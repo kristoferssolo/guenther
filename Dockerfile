@@ -28,9 +28,9 @@ ENV UV_PYTHON_PREFERENCE=only-managed
 # Install Python before the project for caching
 RUN uv python install 3.13
 
-RUN apt-get update -y \
+RUN apt-get update -y\
     && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev ca-certificates ffmpeg curl unzip \
+    pkg-config libssl-dev ca-certificates ffmpeg curl unzip\
     && rm -rf /var/lib/apt/lists/*
 
 # Install Deno (required by yt-dlp for YouTube challenge solving)
@@ -39,10 +39,10 @@ RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
 RUN --mount=type=cache,target=/root/.cache/uv
 
 # Intstall deps
-RUN uv tool install yt-dlp[default] \
+RUN uv tool install yt-dlp[default]\
     && yt-dlp --version
 
 WORKDIR /app
-COPY --from=builder-rs /app/target/release/tg-relay-rs /usr/local/bin/tg-relay-rs
-CMD ["/usr/local/bin/tg-relay-rs"]
+COPY --from=builder-rs /app/target/release/guenther /usr/local/bin/guenther
+CMD ["/usr/local/bin/guenther"]
 

@@ -1,13 +1,13 @@
 use dotenv::dotenv;
-use std::sync::Arc;
-use teloxide::{prelude::*, respond, utils::command::BotCommands};
-use tg_relay_rs::{
+use guenther::{
     commands::{Command, answer},
     comments::Comments,
     config::{Config, FAILED_FETCH_MEDIA_MESSAGE, global_config},
     handler::{Handler, create_handlers},
     telemetry::setup_logger,
 };
+use std::sync::Arc;
+use teloxide::{prelude::*, respond, utils::command::BotCommands};
 use tracing::{error, info, warn};
 
 #[tokio::main]

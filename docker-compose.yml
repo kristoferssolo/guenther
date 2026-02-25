@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BINARY_NAME: tg-relay-rs
+        BINARY_NAME: guenther
     env_file: .env
     environment:
       IG_SESSION_COOKIE_PATH: /app/instagram.txt
