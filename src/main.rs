@@ -37,7 +37,9 @@ async fn main() -> color_eyre::Result<()> {
         let handlers = Arc::clone(&handlers);
         let bot_name = Arc::clone(&bot_name);
         async move {
-            process_cmd(&bot, &msg, &bot_name).await;
+            if process_cmd(&bot, &msg, &bot_name).await {
+                return respond(());
+            }
             process_message(&bot, &msg, &handlers).await;
             respond(())
         }
@@ -68,11 +70,18 @@ async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
     }
 }
 
-async fn process_cmd(bot: &Bot, msg: &Message, bot_name: &str) {
-    if let Some(text) = msg.text()
-        && let Ok(cmd) = Command::parse(text, bot_name)
-        && let Err(e) = answer(bot, msg, cmd).await
-    {
+async fn process_cmd(bot: &Bot, msg: &Message, bot_name: &str) -> bool {
+    let Some(text) = msg.text() else {
+        return false;
+    };
+
+    let Ok(cmd) = Command::parse(text, bot_name) else {
+        return false;
+    };
+
+    if let Err(e) = answer(bot, msg, cmd).await {
         error!(%e, "failed to answer command");
     }
+
+    true
 }
