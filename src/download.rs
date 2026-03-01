@@ -199,19 +199,21 @@ pub async fn process_download_result(
     }
 
     // deterministic ordering
-    media_items.sort_by_key(|(_, k)| match k {
-        MediaKind::Video => 0,
-        MediaKind::Image => 1,
-        MediaKind::Unknown => 2,
+    media_items.sort_by_key(|(path, kind)| {
+        let priority = match kind {
+            MediaKind::Video => 0,
+            MediaKind::Image => 1,
+            MediaKind::Unknown => 2,
+        };
+        (priority, path.clone())
     });
 
     debug!(media_items = media_items.len(), "Sending media to chat");
 
-    if let Some((path, kind)) = media_items.first() {
-        return send_media_from_path(bot, chat_id, path.clone(), *kind).await;
+    for (path, kind) in media_items {
+        send_media_from_path(bot, chat_id, path.clone(), kind).await?;
     }
-
-    Err(Error::NoMediaFound)
+    Ok(())
 }
 
 /// Filter function to determine if a file is potentially media based on name/extension.
