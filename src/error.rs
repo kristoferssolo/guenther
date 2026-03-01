@@ -42,7 +42,7 @@ impl Error {
     }
 
     #[inline]
-    pub fn validation_falied(text: impl Into<String>) -> Self {
+    pub fn validation_failed(text: impl Into<String>) -> Self {
         Self::ValidationFailed(text.into())
     }
 

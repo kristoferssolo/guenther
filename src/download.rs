@@ -2,7 +2,7 @@ use crate::config::global_config;
 use crate::{
     error::{Error, Result},
     utils::{
-        IMAGE_EXTSTENSIONS, MediaKind, VIDEO_EXTSTENSIONS, detect_media_kind_async,
+        IMAGE_EXSTENSIONS, MediaKind, VIDEO_EXSTENSIONS, detect_media_kind_async,
         send_media_from_path,
     },
 };
@@ -235,9 +235,9 @@ fn is_potential_media_file(path: &Path) -> bool {
         return false;
     }
 
-    VIDEO_EXTSTENSIONS
+    VIDEO_EXSTENSIONS
         .iter()
-        .chain(IMAGE_EXTSTENSIONS.iter())
+        .chain(IMAGE_EXSTENSIONS.iter())
         .any(|allowed| allowed.eq_ignore_ascii_case(&ext))
 }
 

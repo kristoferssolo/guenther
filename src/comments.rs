@@ -78,7 +78,7 @@ impl Comments {
     pub fn build_caption(&self) -> String {
         let mut caption = self.pick().to_string();
 
-        // Trancate if too long for Telegram
+        // Truncate if too long for Telegram
         if caption.chars().count() > TELEGRAM_CAPTION_LIMIT {
             let truncated = caption
                 .chars()
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn pick_fallbakc() {
+    fn pick_fallback() {
         let empty_comment = Comments {
             disclaimer: DISCLAIMER.into(),
             lines: Arc::new(Vec::new()),
