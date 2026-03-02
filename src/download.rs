@@ -259,6 +259,9 @@ async fn collect_media_files_recursively(root: &Path) -> Result<Vec<PathBuf>> {
             let path = entry.path();
             let ty = entry.file_type().await?;
 
+            if ty.is_symlink() {
+                continue;
+            }
             if ty.is_dir() {
                 stack.push(path);
             } else if ty.is_file() && is_potential_media_file(&path) {
