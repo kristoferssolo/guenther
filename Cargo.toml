@@ -28,6 +28,11 @@ tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 url = "2.5"
 
+[dev-dependencies]
+claims = "0.8"
+temp-env = "0.3"
+tempfile = "3.26"
+
 [features]
 default = ["instagram", "tiktok", "twitter", "youtube"]
 instagram = []
