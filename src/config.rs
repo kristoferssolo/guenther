@@ -1,9 +1,9 @@
 use crate::error::{Error, Result};
 use std::{env, fmt::Debug, path::PathBuf, sync::OnceLock};
 use teloxide::types::ChatId;
+use tracing::warn;
 
 pub const FAILED_FETCH_MEDIA_MESSAGE: &str = "Failed to fetch media, you foking donkey.";
-
 static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Debug, Clone, Default)]
@@ -40,10 +40,20 @@ impl Config {
     /// Load configuration from environment variables.
     #[must_use]
     pub fn from_env() -> Self {
-        let chat_id = env::var("CHAT_ID")
-            .ok()
-            .and_then(|id| id.parse::<i64>().ok())
-            .map(ChatId);
+        let chat_id = match env::var("CHAT_ID") {
+            Ok(raw) => raw.parse::<i64>().map_or_else(
+                |_| {
+                    warn!(raw = %raw, "CHAT_ID is set but invalid; expected i64");
+                    None
+                },
+                |id| Some(ChatId(id)),
+            ),
+            Err(env::VarError::NotPresent) => None,
+            Err(env::VarError::NotUnicode(_)) => {
+                warn!("CHAT_ID is not valid unicode");
+                None
+            }
+        };
         Self {
             chat_id,
             youtube: YoutubeConfig::from_env(),
@@ -111,11 +121,23 @@ impl TwitterConfig {
     }
 }
 
-fn get_path_from_env(key: &str) -> Option<PathBuf> {
-    env::var(key)
-        .ok()
-        .map(PathBuf::from)
-        .filter(|p| p.is_file())
+fn get_path_from_env(env_key: &str) -> Option<PathBuf> {
+    match env::var(env_key) {
+        Ok(raw) => {
+            let path = PathBuf::from(&raw);
+            if path.is_file() {
+                Some(path)
+            } else {
+                warn!(env_key = env_key, path = %path.display(), "cookie path is set but not a file");
+                None
+            }
+        }
+        Err(env::VarError::NotPresent) => None,
+        Err(env::VarError::NotUnicode(_)) => {
+            warn!(env_key = env_key, "env var is not valid unicode");
+            None
+        }
+    }
 }
 
 impl Default for YoutubeConfig {
