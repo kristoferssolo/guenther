@@ -2,7 +2,7 @@ use crate::config::global_config;
 use crate::{
     error::{Error, Result},
     utils::{
-        IMAGE_EXSTENSIONS, MediaKind, VIDEO_EXSTENSIONS, detect_media_kind_async,
+        IMAGE_EXTENSIONS, MediaKind, VIDEO_EXTENSIONS, detect_media_kind_async,
         send_media_from_path,
     },
 };
@@ -199,7 +199,7 @@ pub async fn process_download_result(
     debug!(media_items = media_items.len(), "Sending media to chat");
 
     for (path, kind) in media_items {
-        send_media_from_path(bot, chat_id, path.clone(), kind).await?;
+        send_media_from_path(bot, chat_id, path, kind).await?;
     }
     Ok(())
 }
@@ -225,9 +225,9 @@ fn is_potential_media_file(path: &Path) -> bool {
         return false;
     }
 
-    VIDEO_EXSTENSIONS
+    VIDEO_EXTENSIONS
         .iter()
-        .chain(IMAGE_EXSTENSIONS.iter())
+        .chain(IMAGE_EXTENSIONS.iter())
         .any(|allowed| allowed.eq_ignore_ascii_case(&ext))
 }
 

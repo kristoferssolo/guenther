@@ -12,8 +12,8 @@ use teloxide::{prelude::*, types::InputFile};
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::{error, info, warn};
 
-pub const VIDEO_EXSTENSIONS: &[&str] = &["mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp"];
-pub const IMAGE_EXSTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];
+pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp"];
+pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];
 
 /// Simple media kind enum shared by handlers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,10 +44,10 @@ fn ext_matches(ext: &str, extensions: &[&str]) -> bool {
 /// Detect media kind from file extension.
 fn detect_from_extension(path: &Path) -> Option<MediaKind> {
     let ext = path.extension().and_then(OsStr::to_str)?;
-    if ext_matches(ext, VIDEO_EXSTENSIONS) {
+    if ext_matches(ext, VIDEO_EXTENSIONS) {
         return Some(MediaKind::Video);
     }
-    if ext_matches(ext, IMAGE_EXSTENSIONS) {
+    if ext_matches(ext, IMAGE_EXTENSIONS) {
         return Some(MediaKind::Image);
     }
     None

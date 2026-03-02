@@ -5,7 +5,7 @@ pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] tokio::io::Error),
 
-    #[error("yt-dpl failed: {0}")]
+    #[error("yt-dlp failed: {0}")]
     YTDLPFailed(String),
 
     #[error("no media found")]
