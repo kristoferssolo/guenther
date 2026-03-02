@@ -9,7 +9,6 @@ use tokio::fs::read_to_string;
 
 static GLOBAL_COMMENTS: OnceLock<Comments> = OnceLock::new();
 
-const DISCLAIMER: &str = "(Roleplay — fictional messages for entertainment.)";
 pub const TELEGRAM_CAPTION_LIMIT: usize = 4096;
 const FALLBACK_COMMENTS: &[&str] = &[
     "Oh come on, that's brilliant — and slightly chaotic, like always.",
@@ -20,7 +19,6 @@ const FALLBACK_COMMENTS: &[&str] = &[
 
 #[derive(Debug)]
 pub struct Comments {
-    pub disclaimer: String,
     lines: Arc<Vec<String>>,
 }
 
@@ -33,7 +31,6 @@ impl Comments {
             .map(ToString::to_string)
             .collect::<Vec<_>>();
         Self {
-            disclaimer: DISCLAIMER.into(),
             lines: lines.into(),
         }
     }
@@ -59,7 +56,6 @@ impl Comments {
         }
 
         Ok(Self {
-            disclaimer: DISCLAIMER.into(),
             lines: lines.into(),
         })
     }
@@ -151,7 +147,6 @@ mod tests {
     fn build_caption_truncation() {
         let long_comment = "A".repeat(TELEGRAM_CAPTION_LIMIT + 10);
         let comments = Comments {
-            disclaimer: DISCLAIMER.into(),
             lines: Arc::new(vec![long_comment]),
         };
 
@@ -163,7 +158,6 @@ mod tests {
     #[test]
     fn pick_fallback() {
         let empty_comment = Comments {
-            disclaimer: DISCLAIMER.into(),
             lines: Arc::new(Vec::new()),
         };
         assert_eq!(empty_comment.pick(), FALLBACK_COMMENTS[0]);
