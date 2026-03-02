@@ -42,7 +42,6 @@ pub struct DownloadResult {
 /// - `Error::Io` for filesystem / spawn errors (propagated).
 /// - `Error::Other` for non-zero exit code (with stderr).
 /// - `Error::NoMediaFound` if no files were produced.
-#[allow(clippy::similar_names)]
 async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResult> {
     let tmp = tempdir()?;
     let cwd = tmp.path().to_path_buf();
@@ -65,16 +64,7 @@ async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResu
         return Err(err);
     }
 
-    // Collect files produced in tempdir (async)
-    let mut rd = read_dir(&cwd).await?;
-    let mut files = Vec::new();
-    while let Some(entry) = rd.next_entry().await? {
-        let path = entry.path();
-        // Filter out non-media files (logs, metadata, etc.)
-        if is_potential_media_file(&path) {
-            files.push(path);
-        }
-    }
+    let files = collect_media_files_recursively(&cwd).await?;
 
     debug!(files = files.len(), "Collected files from tempdir");
 
@@ -86,11 +76,9 @@ async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResu
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        warn!(dir_contents = ?dir_contents, "No media files found in tempdir");
+        warn!(?dir_contents, "No media files found in tempdir");
         return Err(Error::NoMediaFound);
     }
-
-    files.sort();
 
     Ok(DownloadResult {
         tempdir: tmp,
@@ -259,6 +247,27 @@ async fn run_yt_dlp(
 
     debug!(args = ?args, "downloading content");
     run_command_in_tempdir("yt-dlp", &args).await
+}
+
+async fn collect_media_files_recursively(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut stack = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+
+    while let Some(dir) = stack.pop() {
+        let mut rd = read_dir(&dir).await?;
+        while let Some(entry) = rd.next_entry().await? {
+            let path = entry.path();
+            let ty = entry.file_type().await?;
+
+            if ty.is_dir() {
+                stack.push(path);
+            } else if ty.is_file() && is_potential_media_file(&path) {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
 }
 
 #[cfg(test)]
