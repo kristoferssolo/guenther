@@ -1,13 +1,14 @@
 use dotenv::dotenv;
 use guenther::{
-    commands::{Command, answer},
+    commands::answer,
     comments::Comments,
     config::{Config, FAILED_FETCH_MEDIA_MESSAGE, global_config},
     handler::{Handler, create_handlers},
+    router::{RouteAction, decide_route},
     telemetry::setup_logger,
 };
 use std::sync::Arc;
-use teloxide::{prelude::*, respond, utils::command::BotCommands};
+use teloxide::{prelude::*, respond};
 use tracing::{error, info, warn};
 
 #[tokio::main]
@@ -34,13 +35,22 @@ async fn main() -> color_eyre::Result<()> {
     let handlers = create_handlers();
 
     teloxide::repl(bot.clone(), move |bot: Bot, msg: Message| {
-        let handlers = Arc::clone(&handlers);
-        let bot_name = Arc::clone(&bot_name);
+        let chat_id = msg.chat.id;
+        let text = msg.text().map(str::to_owned);
+        let handlers = handlers.clone();
+        let bot_name = bot_name.clone();
+
         async move {
-            if process_cmd(&bot, &msg, &bot_name).await {
-                return respond(());
+            match decide_route(text.as_deref(), &bot_name) {
+                RouteAction::HandleCommand(cmd) => {
+                    if let Err(e) = answer(&bot, chat_id, cmd).await {
+                        error!(%e, "failed to answer command");
+                    }
+                }
+                RouteAction::HandleMessage => process_message(&bot, &msg, &handlers).await,
+                RouteAction::Ignore => {}
             }
-            process_message(&bot, &msg, &handlers).await;
+
             respond(())
         }
     })
@@ -68,20 +78,4 @@ async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
             return;
         }
     }
-}
-
-async fn process_cmd(bot: &Bot, msg: &Message, bot_name: &str) -> bool {
-    let Some(text) = msg.text() else {
-        return false;
-    };
-
-    let Ok(cmd) = Command::parse(text, bot_name) else {
-        return false;
-    };
-
-    if let Err(e) = answer(bot, msg, cmd).await {
-        error!(%e, "failed to answer command");
-    }
-
-    true
 }

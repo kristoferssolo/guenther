@@ -4,5 +4,6 @@ pub mod config;
 pub mod download;
 pub mod error;
 pub mod handler;
+pub mod router;
 pub mod telemetry;
 pub mod utils;

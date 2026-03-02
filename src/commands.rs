@@ -1,7 +1,7 @@
 use crate::comments::global_comments;
 use teloxide::{prelude::*, utils::command::BotCommands};
 
-#[derive(BotCommands, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, BotCommands)]
 #[command(rename_rule = "lowercase")]
 pub enum Command {
     /// Display this text.
@@ -17,15 +17,15 @@ pub enum Command {
 /// # Errors
 ///
 /// Returns a Teloxide error if the message fails to send.
-pub async fn answer(bot: &Bot, msg: &Message, cmd: Command) -> ResponseResult<()> {
+pub async fn answer(bot: &Bot, chat_id: ChatId, cmd: Command) -> ResponseResult<()> {
     match cmd {
         Command::Help => {
-            bot.send_message(msg.chat.id, Command::descriptions().to_string())
+            bot.send_message(chat_id, Command::descriptions().to_string())
                 .await?
         }
         Command::Curse => {
             let comment = global_comments().build_caption();
-            bot.send_message(msg.chat.id, comment).await?
+            bot.send_message(chat_id, comment).await?
         }
     };
 

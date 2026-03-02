@@ -60,8 +60,11 @@ impl Handler {
 macro_rules! handler {
     ($feature:expr, $regex:expr, $download_fn:path) => {
         #[cfg(feature = $feature)]
-        Handler::new($feature, $regex, |url: String| Box::pin($download_fn(url)))
-            .expect(concat!("failed to create ", $feature, " handler"))
+        Handler::new($feature, $regex, |url: String| Box::pin($download_fn(url))).expect(concat!(
+            "failed to create ",
+            $feature,
+            " handler"
+        ))
     };
 }
 
