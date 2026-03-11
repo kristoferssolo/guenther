@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use futures::{StreamExt, stream};
+use std::io;
 use std::{
     cmp::min,
     ffi::OsStr,
@@ -46,14 +47,23 @@ async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResu
     let tmp = tempdir()?;
     let cwd = tmp.path().to_path_buf();
 
-    let output = Command::new(cmd)
+    let output = match Command::new(cmd)
         .current_dir(&cwd)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .output()
-        .await?;
+        .await
+    {
+        Ok(output) => output,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            return Err(Error::other(format!(
+                "required executable `{cmd}` was not found on PATH"
+            )));
+        }
+        Err(err) => return Err(err.into()),
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -276,6 +286,8 @@ async fn collect_media_files_recursively(root: &Path) -> Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::assert_err;
+    use tokio::runtime::Runtime;
 
     #[test]
     fn is_potential_media_file_() {
@@ -284,5 +296,17 @@ mod tests {
         assert!(!is_potential_media_file(Path::new(".DS_Store")));
         assert!(!is_potential_media_file(Path::new("metadata.json")));
         assert!(!is_potential_media_file(Path::new("download.log")));
+    }
+
+    #[test]
+    fn missing_executable_returns_clear_error() {
+        let err = assert_err!(Runtime::new().expect("create tokio runtime").block_on(
+            run_command_in_tempdir("definitely-not-installed-guenther-test-bin", &[],)
+        ));
+
+        assert_eq!(
+            err.to_string(),
+            "other: required executable `definitely-not-installed-guenther-test-bin` was not found on PATH"
+        );
     }
 }
