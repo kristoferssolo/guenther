@@ -1,6 +1,9 @@
 .env
+.git
+.gitignore
 target/
 tests/
 Dockerfile
+docker-compose.yml
 README.md
 LICENSE
