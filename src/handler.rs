@@ -74,22 +74,22 @@ pub fn create_handlers() -> Arc<[Handler]> {
         handler!(
             "instagram",
             r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/([A-Za-z0-9_-]+)",
-            crate::download::download_instagram
+            crate::download::platform::instagram::download_instagram
         ),
         handler!(
             "youtube",
             r"https?:\/\/(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
-            crate::download::download_youtube
+            crate::download::platform::youtube::download_youtube
         ),
         handler!(
             "twitter",
             r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
-            crate::download::download_twitter
+            crate::download::platform::twitter::download_twitter
         ),
         handler!(
             "tiktok",
             r"https?://(?:www\.)?(?:vm|vt|tt|tik)\.tiktok\.com/([A-Za-z0-9_-]+)[/?#]?",
-            crate::download::download_tiktok
+            crate::download::platform::tiktok::download_tiktok
         ),
     ]
     .into()
