@@ -1,5 +1,5 @@
 use dotenv::dotenv;
-use guenther::{
+use guenther_core::{
     commands::answer,
     comments::Comments,
     config::{Config, FAILED_FETCH_MEDIA_MESSAGE, global_config},

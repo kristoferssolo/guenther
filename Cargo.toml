@@ -1,11 +1,23 @@
-[package]
-name = "guenther"
+[workspace]
+members = ["guenther-core", "telegram"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 authors = ["Kristofers Solo <dev@kristofers.xyz>"]
-license = "MIT"
 edition = "2024"
+license = "MIT"
 
-[dependencies]
+[workspace.features]
+default = ["instagram", "tiktok", "twitter", "youtube"]
+instagram = []
+tiktok = []
+twitter = []
+youtube = []
+
+[workspace.dependencies]
+guenther-core = { path = "guenther-core" }
+
 async-trait = "0.1"
 capitalize = "0.3.4"
 color-eyre = "0.6"
@@ -28,19 +40,12 @@ tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 url = "2.5"
 
-[dev-dependencies]
+# dev
 claims = "0.8"
 temp-env = "0.3"
-tempfile = "3.26"
+rstest = "0.26"
 
-[features]
-default = ["instagram", "tiktok", "twitter", "youtube"]
-instagram = []
-tiktok = []
-twitter = []
-youtube = []
-
-[lints.clippy]
-pedantic = "warn"
+[workspace.lints.clippy]
 nursery = "warn"
+pedantic = "warn"
 unwrap_used = "warn"
