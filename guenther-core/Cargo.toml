@@ -15,8 +15,6 @@ youtube = []
 [dependencies]
 async-trait.workspace = true
 capitalize.workspace = true
-color-eyre.workspace = true
-dotenv.workspace = true
 futures.workspace = true
 infer.workspace = true
 rand.workspace = true

@@ -7,27 +7,18 @@ license.workspace = true
 
 [features]
 default = ["instagram", "tiktok", "twitter", "youtube"]
-instagram = []
-tiktok = []
-twitter = []
-youtube = []
+instagram = ["guenther-core/instagram"]
+tiktok = ["guenther-core/tiktok"]
+twitter = ["guenther-core/twitter"]
+youtube = ["guenther-core/youtube"]
 
 [dependencies]
 color-eyre.workspace = true
-guenther-core.workspace = true
 dotenv.workspace = true
-futures.workspace = true
+guenther-core.workspace = true
 teloxide.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-tracing-appender.workspace = true
-tracing-subscriber.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing.workspace = true
-
-[dev-dependencies]
-claims.workspace = true
-temp-env.workspace = true
-rstest.workspace = true
 
 [lints]
 workspace = true
