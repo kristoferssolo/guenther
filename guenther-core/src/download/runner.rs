@@ -27,6 +27,22 @@ const FORBIDDEN_EXTENSIONS: &[&str] = &["json", "txt", "log"];
 /// - `Error::NoMediaFound` if no files were produced.
 pub async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResult> {
     let tmp = tempdir()?;
+    run_command_in_dir(tmp, cmd, args).await
+}
+
+/// Run a command in the provided temporary directory and collect regular files
+/// produced there.
+///
+/// # Errors
+///
+/// - `Error::Io` for filesystem / spawn errors (propagated).
+/// - `Error::Other` for non-zero exit code (with stderr).
+/// - `Error::NoMediaFound` if no files were produced.
+pub async fn run_command_in_dir(
+    tmp: tempfile::TempDir,
+    cmd: &str,
+    args: &[&str],
+) -> Result<DownloadResult> {
     let cwd = tmp.path().to_path_buf();
 
     debug!(command = %cmd, cwd = %cwd.display(), args = ?args, "spawning command");

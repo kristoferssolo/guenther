@@ -1,8 +1,13 @@
 use crate::{
-    download::{DownloadResult, runner::run_command_in_tempdir},
+    download::{
+        DownloadResult,
+        runner::{run_command_in_dir, run_command_in_tempdir},
+    },
     error::Result,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tempfile::tempdir;
+use tokio::fs;
 use tracing::debug;
 
 #[cfg(feature = "instagram")]
@@ -25,12 +30,26 @@ pub async fn run_yt_dlp(
     cookies_path: Option<&PathBuf>,
     url: &str,
 ) -> Result<DownloadResult> {
-    let cookies_path_str;
     let mut args = base_args.to_vec();
 
     if let Some(path) = cookies_path {
-        cookies_path_str = path.to_string_lossy();
+        let cookies_tempdir = tempdir()?;
+        let staged_cookies_path = cookies_tempdir.path().join(cookie_filename(path));
+        fs::copy(path, &staged_cookies_path).await?;
+        let cookies_path_str = staged_cookies_path.to_string_lossy().into_owned();
         args.extend(["--cookies", &cookies_path_str]);
+        args.push(url);
+
+        debug!(
+            url = %url,
+            has_cookies = true,
+            cookies_path = %path.display(),
+            staged_cookies_path = %staged_cookies_path.display(),
+            args = ?args,
+            "starting yt-dlp download"
+        );
+
+        return run_command_in_dir(cookies_tempdir, "yt-dlp", &args).await;
     }
     args.push(url);
 
@@ -42,4 +61,10 @@ pub async fn run_yt_dlp(
         "starting yt-dlp download"
     );
     run_command_in_tempdir("yt-dlp", &args).await
+}
+
+fn cookie_filename(path: &Path) -> &str {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("cookies.txt")
 }

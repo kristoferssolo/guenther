@@ -41,6 +41,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM ghcr.io/astral-sh/uv:0.10.9-debian-slim AS builder-py
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_PYTHON_INSTALL_DIR=/python \
     UV_PYTHON_PREFERENCE=only-managed
 
 RUN uv python install 3.14
@@ -59,7 +60,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
     && useradd -mu 1001 guenther
 
-COPY --from=builder-py /root/.local/share/uv/python /root/.local/share/uv/python
+COPY --from=builder-py /python /python
 COPY --from=builder-py /opt/yt-dlp /opt/yt-dlp
 ENV PATH="/opt/yt-dlp/bin:$PATH"
 
