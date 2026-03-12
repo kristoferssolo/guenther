@@ -9,7 +9,10 @@ RUN apt-get update -y\
 
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-COPY src ./src
+COPY guenther-core/Cargo.toml ./guenther-core/Cargo.toml
+COPY telegram/Cargo.toml ./telegram/Cargo.toml
+COPY guenther-core/src ./guenther-core/src
+COPY telegram/src ./telegram/src
 RUN cargo chef prepare --recipe-path recipe.json
 
 
@@ -19,15 +22,18 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo chef cook --release ${RUST_FEATURES} --recipe-path recipe.json
+    cargo chef cook --release --package telegram ${RUST_FEATURES} --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
-COPY src ./src
+COPY guenther-core/Cargo.toml ./guenther-core/Cargo.toml
+COPY telegram/Cargo.toml ./telegram/Cargo.toml
+COPY guenther-core/src ./guenther-core/src
+COPY telegram/src ./telegram/src
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo build --release ${RUST_FEATURES}\
-    && strip target/release/guenther \
-    && cp target/release/guenther /app/guenther
+    cargo build --release --package telegram ${RUST_FEATURES}\
+    && strip target/release/telegram \
+    && cp target/release/telegram /app/guenther
 
 
 FROM ghcr.io/astral-sh/uv:debian-slim AS builder-py
