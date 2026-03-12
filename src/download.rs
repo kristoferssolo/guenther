@@ -47,6 +47,8 @@ async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResu
     let tmp = tempdir()?;
     let cwd = tmp.path().to_path_buf();
 
+    debug!(command = %cmd, cwd = %cwd.display(), args = ?args, "spawning command");
+
     let output = match Command::new(cmd)
         .current_dir(&cwd)
         .args(args)
@@ -65,8 +67,22 @@ async fn run_command_in_tempdir(cmd: &str, args: &[&str]) -> Result<DownloadResu
         Err(err) => return Err(err.into()),
     };
 
+    debug!(
+        command = %cmd,
+        status = ?output.status.code(),
+        stdout_bytes = output.stdout.len(),
+        stderr_bytes = output.stderr.len(),
+        "command finished"
+    );
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        debug!(
+            command = %cmd,
+            cwd = %cwd.display(),
+            stderr = %stderr,
+            "command failed"
+        );
         let err = match cmd {
             "yt-dlp" => Error::ytdlp_failed(stderr),
             _ => Error::Other(format!("{cmd} failed: {stderr}")),
@@ -255,7 +271,13 @@ async fn run_yt_dlp(
     }
     args.push(url);
 
-    debug!(args = ?args, "downloading content");
+    debug!(
+        url = %url,
+        has_cookies = cookies_path.is_some(),
+        cookies_path = cookies_path.map(|path| path.display().to_string()),
+        args = ?args,
+        "starting yt-dlp download"
+    );
     run_command_in_tempdir("yt-dlp", &args).await
 }
 
@@ -264,18 +286,24 @@ async fn collect_media_files_recursively(root: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
     while let Some(dir) = stack.pop() {
+        debug!(dir = %dir.display(), "scanning download directory");
         let mut rd = read_dir(&dir).await?;
         while let Some(entry) = rd.next_entry().await? {
             let path = entry.path();
             let ty = entry.file_type().await?;
 
             if ty.is_symlink() {
+                debug!(path = %path.display(), "skipping symlink in download directory");
                 continue;
             }
             if ty.is_dir() {
+                debug!(path = %path.display(), "descending into download subdirectory");
                 stack.push(path);
             } else if ty.is_file() && is_potential_media_file(&path) {
+                debug!(path = %path.display(), "found candidate media file");
                 files.push(path);
+            } else if ty.is_file() {
+                debug!(path = %path.display(), "skipping non-media file");
             }
         }
     }
