@@ -1,5 +1,5 @@
 use crate::{
-    download::DownloadResult,
+    download::{DownloadResult, platform::twitter::metadata::parse_post_text_from_value},
     error::{Error, Result},
 };
 use reqwest::Client;
@@ -8,7 +8,7 @@ use tempfile::tempdir;
 use tokio::fs;
 use url::Url;
 
-use super::metadata::parse_post_text_from_value;
+const USER_AGENT: &str = concat!("guenther/", env!("CARGO_PKG_VERSION"));
 
 pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
     let tweet_id =
@@ -54,7 +54,7 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
 
 fn http_client() -> Result<Client> {
     Client::builder()
-        .user_agent("guenther/0.1.0")
+        .user_agent(USER_AGENT)
         .build()
         .map_err(|e| Error::other(format!("failed to build reqwest client: {e}")))
 }
@@ -162,15 +162,15 @@ mod tests {
     #[test]
     fn extracts_photo_urls_from_photos() {
         let payload = json!({
-            "photos": [
-                {
-                    "url": "https://pbs.twimg.com/media/one.jpg"
-                },
-                {
-                    "url": "https://pbs.twimg.com/media/two.png"
-                }
-            ]
-        });
+    "photos": [
+        {
+            "url": "https://pbs.twimg.com/media/one.jpg"
+        },
+        {
+            "url": "https://pbs.twimg.com/media/two.png"
+        }
+    ]
+});
 
         assert_eq!(
             extract_photo_urls(&payload),
@@ -184,17 +184,17 @@ mod tests {
     #[test]
     fn extracts_photo_urls_from_media_details() {
         let payload = json!({
-            "mediaDetails": [
-                {
-                    "type": "photo",
-                    "media_url_https": "https://pbs.twimg.com/media/one.jpg"
-                },
-                {
-                    "type": "video",
-                    "media_url_https": "https://pbs.twimg.com/media/two.jpg"
-                }
-            ]
-        });
+    "mediaDetails": [
+        {
+            "type": "photo",
+            "media_url_https": "https://pbs.twimg.com/media/one.jpg"
+        },
+        {
+            "type": "video",
+            "media_url_https": "https://pbs.twimg.com/media/two.jpg"
+        }
+    ]
+});
 
         assert_eq!(
             extract_photo_urls(&payload),

@@ -172,7 +172,7 @@ fn is_potential_media_file(path: &Path) -> bool {
 mod tests {
     use super::*;
     use claims::assert_err;
-    use tokio::runtime::Runtime;
+    use tokio::runtime::Builder;
 
     #[test]
     fn is_potential_media_file_() {
@@ -185,9 +185,16 @@ mod tests {
 
     #[test]
     fn missing_executable_returns_clear_error() {
-        let err = assert_err!(Runtime::new().expect("create tokio runtime").block_on(
-            run_command_in_tempdir("definitely-not-installed-guenther-test-bin", &[],)
-        ));
+        let runtime = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create tokio runtime");
+        let err = assert_err!(
+            runtime.block_on(run_command_in_tempdir(
+                "definitely-not-installed-guenther-test-bin",
+                &[],
+            ))
+        );
 
         assert_eq!(
             err.to_string(),

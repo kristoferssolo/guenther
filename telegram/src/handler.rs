@@ -109,7 +109,7 @@ pub fn create_handlers() -> Arc<[Handler]> {
         handler!(
             "youtube",
             Platform::Youtube,
-            r"https?:\/\/(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
+            r"https?://(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
             guenther_core::download::platform::youtube::download_youtube
         ),
         handler!(
