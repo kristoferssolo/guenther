@@ -1,4 +1,4 @@
-use crate::comments::global_comments;
+use guenther_core::comments::global_comments;
 use teloxide::{prelude::*, utils::command::BotCommands};
 
 #[derive(Debug, Clone, PartialEq, Eq, BotCommands)]
@@ -12,11 +12,6 @@ pub enum Command {
     Curse,
 }
 
-/// Handle a command from the user.
-///
-/// # Errors
-///
-/// Returns a Teloxide error if the message fails to send.
 pub async fn answer(bot: &Bot, chat_id: ChatId, cmd: Command) -> ResponseResult<()> {
     match cmd {
         Command::Help => {

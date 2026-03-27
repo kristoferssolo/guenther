@@ -17,9 +17,6 @@ pub enum Error {
     #[error("validation failed: {0}")]
     ValidationFailed(String),
 
-    #[error("teloxide error: {0}")]
-    Teloxide(#[from] teloxide::RequestError),
-
     #[error("join error: {0}")]
     Join(#[from] tokio::task::JoinError),
 

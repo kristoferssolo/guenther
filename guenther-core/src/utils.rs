@@ -1,16 +1,7 @@
-use crate::{
-    comments::global_comments,
-    error::{Error, Result},
-};
 use capitalize::Capitalize;
-use std::{
-    ffi::OsStr,
-    fmt::Display,
-    path::{Path, PathBuf},
-};
-use teloxide::{prelude::*, types::InputFile};
+use std::{ffi::OsStr, fmt::Display, path::Path};
 use tokio::{fs::File, io::AsyncReadExt};
-use tracing::{error, info, warn};
+use tracing::warn;
 
 pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp"];
 pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];
@@ -101,48 +92,6 @@ pub async fn detect_media_kind_async(path: &Path) -> MediaKind {
     }
 
     MediaKind::Unknown
-}
-
-/// Given a path, send it to chat as photo or video depending on detected kind.
-///
-/// # Errors
-///
-/// Returns an `Error::UnknownMediaKind` if sending fails or the media kind is unknown.
-pub async fn send_media_from_path(
-    bot: &Bot,
-    chat_id: ChatId,
-    path: PathBuf,
-    kind: MediaKind,
-) -> Result<()> {
-    let caption = global_comments().build_caption();
-    let input = InputFile::file(path);
-
-    macro_rules! send_msg {
-        ($request_expr:expr) => {{
-            let mut request = $request_expr;
-            request = request.caption(caption);
-            match request.await {
-                Ok(message) => info!(message_id = message.id.to_string(), "{} sent", kind),
-                Err(e) => {
-                    error!("Failed to send {}: {e}", kind.to_str());
-                    return Err(Error::Teloxide(e));
-                }
-            }
-        }};
-    }
-
-    match kind {
-        MediaKind::Video => send_msg!(bot.send_video(chat_id, input)),
-        MediaKind::Image => send_msg!(bot.send_photo(chat_id, input)),
-        MediaKind::Unknown => {
-            bot.send_message(chat_id, "No supported media found")
-                .await?;
-            error!("No supported media found");
-            return Err(Error::UnknownMediaKind);
-        }
-    }
-
-    Ok(())
 }
 
 impl AsRef<str> for MediaKind {

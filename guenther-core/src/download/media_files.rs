@@ -1,12 +1,7 @@
-use crate::{
-    error::{Error, Result},
-    utils::{MediaKind, detect_media_kind_async, send_media_from_path},
-};
+use crate::utils::{MediaKind, detect_media_kind_async};
 use futures::{StreamExt, stream};
 use std::{cmp::min, path::PathBuf};
-use teloxide::{Bot, types::ChatId};
 use tempfile::TempDir;
-use tracing::debug;
 
 /// `TempDir` guard + downloaded files. Keep this value alive until you're
 /// done sending files so the temporary directory is not deleted.
@@ -16,29 +11,22 @@ pub struct DownloadResult {
     pub files: Vec<PathBuf>,
 }
 
-/// Post-process a `DownloadResult`.
+/// Classify and filter files in a `DownloadResult`.
 ///
-/// Detect media kinds (async), prefer video, then image, then call `send_media_from_path`.
-/// Keeps the tempdir alive while sending because `DownloadResult` is passed by value.
+/// Keeps the tempdir alive while the returned `DownloadResult` remains in scope.
 ///
 /// # Errors
 ///
-/// - Propagates `send_media_from_path` errors or returns NoMediaFound/UnknownMediaKind.
-pub async fn process_download_result(
-    bot: &Bot,
-    chat_id: ChatId,
+/// Returns `NoMediaFound` when there are no valid image/video files left after classification.
+pub async fn collect_supported_media(
     mut dr: DownloadResult,
-) -> Result<()> {
-    debug!(files = dr.files.len(), "Processing download result");
-
+) -> crate::error::Result<(TempDir, Vec<(PathBuf, MediaKind)>)> {
     if dr.files.is_empty() {
-        return Err(Error::NoMediaFound);
+        return Err(crate::error::Error::NoMediaFound);
     }
 
-    // Detect kinds and validate files in parallel
     let concurrency = min(8, dr.files.len());
     let results = stream::iter(dr.files.drain(..).map(|path| async move {
-        // Check file metadata asynchronously
         let Ok(meta) = tokio::fs::metadata(&path).await else {
             return None;
         };
@@ -57,12 +45,10 @@ pub async fn process_download_result(
     .await;
 
     let mut media_items = results.into_iter().flatten().collect::<Vec<_>>();
-
     if media_items.is_empty() {
-        return Err(Error::NoMediaFound);
+        return Err(crate::error::Error::NoMediaFound);
     }
 
-    // deterministic ordering
     media_items.sort_by_key(|(path, kind)| {
         let priority = match kind {
             MediaKind::Video => 0,
@@ -72,10 +58,5 @@ pub async fn process_download_result(
         (priority, path.clone())
     });
 
-    debug!(media_items = media_items.len(), "Sending media to chat");
-
-    for (path, kind) in media_items {
-        send_media_from_path(bot, chat_id, path, kind).await?;
-    }
-    Ok(())
+    Ok((dr.tempdir, media_items))
 }

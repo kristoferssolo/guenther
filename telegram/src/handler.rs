@@ -1,11 +1,16 @@
-use crate::{
-    download::{DownloadResult, process_download_result},
-    error::Result,
+use guenther_core::{
+    download::{DownloadResult, collect_supported_media},
+    error::{Error, Result},
+    utils::MediaKind,
 };
 use regex::{Error as RegexError, Regex};
-use std::{pin::Pin, sync::Arc};
-use teloxide::{Bot, types::ChatId};
-use tracing::info;
+use std::{path::PathBuf, pin::Pin, sync::Arc};
+use teloxide::{
+    Bot,
+    prelude::*,
+    types::{ChatId, InputFile},
+};
+use tracing::{error, info};
 
 type DownloadFn = fn(String) -> Pin<Box<dyn Future<Output = Result<DownloadResult>> + Send>>;
 
@@ -17,11 +22,6 @@ pub struct Handler {
 }
 
 impl Handler {
-    /// Create a new handler with a regex pattern and download function.
-    ///
-    /// # Errors
-    ///
-    /// Returns `RegexError` if the regex pattern is invalid.
     pub fn new(
         name: &'static str,
         regex_pattern: &'static str,
@@ -37,7 +37,6 @@ impl Handler {
         self.name
     }
 
-    /// Extract a URL matching this handler's regex pattern.
     #[must_use]
     pub fn try_extract<'a>(&self, text: &'a str) -> Option<&'a str> {
         self.regex
@@ -45,15 +44,16 @@ impl Handler {
             .and_then(|c| c.get(0).map(|m| m.as_str()))
     }
 
-    /// Handle a URL by downloading and sending the media.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Error` if download or media processing fails.
     pub async fn handle(&self, bot: &Bot, chat_id: ChatId, url: &str) -> Result<()> {
         info!(handler = %self.name(), url = %url, "handling url");
         let dr = (self.func)(url.to_owned()).await?;
-        process_download_result(bot, chat_id, dr).await
+        let (_tempdir, media_items) = collect_supported_media(dr).await?;
+
+        for (path, kind) in media_items {
+            send_media_from_path(bot, chat_id, path, kind).await?;
+        }
+
+        Ok(())
     }
 }
 
@@ -74,23 +74,60 @@ pub fn create_handlers() -> Arc<[Handler]> {
         handler!(
             "instagram",
             r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/([A-Za-z0-9_-]+)",
-            crate::download::platform::instagram::download_instagram
+            guenther_core::download::platform::instagram::download_instagram
         ),
         handler!(
             "youtube",
             r"https?:\/\/(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
-            crate::download::platform::youtube::download_youtube
+            guenther_core::download::platform::youtube::download_youtube
         ),
         handler!(
             "twitter",
             r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
-            crate::download::platform::twitter::download_twitter
+            guenther_core::download::platform::twitter::download_twitter
         ),
         handler!(
             "tiktok",
             r"https?://(?:www\.)?(?:vm|vt|tt|tik)\.tiktok\.com/([A-Za-z0-9_-]+)[/?#]?",
-            crate::download::platform::tiktok::download_tiktok
+            guenther_core::download::platform::tiktok::download_tiktok
         ),
     ]
     .into()
+}
+
+async fn send_media_from_path(
+    bot: &Bot,
+    chat_id: ChatId,
+    path: PathBuf,
+    kind: MediaKind,
+) -> Result<()> {
+    let caption = guenther_core::comments::global_comments().build_caption();
+    let input = InputFile::file(path);
+
+    macro_rules! send_msg {
+        ($request_expr:expr) => {{
+            let mut request = $request_expr;
+            request = request.caption(caption.clone());
+            match request.await {
+                Ok(message) => info!(message_id = message.id.to_string(), "{} sent", kind),
+                Err(e) => {
+                    error!("Failed to send {}: {e}", kind.to_str());
+                    return Err(Error::other(format!("telegram request failed: {e}")));
+                }
+            }
+        }};
+    }
+
+    match kind {
+        MediaKind::Video => send_msg!(bot.send_video(chat_id, input)),
+        MediaKind::Image => send_msg!(bot.send_photo(chat_id, input)),
+        MediaKind::Unknown => {
+            bot.send_message(chat_id, "No supported media found")
+                .await
+                .map_err(|e| Error::other(format!("telegram request failed: {e}")))?;
+            return Err(Error::UnknownMediaKind);
+        }
+    }
+
+    Ok(())
 }

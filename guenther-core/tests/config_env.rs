@@ -4,7 +4,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use teloxide::types::ChatId;
 use temp_env::with_vars;
 use tempfile::tempdir;
 
@@ -34,7 +33,7 @@ fn from_env_sets_chat_id_when_valid() {
         with_vars([("CHAT_ID", Some("12345"))], || {
             let cfg = Config::from_env();
             let chat_id = assert_some!(cfg.chat_id);
-            assert_eq!(chat_id, ChatId(12345));
+            assert_eq!(chat_id, 12345);
         });
     });
 }

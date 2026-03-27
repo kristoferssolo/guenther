@@ -1,15 +1,22 @@
+mod commands;
+mod handler;
+mod router;
+
 use dotenv::dotenv;
 use guenther_core::{
-    commands::answer,
     comments::Comments,
     config::{Config, FAILED_FETCH_MEDIA_MESSAGE, global_config},
-    handler::{Handler, create_handlers},
-    router::{RouteAction, decide_route},
     telemetry::setup_logger,
 };
 use std::sync::Arc;
-use teloxide::{prelude::*, respond};
+use teloxide::{prelude::*, respond, types::ChatId};
 use tracing::{error, info, warn};
+
+use crate::{
+    commands::answer,
+    handler::{Handler, create_handlers},
+    router::{RouteAction, decide_route},
+};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -72,7 +79,7 @@ async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
                     .send_message(msg.chat.id, FAILED_FETCH_MEDIA_MESSAGE)
                     .await;
                 if let Some(chat_id) = global_config().chat_id {
-                    let _ = bot.send_message(chat_id, err.to_string()).await;
+                    let _ = bot.send_message(ChatId(chat_id), err.to_string()).await;
                 }
             }
             return;

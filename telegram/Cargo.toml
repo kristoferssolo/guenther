@@ -16,6 +16,7 @@ youtube = ["guenther-core/youtube"]
 color-eyre.workspace = true
 dotenv.workspace = true
 guenther-core.workspace = true
+regex.workspace = true
 teloxide.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing.workspace = true
