@@ -78,12 +78,6 @@ fn voice_lines_path() -> PathBuf {
         .map_or_else(|_| PathBuf::from(DEFAULT_VOICE_LINES_PATH), PathBuf::from)
 }
 
-#[cfg(feature = "voice-line-capture")]
-fn audio_lines_path() -> PathBuf {
-    env::var("AUDIO_LINES_PATH")
-        .map_or_else(|_| PathBuf::from(DEFAULT_AUDIO_LINES_PATH), PathBuf::from)
-}
-
 async fn load_voice_lines() -> color_eyre::Result<Vec<VoiceLine>> {
     load_voice_lines_from_paths(&[voice_lines_path(), audio_lines_path()]).await
 }
