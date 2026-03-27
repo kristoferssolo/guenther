@@ -1,4 +1,5 @@
 use guenther_core::{
+    comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
     download::{DownloadResult, collect_supported_media},
     error::{Error, Result},
     utils::MediaKind,
@@ -47,10 +48,22 @@ impl Handler {
     pub async fn handle(&self, bot: &Bot, chat_id: ChatId, url: &str) -> Result<()> {
         info!(handler = %self.name(), url = %url, "handling url");
         let dr = (self.func)(url.to_owned()).await?;
+        let source_text = dr.source_text.clone();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
+        let include_source_text = self.name() == "twitter"
+            && source_text.is_some()
+            && media_items
+                .iter()
+                .all(|(_, kind)| matches!(kind, MediaKind::Image));
+        let base_caption = global_comments().build_caption();
 
-        for (path, kind) in media_items {
-            send_media_from_path(bot, chat_id, path, kind).await?;
+        for (index, (path, kind)) in media_items.into_iter().enumerate() {
+            let caption = if include_source_text && index == 0 {
+                compose_caption(&base_caption, source_text.as_deref())
+            } else {
+                base_caption.clone()
+            };
+            send_media_from_path(bot, chat_id, path, kind, &caption).await?;
         }
 
         Ok(())
@@ -100,14 +113,14 @@ async fn send_media_from_path(
     chat_id: ChatId,
     path: PathBuf,
     kind: MediaKind,
+    caption: &str,
 ) -> Result<()> {
-    let caption = guenther_core::comments::global_comments().build_caption();
     let input = InputFile::file(path);
 
     macro_rules! send_msg {
         ($request_expr:expr) => {{
             let mut request = $request_expr;
-            request = request.caption(caption.clone());
+            request = request.caption(caption.to_owned());
             match request.await {
                 Ok(message) => info!(message_id = message.id.to_string(), "{} sent", kind),
                 Err(e) => {
@@ -130,4 +143,56 @@ async fn send_media_from_path(
     }
 
     Ok(())
+}
+
+fn compose_caption(quote: &str, source_text: Option<&str>) -> String {
+    let Some(source_text) = source_text.map(str::trim).filter(|text| !text.is_empty()) else {
+        return quote.to_owned();
+    };
+
+    let combined = format!("{quote}\n\n{source_text}");
+    if combined.chars().count() <= TELEGRAM_CAPTION_LIMIT {
+        return combined;
+    }
+
+    let reserved = quote.chars().count() + 2;
+    if reserved >= TELEGRAM_CAPTION_LIMIT {
+        return quote.to_owned();
+    }
+
+    let available = TELEGRAM_CAPTION_LIMIT - reserved;
+    let truncated = truncate_with_ellipsis(source_text, available);
+    format!("{quote}\n\n{truncated}")
+}
+
+fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_owned();
+    }
+    if max_chars <= 3 {
+        return ".".repeat(max_chars);
+    }
+
+    let truncated = text
+        .chars()
+        .take(max_chars.saturating_sub(3))
+        .collect::<String>();
+    format!("{truncated}...")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compose_caption;
+
+    #[test]
+    fn compose_caption_appends_source_text() {
+        let caption = compose_caption("quote", Some("tweet text"));
+        assert_eq!(caption, "quote\n\ntweet text");
+    }
+
+    #[test]
+    fn compose_caption_ignores_missing_source_text() {
+        let caption = compose_caption("quote", None);
+        assert_eq!(caption, "quote");
+    }
 }

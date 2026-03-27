@@ -107,6 +107,7 @@ pub async fn run_command_in_dir(
     Ok(DownloadResult {
         tempdir: tmp,
         files,
+        source_text: None,
     })
 }
 

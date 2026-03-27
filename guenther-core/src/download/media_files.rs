@@ -9,6 +9,7 @@ use tempfile::TempDir;
 pub struct DownloadResult {
     pub tempdir: TempDir,
     pub files: Vec<PathBuf>,
+    pub source_text: Option<String>,
 }
 
 /// Classify and filter files in a `DownloadResult`.
