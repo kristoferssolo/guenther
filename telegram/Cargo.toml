@@ -11,14 +11,17 @@ instagram = ["guenther-core/instagram"]
 tiktok = ["guenther-core/tiktok"]
 twitter = ["guenther-core/twitter"]
 youtube = ["guenther-core/youtube"]
+voice-line-capture = []
 
 [dependencies]
 color-eyre.workspace = true
 dotenv.workspace = true
 guenther-core.workspace = true
 regex.workspace = true
+serde = { version = "1", features = ["derive"] }
 teloxide.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+toml = "0.8"
 tracing.workspace = true
 
 [lints]

@@ -9,6 +9,7 @@ use crate::{
     handler::{Handler, create_handlers},
     inline::answer_inline_query,
     router::{RouteAction, decide_route},
+    voice_lines::capture_incoming_voice_line,
 };
 use dotenv::dotenv;
 use guenther_core::{
@@ -62,6 +63,10 @@ async fn message_handler(
     handlers: Arc<[Handler]>,
     bot_name: Arc<str>,
 ) -> color_eyre::Result<()> {
+    if let Err(err) = capture_incoming_voice_line(&msg).await {
+        warn!(%err, "failed to capture incoming voice line metadata");
+    }
+
     let chat_id = msg.chat.id;
     let text = msg.text().map(str::to_owned);
 

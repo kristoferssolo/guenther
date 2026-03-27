@@ -7,11 +7,12 @@ use teloxide::{
 
 pub async fn answer_inline_query(bot: Bot, query: InlineQuery) -> color_eyre::Result<()> {
     let results = search_voice_lines(&query.query)
+        .await?
         .into_iter()
         .map(|line| {
             InlineQueryResult::CachedVoice(InlineQueryResultCachedVoice::new(
                 line.id,
-                line.file_id.to_owned().into(),
+                line.file_id.into(),
                 line.title,
             ))
         })
