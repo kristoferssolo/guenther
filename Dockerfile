@@ -2,11 +2,7 @@
 
 FROM lukemathwalker/cargo-chef:0.1.77-rust-1.94.0-slim-trixie AS chef
 WORKDIR /app
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update -y\
-    && apt-get install -y --no-install-recommends pkg-config libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+ENV CARGO_INCREMENTAL=0
 
 
 FROM chef AS planner
@@ -24,7 +20,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo chef cook --release --package telegram ${RUST_FEATURES} --recipe-path recipe.json
+    cargo chef cook --locked --release --package telegram ${RUST_FEATURES} --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY guenther-core/Cargo.toml ./guenther-core/Cargo.toml
 COPY telegram/Cargo.toml ./telegram/Cargo.toml
@@ -33,7 +29,7 @@ COPY telegram/src ./telegram/src
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo build --release --package telegram ${RUST_FEATURES}\
+    cargo build --locked --release --package telegram ${RUST_FEATURES}\
     && strip target/release/telegram \
     && cp target/release/telegram /app/guenther
 

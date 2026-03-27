@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./comments.txt:/app/comments.txt:ro
-      - ${IG_SESSION_COOKIE_PATH:-/etc/secrets/www.instagram.com_cookies.txt}:/app/instagram.txt:rw
-      - ${TIKTOK_SESSION_COOKIE_PATH:-/etc/secrets/www.tiktok.com_cookies.txt}:/app/tiktok.txt:rw
-      - ${TWITTER_SESSION_COOKIE_PATH:-/etc/secrets/www.twitter.com_cookies.txt}:/app/twitter.txt:rw
-      - ${YOUTUBE_SESSION_COOKIE_PATH:-/etc/secrets/www.youtube.com_cookies.txt}:/app/youtube.txt:rw
+      - ${IG_SESSION_COOKIE_PATH:-/etc/secrets/www.instagram.com_cookies.txt}:/app/instagram.txt:ro
+      - ${TIKTOK_SESSION_COOKIE_PATH:-/etc/secrets/www.tiktok.com_cookies.txt}:/app/tiktok.txt:ro
+      - ${TWITTER_SESSION_COOKIE_PATH:-/etc/secrets/www.twitter.com_cookies.txt}:/app/twitter.txt:ro
+      - ${YOUTUBE_SESSION_COOKIE_PATH:-/etc/secrets/www.youtube.com_cookies.txt}:/app/youtube.txt:ro

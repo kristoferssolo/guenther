@@ -22,6 +22,7 @@ pub struct Handler {
     func: DownloadFn,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     Instagram,
