@@ -13,6 +13,7 @@ services:
       YOUTUBE_SESSION_COOKIE_PATH: /app/youtube.txt
     restart: unless-stopped
     volumes:
+      - ./audio_lines.toml:/app/audio_lines.toml:ro
       - ./comments.txt:/app/comments.txt:ro
       - ${IG_SESSION_COOKIE_PATH:-/etc/secrets/www.instagram.com_cookies.txt}:/app/instagram.txt:ro
       - ${TIKTOK_SESSION_COOKIE_PATH:-/etc/secrets/www.tiktok.com_cookies.txt}:/app/tiktok.txt:ro
