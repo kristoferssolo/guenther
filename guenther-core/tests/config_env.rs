@@ -1,5 +1,5 @@
 use claims::{assert_none, assert_some};
-use guenther::config::Config;
+use guenther_core::config::Config;
 use std::{
     fs,
     path::{Path, PathBuf},
