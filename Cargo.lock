@@ -2159,6 +2159,7 @@ dependencies = [
  "guenther-core",
  "regex",
  "serde",
+ "serde_json",
  "teloxide",
  "tokio",
  "toml",

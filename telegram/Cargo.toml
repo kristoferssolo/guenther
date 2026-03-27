@@ -19,9 +19,10 @@ dotenv.workspace = true
 guenther-core.workspace = true
 regex.workspace = true
 serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
 teloxide.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-toml = "0.8"
+toml.workspace = true
 tracing.workspace = true
 
 [lints]
