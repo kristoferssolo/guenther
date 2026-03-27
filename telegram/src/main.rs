@@ -1,7 +1,15 @@
 mod commands;
 mod handler;
+mod inline;
 mod router;
+mod voice_lines;
 
+use crate::{
+    commands::answer,
+    handler::{Handler, create_handlers},
+    inline::answer_inline_query,
+    router::{RouteAction, decide_route},
+};
 use dotenv::dotenv;
 use guenther_core::{
     comments::Comments,
@@ -9,14 +17,8 @@ use guenther_core::{
     telemetry::setup_logger,
 };
 use std::sync::Arc;
-use teloxide::{prelude::*, respond, types::ChatId};
+use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{error, info, warn};
-
-use crate::{
-    commands::answer,
-    handler::{Handler, create_handlers},
-    router::{RouteAction, decide_route},
-};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -40,28 +42,38 @@ async fn main() -> color_eyre::Result<()> {
     info!(name = %bot_name, "bot starting");
 
     let handlers = create_handlers();
+    let schema = dptree::entry()
+        .branch(Update::filter_message().endpoint(message_handler))
+        .branch(Update::filter_inline_query().endpoint(answer_inline_query));
 
-    teloxide::repl(bot.clone(), move |bot: Bot, msg: Message| {
-        let chat_id = msg.chat.id;
-        let text = msg.text().map(str::to_owned);
-        let handlers = handlers.clone();
-        let bot_name = bot_name.clone();
+    Dispatcher::builder(bot, schema)
+        .dependencies(dptree::deps![handlers, bot_name])
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 
-        async move {
-            match decide_route(text.as_deref(), &bot_name) {
-                RouteAction::HandleCommand(cmd) => {
-                    if let Err(e) = answer(&bot, chat_id, cmd).await {
-                        error!(%e, "failed to answer command");
-                    }
-                }
-                RouteAction::HandleMessage => process_message(&bot, &msg, &handlers).await,
-                RouteAction::Ignore => {}
+    Ok(())
+}
+
+async fn message_handler(
+    bot: Bot,
+    msg: Message,
+    handlers: Arc<[Handler]>,
+    bot_name: Arc<str>,
+) -> color_eyre::Result<()> {
+    let chat_id = msg.chat.id;
+    let text = msg.text().map(str::to_owned);
+
+    match decide_route(text.as_deref(), &bot_name) {
+        RouteAction::HandleCommand(cmd) => {
+            if let Err(e) = answer(&bot, chat_id, cmd).await {
+                error!(%e, "failed to answer command");
             }
-
-            respond(())
         }
-    })
-    .await;
+        RouteAction::HandleMessage => process_message(&bot, &msg, &handlers).await,
+        RouteAction::Ignore => {}
+    }
 
     Ok(())
 }

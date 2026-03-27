@@ -189,12 +189,10 @@ mod tests {
             .enable_all()
             .build()
             .expect("create tokio runtime");
-        let err = assert_err!(
-            runtime.block_on(run_command_in_tempdir(
-                "definitely-not-installed-guenther-test-bin",
-                &[],
-            ))
-        );
+        let err = assert_err!(runtime.block_on(run_command_in_tempdir(
+            "definitely-not-installed-guenther-test-bin",
+            &[],
+        )));
 
         assert_eq!(
             err.to_string(),

@@ -162,15 +162,15 @@ mod tests {
     #[test]
     fn extracts_photo_urls_from_photos() {
         let payload = json!({
-    "photos": [
-        {
-            "url": "https://pbs.twimg.com/media/one.jpg"
-        },
-        {
-            "url": "https://pbs.twimg.com/media/two.png"
-        }
-    ]
-});
+            "photos": [
+                {
+                    "url": "https://pbs.twimg.com/media/one.jpg"
+                },
+                {
+                    "url": "https://pbs.twimg.com/media/two.png"
+                }
+            ]
+        });
 
         assert_eq!(
             extract_photo_urls(&payload),
@@ -184,17 +184,17 @@ mod tests {
     #[test]
     fn extracts_photo_urls_from_media_details() {
         let payload = json!({
-    "mediaDetails": [
-        {
-            "type": "photo",
-            "media_url_https": "https://pbs.twimg.com/media/one.jpg"
-        },
-        {
-            "type": "video",
-            "media_url_https": "https://pbs.twimg.com/media/two.jpg"
-        }
-    ]
-});
+            "mediaDetails": [
+                {
+                    "type": "photo",
+                    "media_url_https": "https://pbs.twimg.com/media/one.jpg"
+                },
+                {
+                    "type": "video",
+                    "media_url_https": "https://pbs.twimg.com/media/two.jpg"
+                }
+            ]
+        });
 
         assert_eq!(
             extract_photo_urls(&payload),
