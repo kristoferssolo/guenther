@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use teloxide::types::Message;
 use tokio::fs;
 
-const MAX_INLINE_RESULTS: usize = 20;
+const MAX_INLINE_RESULTS: usize = 50;
 const DEFAULT_VOICE_LINES_PATH: &str = "voice_lines.toml";
 const DEFAULT_AUDIO_LINES_PATH: &str = "audio_lines.toml";
 
