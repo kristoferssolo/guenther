@@ -17,25 +17,43 @@ type DownloadFn = fn(String) -> Pin<Box<dyn Future<Output = Result<DownloadResul
 
 #[derive(Debug, Clone)]
 pub struct Handler {
-    name: &'static str,
+    platform: Platform,
     regex: Regex,
     func: DownloadFn,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Platform {
+    Instagram,
+    Youtube,
+    Twitter,
+    Tiktok,
+}
+
 impl Handler {
     pub fn new(
-        name: &'static str,
+        platform: Platform,
         regex_pattern: &'static str,
         func: DownloadFn,
     ) -> std::result::Result<Self, RegexError> {
         let regex = Regex::new(regex_pattern)?;
-        Ok(Self { name, regex, func })
+        Ok(Self {
+            platform,
+            regex,
+            func,
+        })
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn platform(&self) -> Platform {
+        self.platform
     }
 
     #[inline]
     #[must_use]
     pub const fn name(&self) -> &'static str {
-        self.name
+        self.platform.name()
     }
 
     #[must_use]
@@ -50,12 +68,10 @@ impl Handler {
         let dr = (self.func)(url.to_owned()).await?;
         let source_text = dr.source_text.clone();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
-        let include_source_text = self.name() == "twitter"
-            && source_text.is_some()
-            && media_items
-                .iter()
-                .all(|(_, kind)| matches!(kind, MediaKind::Image));
         let base_caption = global_comments().build_caption();
+        let include_source_text = self
+            .platform()
+            .should_include_source_text(&media_items, source_text.as_deref());
 
         for (index, (path, kind)) in media_items.into_iter().enumerate() {
             let caption = if include_source_text && index == 0 {
@@ -71,9 +87,9 @@ impl Handler {
 }
 
 macro_rules! handler {
-    ($feature:expr, $regex:expr, $download_fn:path) => {
+    ($feature:expr, $platform:expr, $regex:expr, $download_fn:path) => {
         #[cfg(feature = $feature)]
-        Handler::new($feature, $regex, |url: String| Box::pin($download_fn(url))).expect(concat!(
+        Handler::new($platform, $regex, |url: String| Box::pin($download_fn(url))).expect(concat!(
             "failed to create ",
             $feature,
             " handler"
@@ -86,21 +102,25 @@ pub fn create_handlers() -> Arc<[Handler]> {
     [
         handler!(
             "instagram",
+            Platform::Instagram,
             r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/([A-Za-z0-9_-]+)",
             guenther_core::download::platform::instagram::download_instagram
         ),
         handler!(
             "youtube",
+            Platform::Youtube,
             r"https?:\/\/(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
             guenther_core::download::platform::youtube::download_youtube
         ),
         handler!(
             "twitter",
+            Platform::Twitter,
             r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
             guenther_core::download::platform::twitter::download_twitter
         ),
         handler!(
             "tiktok",
+            Platform::Tiktok,
             r"https?://(?:www\.)?(?:vm|vt|tt|tik)\.tiktok\.com/([A-Za-z0-9_-]+)[/?#]?",
             guenther_core::download::platform::tiktok::download_tiktok
         ),
@@ -143,6 +163,29 @@ async fn send_media_from_path(
     }
 
     Ok(())
+}
+
+impl Platform {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Instagram => "instagram",
+            Self::Youtube => "youtube",
+            Self::Twitter => "twitter",
+            Self::Tiktok => "tiktok",
+        }
+    }
+
+    fn should_include_source_text(
+        self,
+        media_items: &[(PathBuf, MediaKind)],
+        source_text: Option<&str>,
+    ) -> bool {
+        matches!(self, Self::Twitter)
+            && source_text.is_some()
+            && media_items
+                .iter()
+                .all(|(_, kind)| matches!(kind, MediaKind::Image))
+    }
 }
 
 fn compose_caption(quote: &str, source_text: Option<&str>) -> String {
