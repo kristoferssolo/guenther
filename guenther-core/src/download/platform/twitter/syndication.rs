@@ -31,9 +31,9 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
             .get(image_url)
             .send()
             .await
-            .map_err(download_error)?
+            .map_err(|err| download_error(&err))?
             .error_for_status()
-            .map_err(download_error)?
+            .map_err(|err| download_error(&err))?
             .bytes()
             .await
             .map_err(|e| Error::other(format!("failed to read twitter image bytes: {e}")))?;
@@ -69,9 +69,9 @@ async fn fetch_tweet_result(tweet_id: &str) -> Result<Value> {
         .get(url)
         .send()
         .await
-        .map_err(fetch_error)?
+        .map_err(|err| fetch_error(&err))?
         .error_for_status()
-        .map_err(fetch_error)?
+        .map_err(|err| fetch_error(&err))?
         .json::<Value>()
         .await
         .map_err(|e| Error::other(format!("failed to parse twitter syndication data: {e}")))
@@ -128,7 +128,7 @@ fn image_extension(url: &str) -> String {
         .and_then(|parsed| {
             parsed
                 .path_segments()
-                .and_then(|segments| segments.last().map(str::to_owned))
+                .and_then(|mut segments| segments.next_back().map(str::to_owned))
         })
         .and_then(|last| {
             last.rsplit_once('.')
@@ -138,11 +138,11 @@ fn image_extension(url: &str) -> String {
         .unwrap_or_else(|| "jpg".to_owned())
 }
 
-fn fetch_error(err: reqwest::Error) -> Error {
+fn fetch_error(err: &reqwest::Error) -> Error {
     Error::other(format!("failed to fetch twitter syndication data: {err}"))
 }
 
-fn download_error(err: reqwest::Error) -> Error {
+fn download_error(err: &reqwest::Error) -> Error {
     Error::other(format!("failed to download twitter image: {err}"))
 }
 
@@ -163,8 +163,12 @@ mod tests {
     fn extracts_photo_urls_from_photos() {
         let payload = json!({
             "photos": [
-                {"url": "https://pbs.twimg.com/media/one.jpg"},
-                {"url": "https://pbs.twimg.com/media/two.png"}
+                {
+                    "url": "https://pbs.twimg.com/media/one.jpg"
+                },
+                {
+                    "url": "https://pbs.twimg.com/media/two.png"
+                }
             ]
         });
 
@@ -181,8 +185,14 @@ mod tests {
     fn extracts_photo_urls_from_media_details() {
         let payload = json!({
             "mediaDetails": [
-                {"type": "photo", "media_url_https": "https://pbs.twimg.com/media/one.jpg"},
-                {"type": "video", "media_url_https": "https://pbs.twimg.com/media/two.jpg"}
+                {
+                    "type": "photo",
+                    "media_url_https": "https://pbs.twimg.com/media/one.jpg"
+                },
+                {
+                    "type": "video",
+                    "media_url_https": "https://pbs.twimg.com/media/two.jpg"
+                }
             ]
         });
 

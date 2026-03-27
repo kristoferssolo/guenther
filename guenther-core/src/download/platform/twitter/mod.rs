@@ -12,6 +12,11 @@ use tracing::warn;
 ///
 /// Uses `yt-dlp` for the normal path and falls back to the public syndication
 /// endpoint for image-only tweets that `yt-dlp` rejects as having no video.
+///
+/// # Errors
+///
+/// Returns any download, parsing, or network error encountered while fetching
+/// media via `yt-dlp` or the syndication fallback.
 pub async fn download_twitter(url: String) -> Result<DownloadResult> {
     let config = global_config();
 
