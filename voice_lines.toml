@@ -138,7 +138,7 @@ id = "AgADMRsAAtbUQVI"
 title = "I got damage [*crash*].mp3"
 file_id = "AwACAgQAAxkDAAIBEWnH_TTkT6bpChqF2OooN1lWjm_9AAIxGwAC1tRBUpCKknetqFBqOgQ"
 unique_file_id = "AgADMRsAAtbUQVI"
-tags = ["damage", "crash"]
+tags = ["max", "verstappen", "damage", "crash"]
 source_file_id = "CQACAgQAAxkBAAP9acf9LJWWOHWvpUl4QP4vnI5y4CoAAhUbAALW1EFSzqGEhYTUTxU6BA"
 source_unique_file_id = "AgADFRsAAtbUQVI"
 
@@ -510,3 +510,111 @@ unique_file_id = "AgADehsAAtbUQVI"
 tags = ["ferrari", "checking"]
 source_file_id = "CQACAgQAAxkBAAIBXGnIBTYCMkU2jrEINwf8pyKJPoL7AAJ5GwAC1tRBUufaPf2AuHZ3OgQ"
 source_unique_file_id = "AgADeRsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADixsAAtbUQVI"
+title = "Fernando is faster than you.mp3"
+file_id = "AwACAgQAAxkDAAIBamnIDDDpv6RUFEFX18kiSVzU6zcqAAKLGwAC1tRBUuJvC0t9BnLOOgQ"
+unique_file_id = "AgADixsAAtbUQVI"
+tags = ["fernando", "alonso", "felipe", "massa", "ferrari", "faster"]
+source_file_id = "CQACAgQAAxkBAAIBXmnIDC-ZbArrLVXvR4q2VgHLyjraAAKAGwAC1tRBUk72erFrPKJmOgQ"
+source_unique_file_id = "AgADgBsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADjBsAAtbUQVI"
+title = "FOR WHAT?.mp3"
+file_id = "AwACAgQAAxkDAAIBa2nIDDCz6BonwBrWTmNQ4O77AAEOqQACjBsAAtbUQVJXO6V9rjge-ToE"
+unique_file_id = "AgADjBsAAtbUQVI"
+tags = ["kimi", "raikkonen", "what", "scream"]
+source_file_id = "CQACAgQAAxkBAAIBX2nIDC85jEMWhrRcYHq6bCgS5EYCAAJ_GwAC1tRBUl3SwmDP-a7BOgQ"
+source_unique_file_id = "AgADfxsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADjRsAAtbUQVI"
+title = "FUCK.mp3"
+file_id = "AwACAgQAAxkDAAIBbGnIDDBA7NY72vO5k5APH1M_R1XkAAKNGwAC1tRBUpwd-ZtUWZSFOgQ"
+unique_file_id = "AgADjRsAAtbUQVI"
+tags = ["lando", "norris", "fuck", "scream"]
+source_file_id = "CQACAgQAAxkBAAIBYGnIDC9-qHwq1_iLU_TDkS_V3kPyAAKCGwAC1tRBUlwWtEfmXh3AOgQ"
+source_unique_file_id = "AgADghsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADjhsAAtbUQVI"
+title = "Fuuck.mp3"
+file_id = "AwACAgQAAxkDAAIBbWnIDDG2iDySi5Wop3kPTKcx7jGGAAKOGwAC1tRBUtuZXSs243EkOgQ"
+unique_file_id = "AgADjhsAAtbUQVI"
+tags = ["daniel", "ricciardo", "fuck", "scream"]
+source_file_id = "CQACAgQAAxkBAAIBYWnIDC9gyLrZAAFopdhmwGwtjH1UGgACgxsAAtbUQVItU-sl76khVToE"
+source_unique_file_id = "AgADgxsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADjxsAAtbUQVI"
+title = "Have a tea break.mp3"
+file_id = "AwACAgQAAxkDAAIBbmnIDDH3a4wMqameQqAAAUc8NqvV2AACjxsAAtbUQVIGV3D_aiQPJDoE"
+unique_file_id = "AgADjxsAAtbUQVI"
+tags = ["lewis", "hamilton", "ferrari", "tea"]
+source_file_id = "CQACAgQAAxkBAAIBYmnIDC8441dsicWdKTOsPvn7WrkAA4EbAALW1EFSDgN4djicmhw6BA"
+source_unique_file_id = "AgADgRsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADkBsAAtbUQVI"
+title = "I can't, it's broken.mp3"
+file_id = "AwACAgQAAxkDAAIBb2nIDDIkfnHybBwL18Rd80S_5XWlAAKQGwAC1tRBUqQvnJTyDkSPOgQ"
+unique_file_id = "AgADkBsAAtbUQVI"
+tags = ["lando", "norris", "broken"]
+source_file_id = "CQACAgQAAxkBAAIBY2nIDC9PZF_v9u3bie2dYKGWdMQrAAKFGwAC1tRBUlPIks1E8t7uOgQ"
+source_unique_file_id = "AgADhRsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADkRsAAtbUQVI"
+title = "I think Ericsson hit us.mp3"
+file_id = "AwACAgQAAxkDAAIBcGnIDDJjRjjt3jwSqd6xW73l3w5WAAKRGwAC1tRBUuFTVG055NoYOgQ"
+unique_file_id = "AgADkRsAAtbUQVI"
+tags = ["romain", "grosjean", "crash", "marcus", "ericsson"]
+source_file_id = "CQACAgQAAxkBAAIBZGnIDC8rymOrXj9_-B0QJ_xQhY_NAAKHGwAC1tRBUgS4wY8hEHjkOgQ"
+source_unique_file_id = "AgADhxsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADkhsAAtbUQVI"
+title = "It's broken.mp3"
+file_id = "AwACAgQAAxkDAAIBcWnIDDL8koYCTKn2KIINRYB03MviAAKSGwAC1tRBUgABfgjvnxOjuDoE"
+unique_file_id = "AgADkhsAAtbUQVI"
+tags = ["lando", "norris", "broken"]
+source_file_id = "CQACAgQAAxkBAAIBZWnIDC9FPVzIh_KUa8Lw6yUmkQ_NAAKGGwAC1tRBUl0PyrWzsoSSOgQ"
+source_unique_file_id = "AgADhhsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADkxsAAtbUQVI"
+title = "Karma.mp3"
+file_id = "AwACAgQAAxkDAAIBcmnIDDOMlzTj9gUnLJ3CzbZcqgFmAAKTGwAC1tRBUlt02ekTa7MHOgQ"
+unique_file_id = "AgADkxsAAtbUQVI"
+tags = ["fernando", "alonso", "karma"]
+source_file_id = "CQACAgQAAxkBAAIBZmnIDC_p9tx1NZT2-BbSxywN4SgaAAKEGwAC1tRBUt53IA2sEFxpOgQ"
+source_unique_file_id = "AgADhBsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADlBsAAtbUQVI"
+title = "Kimi, get out of the way.mp3"
+file_id = "AwACAgQAAxkDAAIBc2nIDDNixkozr1kttkbi-0EYkvscAAKUGwAC1tRBUpr5qBNqYuAuOgQ"
+unique_file_id = "AgADlBsAAtbUQVI"
+tags = ["kimi", "raikkonen", "fuck"]
+source_file_id = "CQACAgQAAxkBAAIBZ2nIDC_eRIbf34rx-E29eo5zzYXbAAKJGwAC1tRBUu3kpgTdsOvAOgQ"
+source_unique_file_id = "AgADiRsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADlRsAAtbUQVI"
+title = "Leave me alone, I know what I'm doing.mp3"
+file_id = "AwACAgQAAxkDAAIBdGnIDDSXr9PyaShlBU9EneQ0ysBXAAKVGwAC1tRBUnrKStqWF-DWOgQ"
+unique_file_id = "AgADlRsAAtbUQVI"
+tags = ["kimi", "raikkonen"]
+source_file_id = "CQACAgQAAxkBAAIBaGnIDC-f5q2Sh34P-hDCMEpPRzqRAAKIGwAC1tRBUkQh-t-2OzvWOgQ"
+source_unique_file_id = "AgADiBsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADlhsAAtbUQVI"
+title = "Yesss.mp3"
+file_id = "AwACAgQAAxkDAAIBdWnIDDVLuIcb5_ACc6oF_HeZUCs0AAKWGwAC1tRBUrTAdKKMMXYaOgQ"
+unique_file_id = "AgADlhsAAtbUQVI"
+tags = ["max", "verstappen", "wdc", "scream"]
+source_file_id = "CQACAgQAAxkBAAIBaWnIDC9g6LPdf93GekSZghl6agw_AAKKGwAC1tRBUgUTThJM-24FOgQ"
+source_unique_file_id = "AgADihsAAtbUQVI"
