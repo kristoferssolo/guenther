@@ -63,7 +63,7 @@ async fn message_handler(
     handlers: Arc<[Handler]>,
     bot_name: Arc<str>,
 ) -> color_eyre::Result<()> {
-    if let Err(err) = capture_incoming_voice_line(&msg).await {
+    if let Err(err) = capture_incoming_voice_line(&bot, &msg).await {
         warn!(%err, "failed to capture incoming voice line metadata");
     }
 
