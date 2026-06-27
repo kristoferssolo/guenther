@@ -80,7 +80,7 @@ struct Session {
 impl Race {
     fn header(&self, offset: UtcOffset) -> String {
         format!(
-            "{}\n{}, {}, {}\nTimes: UTC{}",
+            "{}\n{}, {}, {}\nTime: UTC{}",
             self.name,
             self.circuit.circuit_name,
             self.circuit.location.locality,
