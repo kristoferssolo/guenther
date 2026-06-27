@@ -18,50 +18,44 @@ pub enum ScheduleView {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct JolpicaResponse {
-    #[serde(rename = "MRData")]
-    data: MrData,
+    mr_data: MrData,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct MrData {
-    #[serde(rename = "RaceTable")]
     race_table: RaceTable,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct RaceTable {
-    #[serde(rename = "Races")]
     races: Vec<Race>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct Race {
     #[serde(rename = "raceName")]
     name: String,
-    #[serde(rename = "Circuit")]
     circuit: Circuit,
     date: String,
     time: String,
-    #[serde(rename = "FirstPractice")]
     first_practice: Option<Session>,
-    #[serde(rename = "SecondPractice")]
     second_practice: Option<Session>,
-    #[serde(rename = "ThirdPractice")]
     third_practice: Option<Session>,
-    #[serde(rename = "Sprint")]
     sprint: Option<Session>,
-    #[serde(rename = "SprintQualifying")]
     sprint_qualifying: Option<Session>,
-    #[serde(rename = "Qualifying")]
     qualifying: Option<Session>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct Circuit {
     #[serde(rename = "circuitName")]
     circuit_name: String,
-    #[serde(rename = "Location")]
     location: Location,
 }
 
@@ -93,51 +87,41 @@ impl Race {
         let mut lines = Vec::new();
         match view {
             ScheduleView::Weekend => {
-                push_optional_session(&mut lines, "🔧 FP1", self.first_practice.as_ref(), offset)?;
-                push_optional_session(&mut lines, "🔧 FP2", self.second_practice.as_ref(), offset)?;
-                push_optional_session(&mut lines, "🔧 FP3", self.third_practice.as_ref(), offset)?;
-                push_optional_session(
+                push_sessions(
                     &mut lines,
-                    "⚡ Sprint Qualifying",
-                    self.sprint_qualifying.as_ref(),
+                    [
+                        ("🔧 FP1", self.first_practice.as_ref()),
+                        ("🔧 FP2", self.second_practice.as_ref()),
+                        ("🔧 FP3", self.third_practice.as_ref()),
+                        ("⚡ Sprint Qualifying", self.sprint_qualifying.as_ref()),
+                        ("⚡ Sprint", self.sprint.as_ref()),
+                        ("⏱️ Qualifying", self.qualifying.as_ref()),
+                    ],
                     offset,
                 )?;
-                push_optional_session(&mut lines, "⚡ Sprint", self.sprint.as_ref(), offset)?;
-                push_optional_session(
-                    &mut lines,
-                    "⏱️ Qualifying",
-                    self.qualifying.as_ref(),
-                    offset,
-                )?;
-                lines.push(format!(
-                    "🏁 Race: {}",
-                    format_session(&self.date, &self.time, offset)?
-                ));
+                lines.push(self.format_race_session(offset)?);
             }
             ScheduleView::Qualifying => {
-                push_optional_session(
+                push_sessions(
                     &mut lines,
-                    "⚡ Sprint Qualifying",
-                    self.sprint_qualifying.as_ref(),
-                    offset,
-                )?;
-                push_optional_session(
-                    &mut lines,
-                    "⏱️ Qualifying",
-                    self.qualifying.as_ref(),
+                    [
+                        ("⚡ Sprint Qualifying", self.sprint_qualifying.as_ref()),
+                        ("⏱️ Qualifying", self.qualifying.as_ref()),
+                    ],
                     offset,
                 )?;
             }
             ScheduleView::Race => {
-                push_optional_session(&mut lines, "⚡ Sprint", self.sprint.as_ref(), offset)?;
-                lines.push(format!(
-                    "🏁 Race: {}",
-                    format_session(&self.date, &self.time, offset)?
-                ));
+                push_sessions(&mut lines, [("⚡ Sprint", self.sprint.as_ref())], offset)?;
+                lines.push(self.format_race_session(offset)?);
             }
         }
 
         Ok(lines)
+    }
+
+    fn format_race_session(&self, offset: UtcOffset) -> Result<String> {
+        format_labeled_session("🏁 Race", &self.date, &self.time, offset)
     }
 }
 
@@ -158,7 +142,7 @@ pub async fn next_race_message(view: ScheduleView, offset: UtcOffset) -> Result<
         .map_err(|e| Error::other(format!("failed to parse F1 schedule: {e}")))?;
 
     let race = response
-        .data
+        .mr_data
         .race_table
         .races
         .first()
@@ -172,20 +156,33 @@ pub async fn next_race_message(view: ScheduleView, offset: UtcOffset) -> Result<
     Ok(format!("{}\n\n{}", race.header(offset), lines.join("\n")))
 }
 
-fn push_optional_session(
+fn push_sessions<const N: usize>(
     lines: &mut Vec<String>,
-    label: &str,
-    session: Option<&Session>,
+    sessions: [(&str, Option<&Session>); N],
     offset: UtcOffset,
 ) -> Result<()> {
-    if let Some(session) = session {
-        lines.push(format!(
-            "{label}: {}",
-            format_session(&session.date, &session.time, offset)?
-        ));
+    for (label, session) in sessions {
+        let Some(session) = session else {
+            continue;
+        };
+        lines.push(format_labeled_session(
+            label,
+            &session.date,
+            &session.time,
+            offset,
+        )?);
     }
 
     Ok(())
+}
+
+fn format_labeled_session(
+    label: &str,
+    date: &str,
+    time: &str,
+    offset: UtcOffset,
+) -> Result<String> {
+    format_session(date, time, offset).map(|session| format!("{label}: {session}"))
 }
 
 fn format_session(date: &str, time: &str, offset: UtcOffset) -> Result<String> {

@@ -167,10 +167,10 @@ fn get_path_from_env(env_key: &str) -> Option<PathBuf> {
 
 fn parse_utc_offset(raw: &str) -> Option<UtcOffset> {
     let trimmed = raw.trim();
-    let (sign, offset) = match trimmed.as_bytes().first().copied() {
-        Some(b'+') => (1, &trimmed[1..]),
-        Some(b'-') => (-1, &trimmed[1..]),
-        _ => (1, trimmed),
+    let (is_negative, offset) = match trimmed.as_bytes().first().copied() {
+        Some(b'+') => (false, &trimmed[1..]),
+        Some(b'-') => (true, &trimmed[1..]),
+        _ => (false, trimmed),
     };
 
     let mut parts = offset.split(':');
@@ -187,7 +187,13 @@ fn parse_utc_offset(raw: &str) -> Option<UtcOffset> {
         return None;
     };
 
-    UtcOffset::from_hms(sign * hours, sign * minutes, 0).ok()
+    let (hours, minutes) = if is_negative {
+        (-hours, -minutes)
+    } else {
+        (hours, minutes)
+    };
+
+    UtcOffset::from_hms(hours, minutes, 0).ok()
 }
 
 impl Default for YoutubeConfig {
