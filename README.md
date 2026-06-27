@@ -110,9 +110,9 @@ The bot currently exposes:
 
 - `/help` or `/h` or `/?`: show command help
 - `/curse`: send a random Guenther-style line
-- `/f1weekend`: show the next F1 weekend schedule, including practice sessions when available
-- `/f1quali`: show the next F1 qualifying sessions, including sprint qualifying when available
-- `/f1race`: show the next F1 race sessions, including the sprint when available
+- `/weekend` or `/f1`: show the next F1 weekend schedule, including practice sessions when available
+- `/quali`: show the next F1 qualifying sessions, including sprint qualifying when available
+- `/race`: show the next F1 race sessions, including the sprint when available
 
 ## Inline Voice Lines
 

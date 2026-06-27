@@ -14,13 +14,13 @@ pub enum Command {
     /// Send a random comment
     #[command()]
     Curse,
-    /// 🏎️ Show the next F1 weekend schedule
-    #[command()]
+    /// Show the next F1 weekend schedule
+    #[command(aliases = ["f1"])]
     Weekend,
-    /// ⏱️ Show the next F1 qualifying schedule
+    /// Show the next F1 qualifying schedule
     #[command()]
     Quali,
-    /// 🏁 Show the next F1 race schedule
+    /// Show the next F1 race schedule
     #[command()]
     Race,
 }
