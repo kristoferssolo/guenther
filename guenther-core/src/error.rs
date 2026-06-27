@@ -23,6 +23,28 @@ pub enum Error {
     #[error("environment variable `{0}` not found")]
     EnvNotFound(String),
 
+    #[error("failed to fetch F1 schedule")]
+    FetchF1Schedule(#[source] reqwest::Error),
+
+    #[error("failed to decode F1 schedule")]
+    DecodeF1Schedule(#[source] reqwest::Error),
+
+    #[error("no upcoming F1 race found")]
+    MissingF1Race,
+
+    #[error("no matching F1 sessions found")]
+    MissingF1Sessions,
+
+    #[error("failed to parse F1 session time `{raw}`")]
+    ParseF1SessionTime {
+        raw: String,
+        #[source]
+        source: time::error::Parse,
+    },
+
+    #[error("failed to format F1 session time")]
+    FormatF1SessionTime(#[source] time::error::Format),
+
     #[error("other: {0}")]
     Other(String),
 }

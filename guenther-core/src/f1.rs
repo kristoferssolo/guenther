@@ -134,23 +134,23 @@ impl Race {
 pub async fn next_race_message(view: ScheduleView, offset: UtcOffset) -> Result<String> {
     let response = reqwest::get(NEXT_RACE_URL)
         .await
-        .map_err(|e| Error::other(format!("failed to fetch F1 schedule: {e}")))?
+        .map_err(Error::FetchF1Schedule)?
         .error_for_status()
-        .map_err(|e| Error::other(format!("failed to fetch F1 schedule: {e}")))?
+        .map_err(Error::FetchF1Schedule)?
         .json::<JolpicaResponse>()
         .await
-        .map_err(|e| Error::other(format!("failed to parse F1 schedule: {e}")))?;
+        .map_err(Error::DecodeF1Schedule)?;
 
     let race = response
         .mr_data
         .race_table
         .races
         .first()
-        .ok_or_else(|| Error::other("no upcoming F1 race found"))?;
+        .ok_or(Error::MissingF1Race)?;
 
     let lines = race.session_lines(view, offset)?;
     if lines.is_empty() {
-        return Err(Error::other("no matching F1 sessions found"));
+        return Err(Error::MissingF1Sessions);
     }
 
     Ok(format!("{}\n\n{}", race.header(offset), lines.join("\n")))
@@ -189,13 +189,13 @@ fn format_session(date: &str, time: &str, offset: UtcOffset) -> Result<String> {
     let session_time = parse_session_time(date, time)?.to_offset(offset);
     session_time
         .format(DISPLAY_FORMAT)
-        .map_err(|e| Error::other(format!("failed to format F1 session time: {e}")))
+        .map_err(Error::FormatF1SessionTime)
 }
 
 fn parse_session_time(date: &str, time: &str) -> Result<OffsetDateTime> {
     let raw = format!("{date}T{time}");
     OffsetDateTime::parse(&raw, &Rfc3339)
-        .map_err(|e| Error::other(format!("failed to parse F1 session time `{raw}`: {e}")))
+        .map_err(|source| Error::ParseF1SessionTime { raw, source })
 }
 
 fn format_offset(offset: UtcOffset) -> String {
