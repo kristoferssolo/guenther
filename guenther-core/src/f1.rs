@@ -80,7 +80,7 @@ struct Session {
 impl Race {
     fn header(&self, offset: UtcOffset) -> String {
         format!(
-            "{}\n{}, {}, {}\nTime: UTC{}",
+            "🏎️ {}\n📍 {}, {}, {}\n🕒 Time: UTC{}",
             self.name,
             self.circuit.circuit_name,
             self.circuit.location.locality,
@@ -93,35 +93,45 @@ impl Race {
         let mut lines = Vec::new();
         match view {
             ScheduleView::Weekend => {
-                push_optional_session(&mut lines, "FP1", self.first_practice.as_ref(), offset)?;
-                push_optional_session(&mut lines, "FP2", self.second_practice.as_ref(), offset)?;
-                push_optional_session(&mut lines, "FP3", self.third_practice.as_ref(), offset)?;
+                push_optional_session(&mut lines, "🔧 FP1", self.first_practice.as_ref(), offset)?;
+                push_optional_session(&mut lines, "🔧 FP2", self.second_practice.as_ref(), offset)?;
+                push_optional_session(&mut lines, "🔧 FP3", self.third_practice.as_ref(), offset)?;
                 push_optional_session(
                     &mut lines,
-                    "Sprint Qualifying",
+                    "⚡ Sprint Qualifying",
                     self.sprint_qualifying.as_ref(),
                     offset,
                 )?;
-                push_optional_session(&mut lines, "Sprint", self.sprint.as_ref(), offset)?;
-                push_optional_session(&mut lines, "Qualifying", self.qualifying.as_ref(), offset)?;
+                push_optional_session(&mut lines, "⚡ Sprint", self.sprint.as_ref(), offset)?;
+                push_optional_session(
+                    &mut lines,
+                    "⏱️ Qualifying",
+                    self.qualifying.as_ref(),
+                    offset,
+                )?;
                 lines.push(format!(
-                    "Race: {}",
+                    "🏁 Race: {}",
                     format_session(&self.date, &self.time, offset)?
                 ));
             }
             ScheduleView::Qualifying => {
                 push_optional_session(
                     &mut lines,
-                    "Sprint Qualifying",
+                    "⚡ Sprint Qualifying",
                     self.sprint_qualifying.as_ref(),
                     offset,
                 )?;
-                push_optional_session(&mut lines, "Qualifying", self.qualifying.as_ref(), offset)?;
+                push_optional_session(
+                    &mut lines,
+                    "⏱️ Qualifying",
+                    self.qualifying.as_ref(),
+                    offset,
+                )?;
             }
             ScheduleView::Race => {
-                push_optional_session(&mut lines, "Sprint", self.sprint.as_ref(), offset)?;
+                push_optional_session(&mut lines, "⚡ Sprint", self.sprint.as_ref(), offset)?;
                 lines.push(format!(
-                    "Race: {}",
+                    "🏁 Race: {}",
                     format_session(&self.date, &self.time, offset)?
                 ));
             }
