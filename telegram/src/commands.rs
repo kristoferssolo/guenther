@@ -51,7 +51,7 @@ async fn send_f1_schedule(
     let offset = global_config().f1.utc_offset;
     let message = next_race_message(view, offset)
         .await
-        .unwrap_or_else(|e| format!("Failed to fetch F1 schedule: {e}"));
+        .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 
     bot.send_message(chat_id, message).await
 }

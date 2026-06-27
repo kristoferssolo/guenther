@@ -20,6 +20,7 @@ pub enum ScheduleView {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct JolpicaResponse {
+    #[serde(rename = "MRData")]
     mr_data: MrData,
 }
 
@@ -36,18 +37,24 @@ struct RaceTable {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
 struct Race {
     #[serde(rename = "raceName")]
     name: String,
+    #[serde(rename = "Circuit")]
     circuit: Circuit,
     date: String,
     time: String,
+    #[serde(rename = "FirstPractice")]
     first_practice: Option<Session>,
+    #[serde(rename = "SecondPractice")]
     second_practice: Option<Session>,
+    #[serde(rename = "ThirdPractice")]
     third_practice: Option<Session>,
+    #[serde(rename = "Sprint")]
     sprint: Option<Session>,
+    #[serde(rename = "SprintQualifying")]
     sprint_qualifying: Option<Session>,
+    #[serde(rename = "Qualifying")]
     qualifying: Option<Session>,
 }
 
@@ -216,6 +223,51 @@ fn format_offset(offset: UtcOffset) -> String {
 mod tests {
     use super::*;
     use time::UtcOffset;
+
+    #[test]
+    fn decodes_jolpica_next_race_response() {
+        let response = serde_json::from_str::<JolpicaResponse>(
+            r#"{
+                "MRData": {
+                    "RaceTable": {
+                        "Races": [{
+                            "raceName": "Austrian Grand Prix",
+                            "Circuit": {
+                                "circuitName": "Red Bull Ring",
+                                "Location": {
+                                    "locality": "Spielberg",
+                                    "country": "Austria"
+                                }
+                            },
+                            "date": "2026-06-28",
+                            "time": "13:00:00Z",
+                            "FirstPractice": {
+                                "date": "2026-06-26",
+                                "time": "11:30:00Z"
+                            },
+                            "Qualifying": {
+                                "date": "2026-06-27",
+                                "time": "14:00:00Z"
+                            }
+                        }]
+                    }
+                }
+            }"#,
+        )
+        .expect("decode Jolpica response");
+
+        let race = response
+            .mr_data
+            .race_table
+            .races
+            .first()
+            .expect("race exists");
+
+        assert_eq!(race.name, "Austrian Grand Prix");
+        assert_eq!(race.circuit.circuit_name, "Red Bull Ring");
+        assert!(race.first_practice.is_some());
+        assert!(race.qualifying.is_some());
+    }
 
     #[test]
     fn format_session_applies_positive_offset() {
