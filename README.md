@@ -17,6 +17,7 @@ It currently supports:
 - Supports optional cookie files for platforms that need authenticated access
 - Can answer inline queries with saved voice lines
 - Can optionally capture incoming voice and audio messages into `voice_lines.toml`
+- Can show the next F1 weekend, qualifying, sprint, and race times
 
 ## Requirements
 
@@ -42,6 +43,7 @@ Optional:
 - `TWITTER_SESSION_COOKIE_PATH`: path to X/Twitter cookies file
 - `YOUTUBE_SESSION_COOKIE_PATH`: path to YouTube cookies file
 - `YOUTUBE_POSTPROCESSOR_ARGS`: custom `yt-dlp` postprocessor arguments for YouTube downloads
+- `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
 - `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture
 
@@ -54,6 +56,7 @@ IG_SESSION_COOKIE_PATH=./cookies/www.instagram.com_cookies.txt
 TIKTOK_SESSION_COOKIE_PATH=./cookies/www.tiktok.com_cookies.txt
 TWITTER_SESSION_COOKIE_PATH=./cookies/www.twitter.com_cookies.txt
 YOUTUBE_SESSION_COOKIE_PATH=./cookies/www.youtube.com_cookies.txt
+F1_UTC_OFFSET=+3
 ```
 
 ## Running Locally
@@ -107,6 +110,9 @@ The bot currently exposes:
 
 - `/help` or `/h` or `/?`: show command help
 - `/curse`: send a random Guenther-style line
+- `/f1weekend`: show the next F1 weekend schedule, including practice sessions when available
+- `/f1quali`: show the next F1 qualifying sessions, including sprint qualifying when available
+- `/f1race`: show the next F1 race sessions, including the sprint when available
 
 ## Inline Voice Lines
 

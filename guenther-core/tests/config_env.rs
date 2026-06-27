@@ -16,6 +16,7 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("TIKTOK_SESSION_COOKIE_PATH", None),
             ("TWITTER_SESSION_COOKIE_PATH", None),
             ("YOUTUBE_POSTPROCESSOR_ARGS", None),
+            ("F1_UTC_OFFSET", None),
         ],
         f,
     )
@@ -97,5 +98,25 @@ fn from_env_uses_none_when_cookie_path_is_not_a_file() {
                 assert_none!(cfg.youtube.cookies_path);
             },
         );
+    });
+}
+
+#[test]
+fn from_env_sets_f1_utc_offset_when_valid() {
+    with_clean_config_env(|| {
+        with_vars([("F1_UTC_OFFSET", Some("+3"))], || {
+            let cfg = Config::from_env();
+            assert_eq!(cfg.f1.utc_offset.whole_seconds(), 10_800);
+        });
+    });
+}
+
+#[test]
+fn from_env_uses_utc_when_f1_utc_offset_invalid() {
+    with_clean_config_env(|| {
+        with_vars([("F1_UTC_OFFSET", Some("wat"))], || {
+            let cfg = Config::from_env();
+            assert_eq!(cfg.f1.utc_offset.whole_seconds(), 0);
+        });
     });
 }
