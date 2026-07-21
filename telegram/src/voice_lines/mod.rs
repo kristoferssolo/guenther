@@ -111,7 +111,7 @@ fn normalize(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{VoiceLine, matches_query};
+    use super::*;
 
     fn sample_line(id: &str, title: &str, tags: &[&str]) -> VoiceLine {
         VoiceLine {

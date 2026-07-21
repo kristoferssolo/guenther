@@ -1,4 +1,7 @@
-use crate::utils::{MediaKind, detect_media_kind_async};
+use crate::{
+    error::{Error, Result},
+    utils::{MediaKind, detect_media_kind_async},
+};
 use futures::{StreamExt, stream};
 use std::{cmp::min, path::PathBuf};
 use tempfile::TempDir;
@@ -21,9 +24,9 @@ pub struct DownloadResult {
 /// Returns `NoMediaFound` when there are no valid image/video files left after classification.
 pub async fn collect_supported_media(
     mut dr: DownloadResult,
-) -> crate::error::Result<(TempDir, Vec<(PathBuf, MediaKind)>)> {
+) -> Result<(TempDir, Vec<(PathBuf, MediaKind)>)> {
     if dr.files.is_empty() {
-        return Err(crate::error::Error::NoMediaFound);
+        return Err(Error::NoMediaFound);
     }
 
     let concurrency = min(8, dr.files.len());
@@ -47,7 +50,7 @@ pub async fn collect_supported_media(
 
     let mut media_items = results.into_iter().flatten().collect::<Vec<_>>();
     if media_items.is_empty() {
-        return Err(crate::error::Error::NoMediaFound);
+        return Err(Error::NoMediaFound);
     }
 
     media_items.sort_by_key(|(path, kind)| {

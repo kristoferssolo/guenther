@@ -148,7 +148,7 @@ fn download_error(err: &reqwest::Error) -> Error {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_photo_urls, extract_tweet_id, syndication_token};
+    use super::*;
     use serde_json::json;
 
     #[test]

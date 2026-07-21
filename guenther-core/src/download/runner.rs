@@ -175,7 +175,7 @@ mod tests {
     use tokio::runtime::Builder;
 
     #[test]
-    fn is_potential_media_file_() {
+    fn identifies_potential_media_files() {
         assert!(is_potential_media_file(Path::new("video.mp4")));
         assert!(is_potential_media_file(Path::new("image.jpg")));
         assert!(!is_potential_media_file(Path::new(".DS_Store")));

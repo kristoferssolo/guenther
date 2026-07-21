@@ -134,7 +134,7 @@ fn normalized_title(line: &VoiceLine) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::telegram_method_url;
+    use super::*;
     use teloxide::Bot;
 
     #[test]

@@ -22,7 +22,7 @@ pub async fn download_twitter(url: String) -> Result<DownloadResult> {
 
     match run_yt_dlp(
         &["-t", "mp4", "--write-info-json"],
-        config.twitter.cookies_path.as_ref(),
+        config.twitter.cookies_path.as_deref(),
         &url,
     )
     .await

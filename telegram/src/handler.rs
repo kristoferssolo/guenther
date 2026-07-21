@@ -5,7 +5,7 @@ use guenther_core::{
     utils::MediaKind,
 };
 use regex::{Error as RegexError, Regex};
-use std::{path::PathBuf, pin::Pin, sync::Arc};
+use std::{path::PathBuf, pin::Pin, result::Result as StdResult, sync::Arc};
 use teloxide::{
     Bot,
     prelude::*,
@@ -36,7 +36,7 @@ impl Handler {
         platform: Platform,
         regex_pattern: &'static str,
         func: DownloadFn,
-    ) -> std::result::Result<Self, RegexError> {
+    ) -> StdResult<Self, RegexError> {
         let regex = Regex::new(regex_pattern)?;
         Ok(Self {
             platform,
@@ -226,7 +226,7 @@ fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::compose_caption;
+    use super::*;
 
     #[test]
     fn compose_caption_appends_source_text() {

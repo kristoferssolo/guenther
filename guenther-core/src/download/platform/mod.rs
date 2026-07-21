@@ -5,7 +5,7 @@ use crate::{
     },
     error::Result,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tempfile::tempdir;
 use tokio::fs;
 use tracing::debug;
@@ -27,7 +27,7 @@ pub mod youtube;
 /// `run_command_in_tempdir`.
 pub async fn run_yt_dlp(
     base_args: &[&str],
-    cookies_path: Option<&PathBuf>,
+    cookies_path: Option<&Path>,
     url: &str,
 ) -> Result<DownloadResult> {
     let mut args = base_args.to_vec();

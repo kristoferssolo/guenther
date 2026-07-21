@@ -21,5 +21,5 @@ pub async fn download_youtube(url: String) -> Result<DownloadResult> {
     if !config.youtube.postprocessor_args.is_empty() {
         args.extend(["--postprocessor-args", &config.youtube.postprocessor_args]);
     }
-    run_yt_dlp(&args, config.youtube.cookies_path.as_ref(), &url).await
+    run_yt_dlp(&args, config.youtube.cookies_path.as_deref(), &url).await
 }

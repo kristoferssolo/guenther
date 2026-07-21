@@ -16,7 +16,7 @@ capitalize = "0.3.4"
 color-eyre = "0.6"
 dotenv = "0.15"
 futures = "0.3"
-infer = "0.19"
+infer = "0.22"
 rand = "0.10"
 regex = "1.12"
 reqwest = { version = "0.13", default-features = false, features = [
@@ -34,7 +34,7 @@ tempfile = "3"
 thiserror = "2.0"
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = ["process", "fs"] }
-toml = "0.8"
+toml = "1.1"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }

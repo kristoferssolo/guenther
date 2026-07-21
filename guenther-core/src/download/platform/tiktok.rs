@@ -11,5 +11,5 @@ use crate::{
 /// - Propagates `run_command_in_tempdir` errors.
 pub async fn download_tiktok(url: String) -> Result<DownloadResult> {
     let config = global_config();
-    run_yt_dlp(&["-t", "mp4"], config.tiktok.cookies_path.as_ref(), &url).await
+    run_yt_dlp(&["-t", "mp4"], config.tiktok.cookies_path.as_deref(), &url).await
 }

@@ -55,7 +55,7 @@ pub fn parse_post_text_from_value(json: &Value) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_post_text;
+    use super::*;
 
     #[test]
     fn parse_prefers_full_text() {

@@ -1,10 +1,6 @@
 use crate::error::{Error, Result};
 use rand::{rng, seq::IndexedRandom};
-use std::{
-    fmt::Display,
-    path::Path,
-    sync::{Arc, OnceLock},
-};
+use std::{fmt::Display, path::Path, sync::OnceLock};
 use tokio::fs::read_to_string;
 
 static GLOBAL_COMMENTS: OnceLock<Comments> = OnceLock::new();
@@ -19,7 +15,7 @@ const FALLBACK_COMMENTS: &[&str] = &[
 
 #[derive(Debug)]
 pub struct Comments {
-    lines: Arc<Vec<String>>,
+    lines: Vec<String>,
 }
 
 impl Comments {
@@ -30,9 +26,7 @@ impl Comments {
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>();
-        Self {
-            lines: lines.into(),
-        }
+        Self { lines }
     }
 
     /// Load comments from a plaintext file asynchronously.
@@ -55,9 +49,7 @@ impl Comments {
             return Err(Error::other("comments file contains no usable lines"));
         }
 
-        Ok(Self {
-            lines: lines.into(),
-        })
+        Ok(Self { lines })
     }
 
     /// Pick a random comment. Falls back to a default if the list is empty.
@@ -147,7 +139,7 @@ mod tests {
     fn build_caption_truncation() {
         let long_comment = "A".repeat(TELEGRAM_CAPTION_LIMIT + 10);
         let comments = Comments {
-            lines: Arc::new(vec![long_comment]),
+            lines: vec![long_comment],
         };
 
         let caption = comments.build_caption();
@@ -157,9 +149,7 @@ mod tests {
 
     #[test]
     fn pick_fallback() {
-        let empty_comment = Comments {
-            lines: Arc::new(Vec::new()),
-        };
+        let empty_comment = Comments { lines: Vec::new() };
         assert_eq!(empty_comment.pick(), FALLBACK_COMMENTS[0]);
     }
 }

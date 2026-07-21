@@ -203,7 +203,7 @@ async fn transcode_audio_to_voice(input_path: &Path, output_path: &Path) -> colo
 
 #[cfg(test)]
 mod tests {
-    use super::pick_audio_title;
+    use super::*;
 
     #[test]
     fn pick_audio_title_prefers_caption() {
