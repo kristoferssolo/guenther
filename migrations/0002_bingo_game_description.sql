@@ -1,2 +1,0 @@
-ALTER TABLE bingo_games
-ADD COLUMN description TEXT NOT NULL DEFAULT '';

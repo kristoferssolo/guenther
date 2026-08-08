@@ -16,6 +16,7 @@ CREATE TABLE bingo_games (
     chat_id INTEGER NOT NULL,
     slug TEXT NOT NULL COLLATE nocase,
     name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
     center_text TEXT NOT NULL DEFAULT 'LIGHTS OUT!',
     state TEXT NOT NULL DEFAULT 'draft'
     CHECK (state IN ('draft', 'active', 'closed')),
