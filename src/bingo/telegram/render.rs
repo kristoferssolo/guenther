@@ -1,4 +1,5 @@
 use crate::bingo::{
+    card_image::render_card_png,
     error::Result,
     model::{Card, GRID_SIDE, Position},
     store::BingoStore,
@@ -6,7 +7,7 @@ use crate::bingo::{
 use teloxide::{
     payloads::SendMessageSetters,
     prelude::{Bot, ChatId, Requester},
-    types::{InlineKeyboardButton, InlineKeyboardMarkup},
+    types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile},
 };
 
 pub const HELP: &str = r"F1 bingo commands
@@ -71,9 +72,20 @@ pub async fn send_entries(
 }
 
 pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
-    bot.send_message(chat_id, render_card(card))
-        .reply_markup(card_keyboard(card))
+    let photo = bot
+        .send_photo(
+            chat_id,
+            InputFile::memory(render_card_png(card)?).file_name("bingo-card.png"),
+        )
         .await?;
+    let text_result = bot
+        .send_message(chat_id, render_card(card))
+        .reply_markup(card_keyboard(card))
+        .await;
+    if let Err(error) = text_result {
+        let _ = bot.delete_message(chat_id, photo.id).await;
+        return Err(error.into());
+    }
     Ok(())
 }
 
