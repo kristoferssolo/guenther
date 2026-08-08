@@ -133,12 +133,12 @@ pub struct KnownUser {
     pub display_name: String,
 }
 
-impl KnownUser {
-    #[must_use]
-    pub fn label(&self) -> String {
-        self.username
-            .as_ref()
-            .map_or_else(|| self.display_name.clone(), |name| format!("@{name}"))
+impl fmt::Display for KnownUser {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.username {
+            Some(name) => write!(formatter, "@{name}"),
+            None => formatter.write_str(&self.display_name),
+        }
     }
 }
 

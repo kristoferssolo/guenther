@@ -1,7 +1,7 @@
 use crate::bingo::{
     command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
     error::{BingoError, Result},
-    model::{Card, KnownUser, Position, ToggleResult},
+    model::{Card, GRID_SIDE, KnownUser, Position, ToggleResult},
     store::BingoStore,
 };
 use teloxide::{
@@ -34,6 +34,9 @@ Chat administrators:
 
 You can omit @user when replying to that user's message. Use /bingo import or /bingo reimport with a five-row, pipe-separated grid to migrate a manual card.";
 
+// Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
+const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
+
 pub async fn observe_message_users(store: &BingoStore, message: &Message) -> Result<()> {
     let chat_id = message.chat.id.0;
     for user in message.mentioned_users() {
@@ -64,7 +67,7 @@ pub async fn answer_bingo(
     }
 }
 
-pub async fn answer_callback(bot: Bot, query: CallbackQuery, store: BingoStore) -> Result<()> {
+pub async fn answer_callback(bot: &Bot, query: &CallbackQuery, store: &BingoStore) -> Result<()> {
     let Some(data) = query.data.as_deref() else {
         return Ok(());
     };
@@ -74,9 +77,9 @@ pub async fn answer_callback(bot: Bot, query: CallbackQuery, store: BingoStore) 
     let user_id = telegram_user_id(&query.from)?;
     let result = store.toggle_cell(card_id, user_id, position).await;
     match result {
-        Ok(toggle) => finish_toggle(&bot, &query, toggle).await,
+        Ok(toggle) => finish_toggle(bot, query, toggle).await,
         Err(error) if error.is_user_facing() => {
-            bot.answer_callback_query(query.id)
+            bot.answer_callback_query(query.id.clone())
                 .text(error.to_string())
                 .show_alert(true)
                 .await?;
@@ -84,7 +87,7 @@ pub async fn answer_callback(bot: Bot, query: CallbackQuery, store: BingoStore) 
         }
         Err(error) => {
             let _ = bot
-                .answer_callback_query(query.id)
+                .answer_callback_query(query.id.clone())
                 .text("Could not update the card")
                 .show_alert(true)
                 .await;
@@ -360,8 +363,7 @@ async fn finish_toggle(bot: &Bot, query: &CallbackQuery, toggle: ToggleResult) -
                 message.chat.id,
                 format!(
                     "🏁 BINGO! {} completed a line on {}.",
-                    toggle.card.owner.label(),
-                    toggle.card.game.name
+                    toggle.card.owner, toggle.card.game.name
                 ),
             )
             .await?;
@@ -380,7 +382,7 @@ async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
 fn render_card(card: &Card) -> String {
     let mut lines = vec![
         format!("🏁 {}", card.game.name),
-        format!("Card for {} · game: {}", card.owner.label(), card.game.slug),
+        format!("Card for {} · game: {}", card.owner, card.game.slug),
         String::new(),
     ];
     lines.extend(card.cells.iter().map(|cell| {
@@ -403,13 +405,13 @@ fn render_card(card: &Card) -> String {
 fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
     let rows = card
         .cells
-        .chunks(5)
+        .chunks(GRID_SIDE)
         .map(|cells| {
             cells
                 .iter()
                 .map(|cell| {
                     let label = if cell.is_free {
-                        "★ C3".to_owned()
+                        format!("★ {}", Position::FREE)
                     } else if cell.marked {
                         format!("✓ {}", cell.position)
                     } else {
@@ -457,7 +459,7 @@ async fn send_text(bot: &Bot, chat_id: ChatId, text: &str) -> Result<()> {
 async fn send_lines(bot: &Bot, chat_id: ChatId, lines: Vec<String>) -> Result<()> {
     let mut chunk = String::new();
     for line in lines {
-        if !chunk.is_empty() && chunk.len() + line.len() + 1 > 3_800 {
+        if !chunk.is_empty() && chunk.len() + line.len() + 1 > TELEGRAM_MESSAGE_BUDGET {
             send_text(bot, chat_id, &chunk).await?;
             chunk.clear();
         }

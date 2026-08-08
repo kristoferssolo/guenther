@@ -130,7 +130,7 @@ async fn bingo_callback_handler(
     query: teloxide::types::CallbackQuery,
     bingo_store: BingoStore,
 ) -> color_eyre::Result<()> {
-    answer_callback(bot, query, bingo_store).await?;
+    answer_callback(&bot, &query, &bingo_store).await?;
     Ok(())
 }
 

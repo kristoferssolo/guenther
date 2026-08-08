@@ -738,7 +738,7 @@ async fn insert_card(
     game_id: i64,
     owner: &KnownUser,
 ) -> Result<i64> {
-    let owner_name = owner.label();
+    let owner_name = owner.to_string();
     let result = sqlx::query!(
         r#"INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)"#,
         game_id,
