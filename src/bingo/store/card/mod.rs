@@ -17,7 +17,21 @@ use crate::bingo::{
     },
 };
 use rand::seq::SliceRandom;
+use sqlx::{FromRow, query, query_as, query_scalar};
 use teloxide::types::{ChatId, UserId};
+
+#[derive(Debug, FromRow)]
+struct EntryRow {
+    id: i64,
+    text: String,
+}
+
+#[derive(Debug, FromRow)]
+struct CardOwnerRow {
+    user_id: i64,
+    bingo_announced: bool,
+    state: String,
+}
 
 impl BingoStore {
     pub async fn generate_card(
@@ -110,12 +124,12 @@ impl BingoStore {
                     "non-free imported cells must contain entry IDs".to_owned(),
                 )
             })?;
-            let entry = sqlx::query!(
-                r#"SELECT id, text FROM bingo_entries
-WHERE id = ? AND game_id = ? AND active = 1"#,
-                entry_id,
-                game.id,
+            let entry = query_as::<_, EntryRow>(
+                r"SELECT id, text FROM bingo_entries
+WHERE id = ? AND game_id = ? AND active = 1",
             )
+            .bind(entry_id)
+            .bind(game.id)
             .fetch_optional(&mut *transaction)
             .await?
             .ok_or_else(|| {
@@ -143,13 +157,12 @@ WHERE id = ? AND game_id = ? AND active = 1"#,
     pub async fn card(&self, chat_id: ChatId, slug: Option<&str>, user_id: UserId) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
         let user_id = db_user_id(user_id)?;
-        let card_id = sqlx::query_scalar!(
-            r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
-            game.id,
-            user_id,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let card_id =
+            query_scalar::<_, i64>("SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?")
+                .bind(game.id)
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
         fetch_card(
             &self.pool,
             card_id.ok_or_else(|| {
@@ -177,12 +190,12 @@ WHERE id = ? AND game_id = ? AND active = 1"#,
         ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
-        let entry = sqlx::query!(
-            r#"SELECT id, text FROM bingo_entries
-WHERE id = ? AND game_id = ? AND active = 1"#,
-            entry_id,
-            game.id,
+        let entry = query_as::<_, EntryRow>(
+            r"SELECT id, text FROM bingo_entries
+WHERE id = ? AND game_id = ? AND active = 1",
         )
+        .bind(entry_id)
+        .bind(game.id)
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or_else(|| {
@@ -191,14 +204,14 @@ WHERE id = ? AND game_id = ? AND active = 1"#,
             ))
         })?;
         let position = i64::from(position);
-        sqlx::query!(
-            r#"UPDATE bingo_card_cells SET entry_id = ?, text = ?
-WHERE card_id = ? AND position = ?"#,
-            entry.id,
-            entry.text,
-            card_id,
-            position,
+        query(
+            r"UPDATE bingo_card_cells SET entry_id = ?, text = ?
+WHERE card_id = ? AND position = ?",
         )
+        .bind(entry.id)
+        .bind(entry.text)
+        .bind(card_id)
+        .bind(position)
         .execute(&mut *transaction)
         .await?;
         transaction.commit().await?;
@@ -214,18 +227,14 @@ WHERE card_id = ? AND position = ?"#,
         let game = self.game(chat_id, slug).await?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
-        sqlx::query!(
-            r#"UPDATE bingo_card_cells SET marked = is_free WHERE card_id = ?"#,
-            card_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
-        sqlx::query!(
-            r#"UPDATE bingo_cards SET bingo_announced = 0 WHERE id = ?"#,
-            card_id,
-        )
-        .execute(&mut *transaction)
-        .await?;
+        query("UPDATE bingo_card_cells SET marked = is_free WHERE card_id = ?")
+            .bind(card_id)
+            .execute(&mut *transaction)
+            .await?;
+        query("UPDATE bingo_cards SET bingo_announced = 0 WHERE id = ?")
+            .bind(card_id)
+            .execute(&mut *transaction)
+            .await?;
         transaction.commit().await?;
         fetch_card(&self.pool, card_id).await
     }
@@ -241,14 +250,14 @@ WHERE card_id = ? AND position = ?"#,
         }
         let position = i64::from(position);
         let mut transaction = self.pool.begin().await?;
-        let row = sqlx::query!(
-            r#"SELECT
-    c.user_id, c.bingo_announced AS `bingo_announced: bool`,
+        let row = query_as::<_, CardOwnerRow>(
+            r"SELECT
+    c.user_id, c.bingo_announced,
     g.state FROM bingo_cards c
     JOIN bingo_games g ON g.id = c.game_id
-WHERE c.id = ?"#,
-            card_id,
+WHERE c.id = ?",
         )
+        .bind(card_id)
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
@@ -258,12 +267,12 @@ WHERE c.id = ?"#,
         if row.state.parse::<GameState>()? != GameState::Active {
             return Err(BingoError::GameNotActive);
         }
-        let result = sqlx::query!(
-            r#"UPDATE bingo_card_cells SET marked = NOT marked
-WHERE card_id = ? AND position = ? AND is_free = 0"#,
-            card_id,
-            position,
+        let result = query(
+            r"UPDATE bingo_card_cells SET marked = NOT marked
+WHERE card_id = ? AND position = ? AND is_free = 0",
         )
+        .bind(card_id)
+        .bind(position)
         .execute(&mut *transaction)
         .await?;
         require_changed(result.rows_affected(), || {
@@ -272,12 +281,10 @@ WHERE card_id = ? AND position = ? AND is_free = 0"#,
         let cells = fetch_cells(&mut *transaction, card_id).await?;
         let newly_completed = !row.bingo_announced && has_bingo(&cells);
         if newly_completed {
-            sqlx::query!(
-                r#"UPDATE bingo_cards SET bingo_announced = 1 WHERE id = ?"#,
-                card_id,
-            )
-            .execute(&mut *transaction)
-            .await?;
+            query("UPDATE bingo_cards SET bingo_announced = 1 WHERE id = ?")
+                .bind(card_id)
+                .execute(&mut *transaction)
+                .await?;
         }
         transaction.commit().await?;
         let card = fetch_card(&self.pool, card_id).await?;
