@@ -69,6 +69,10 @@ impl BingoStore {
         fetch_card(&self.pool, card_id).await
     }
 
+    /// Import a card while its game is draft or active.
+    ///
+    /// Draft imports are supported so administrators can stage paper cards before activating a
+    /// game.
     pub async fn import_card(
         &self,
         chat_id: ChatId,
@@ -212,6 +216,7 @@ WHERE card_id = ? AND position = ?"#,
         user_id: UserId,
     ) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
+        ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
         sqlx::query!(

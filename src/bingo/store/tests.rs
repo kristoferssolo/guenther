@@ -151,6 +151,26 @@ async fn rejects_duplicate_generation_without_replace() {
 }
 
 #[tokio::test]
+async fn rejects_card_reset_after_game_is_closed() {
+    let store = store().await;
+    let owner = user(10, "driver");
+    let card = setup_card(&store, &owner).await;
+    assert_ok!(store.toggle_cell(card.id, owner.user_id, position(0)).await);
+    assert_ok!(
+        store
+            .set_game_state(CHAT_ID, "season", GameState::Closed)
+            .await
+    );
+
+    assert_err!(store.reset_card(CHAT_ID, None, owner.user_id).await);
+    let fetched = store
+        .card(CHAT_ID, None, owner.user_id)
+        .await
+        .expect("fetch unchanged card");
+    assert!(fetched.cells[0].marked);
+}
+
+#[tokio::test]
 async fn only_owner_can_mark_and_first_line_is_announced_once() {
     let store = store().await;
     let owner = user(10, "driver");
