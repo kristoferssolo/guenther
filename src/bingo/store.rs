@@ -318,29 +318,21 @@ WHERE game_id = ? AND active = 1 ORDER BY id"#,
     pub async fn edit_entry(&self, chat_id: i64, entry_id: i64, text: &str) -> Result<Entry> {
         validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
         let normalized = normalize_entry(text);
-        let result = sqlx::query!(
+        let row = sqlx::query_as!(
+            EntryRow,
             r#"UPDATE bingo_entries SET text = ?, normalized_text = ?
 WHERE id = ? AND game_id IN
-(SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1"#,
+(SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1
+RETURNING id, game_id, text"#,
             text.trim(),
             normalized,
             entry_id,
             chat_id,
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .map_err(|error| map_unique(error, "that entry already exists".to_owned()))?;
-        require_changed(
-            result.rows_affected(),
-            format!("entry `{entry_id}` was not found"),
-        )?;
-        let row = sqlx::query_as!(
-            EntryRow,
-            r#"SELECT id, game_id, text FROM bingo_entries WHERE id = ?"#,
-            entry_id,
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        .map_err(|error| map_unique(error, "that entry already exists".to_owned()))?
+        .ok_or_else(|| BingoError::NotFound(format!("entry `{entry_id}` was not found")))?;
         Ok(row.into())
     }
 
