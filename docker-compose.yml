@@ -8,17 +8,12 @@ services:
     env_file: .env
     environment:
       COBALT_API_URL: http://cobalt:9000/
-      TIKTOK_SESSION_COOKIE_PATH: /app/tiktok.txt
-      TWITTER_SESSION_COOKIE_PATH: /app/twitter.txt
     depends_on:
       - cobalt
     restart: unless-stopped
     volumes:
       - ./voice_lines.toml:/app/voice_lines.toml:ro
       - ./comments.txt:/app/comments.txt:ro
-      - ${TIKTOK_SESSION_COOKIE_PATH:-/etc/secrets/www.tiktok.com_cookies.txt}:/app/tiktok.txt:ro
-      - ${TWITTER_SESSION_COOKIE_PATH:-/etc/secrets/www.twitter.com_cookies.txt}:/app/twitter.txt:ro
-
   cobalt:
     image: ghcr.io/imputnet/cobalt:11
     init: true

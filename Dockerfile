@@ -34,20 +34,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && cp target/release/telegram /app/guenther
 
 
-FROM ghcr.io/astral-sh/uv:0.10.9-debian-slim AS builder-py
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_PYTHON_INSTALL_DIR=/python \
-    UV_PYTHON_PREFERENCE=only-managed
-
-RUN uv python install 3.14
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv --python 3.14 /opt/yt-dlp\
-    && uv pip install --python /opt/yt-dlp/bin/python yt-dlp[default] \
-    && /opt/yt-dlp/bin/yt-dlp --version
-
-
 FROM debian:trixie-slim AS runtime
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -55,10 +41,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update -y\
     && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
     && useradd -mu 1001 guenther
-
-COPY --from=builder-py /python /python
-COPY --from=builder-py /opt/yt-dlp /opt/yt-dlp
-ENV PATH="/opt/yt-dlp/bin:$PATH"
 
 WORKDIR /app
 COPY --from=builder-rs /app/guenther /usr/local/bin/guenther
