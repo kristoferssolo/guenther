@@ -29,6 +29,7 @@ pub enum GameAdmin {
     SetState { slug: String, state: GameState },
     SetDefault { slug: String },
     SetCenter { slug: String, text: String },
+    SetDescription { slug: String, description: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,7 +78,7 @@ impl BingoCommand {
 #[cfg(test)]
 mod tests {
     use crate::bingo::{
-        command::{BingoCommand, CardAdmin, EntryAdmin},
+        command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
         model::FREE_POSITION,
     };
     use claims::{assert_err, assert_ok_eq};
@@ -190,5 +191,24 @@ mod tests {
         );
         assert!(command.requires_admin());
         assert_err!(BingoCommand::parse("entries import"));
+    }
+
+    #[test]
+    fn parses_setting_and_clearing_game_descriptions() {
+        assert_ok_eq!(
+            BingoCommand::parse("game description season Welcome to 2026"),
+            BingoCommand::Game(GameAdmin::SetDescription {
+                slug: "season".to_owned(),
+                description: "Welcome to 2026".to_owned(),
+            })
+        );
+        assert_ok_eq!(
+            BingoCommand::parse("game description season"),
+            BingoCommand::Game(GameAdmin::SetDescription {
+                slug: "season".to_owned(),
+                description: String::new(),
+            })
+        );
+        assert_err!(BingoCommand::parse("game description"));
     }
 }

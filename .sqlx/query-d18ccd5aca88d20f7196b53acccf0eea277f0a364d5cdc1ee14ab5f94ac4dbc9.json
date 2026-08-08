@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT\n    id, chat_id, slug, name, center_text, state,\n    is_default AS `is_default: bool`\nFROM bingo_games\nWHERE chat_id = ?1\n  AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))",
+  "query": "UPDATE bingo_games SET is_default = 1 WHERE id = ?\nRETURNING\n    id, chat_id, slug, name, description, center_text, state,\n    is_default AS `is_default: bool`",
   "describe": {
     "columns": [
       {
@@ -48,8 +48,19 @@
         }
       },
       {
-        "name": "center_text",
+        "name": "description",
         "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "name": "center_text",
+        "ordinal": 5,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -60,7 +71,7 @@
       },
       {
         "name": "state",
-        "ordinal": 5,
+        "ordinal": 6,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -71,7 +82,7 @@
       },
       {
         "name": "is_default: bool",
-        "ordinal": 6,
+        "ordinal": 7,
         "type_info": "Integer",
         "origin": {
           "Table": {
@@ -82,9 +93,10 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -94,5 +106,5 @@
       false
     ]
   },
-  "hash": "742efe2b1381ab84e2597c3200ae899cc7a02df355b742c58cfbdb01a267f2ab"
+  "hash": "d18ccd5aca88d20f7196b53acccf0eea277f0a364d5cdc1ee14ab5f94ac4dbc9"
 }

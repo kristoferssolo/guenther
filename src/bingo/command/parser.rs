@@ -65,8 +65,18 @@ fn parse_game(input: &str) -> Result<BingoCommand> {
             let (slug, text) = required_pair(rest, "game center <slug> <text>")?;
             Ok(BingoCommand::Game(GameAdmin::SetCenter { slug, text }))
         }
+        "description" => {
+            let (slug, description) = split_once_whitespace(rest);
+            if slug.is_empty() {
+                return Err(usage("game description <slug> [text]"));
+            }
+            Ok(BingoCommand::Game(GameAdmin::SetDescription {
+                slug: slug.to_owned(),
+                description: description.to_owned(),
+            }))
+        }
         _ => Err(BingoError::InvalidCommand(
-            "usage: /bingo game <create|activate|close|default|center> ...".to_owned(),
+            "usage: /bingo game <create|activate|close|default|center|description> ...".to_owned(),
         )),
     }
 }

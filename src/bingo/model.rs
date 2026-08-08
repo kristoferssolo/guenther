@@ -8,6 +8,7 @@ pub const CELL_COUNT: usize = GRID_SIDE * GRID_SIDE;
 pub const FREE_POSITION: usize = 12;
 pub const REQUIRED_ENTRIES: usize = CELL_COUNT - 1;
 pub const MAX_ENTRY_CHARS: usize = 128;
+pub const MAX_GAME_DESCRIPTION_CHARS: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position(u8);
@@ -150,6 +151,7 @@ pub struct Game {
     pub chat_id: ChatId,
     pub slug: String,
     pub name: String,
+    pub description: String,
     pub center_text: String,
     pub state: GameState,
     pub is_default: bool,

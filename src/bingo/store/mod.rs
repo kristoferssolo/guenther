@@ -16,7 +16,10 @@ pub struct BingoStore {
 #[cfg(test)]
 mod tests {
     use crate::bingo::{
-        model::{CELL_COUNT, Card, GameState, KnownUser, Position, REQUIRED_ENTRIES},
+        model::{
+            CELL_COUNT, Card, GameState, KnownUser, MAX_GAME_DESCRIPTION_CHARS, Position,
+            REQUIRED_ENTRIES,
+        },
         store::BingoStore,
     };
     use claims::{assert_err, assert_ok, assert_ok_eq};
@@ -118,6 +121,43 @@ mod tests {
             .await
             .expect("list imported entries");
         assert_eq!(entries.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn stores_updates_and_clears_game_descriptions() {
+        let store = store().await;
+        assert_ok!(
+            store
+                .create_game(CHAT_ID, "season", "Season", UserId(10))
+                .await
+        );
+        let described = store
+            .set_game_description(CHAT_ID, "season", "  Welcome to 2026.  ")
+            .await
+            .expect("set game description");
+        assert_eq!(described.description, "Welcome to 2026.");
+        assert_eq!(
+            store
+                .game(CHAT_ID, Some("season"))
+                .await
+                .expect("fetch described game")
+                .description,
+            "Welcome to 2026."
+        );
+        assert_err!(
+            store
+                .set_game_description(
+                    CHAT_ID,
+                    "season",
+                    &"x".repeat(MAX_GAME_DESCRIPTION_CHARS + 1),
+                )
+                .await
+        );
+        let cleared = store
+            .set_game_description(CHAT_ID, "season", "")
+            .await
+            .expect("clear game description");
+        assert!(cleared.description.is_empty());
     }
 
     #[tokio::test]

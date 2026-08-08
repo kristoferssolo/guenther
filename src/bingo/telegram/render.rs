@@ -24,6 +24,7 @@ Chat administrators:
 /bingo game close <slug>
 /bingo game default <slug>
 /bingo game center <slug> <text>
+/bingo game description <slug> [text]
 /bingo entries import <game> (attach a UTF-8 text file)
 /bingo edit <entry_id> <text>
 /bingo delete <entry_id>
@@ -77,11 +78,14 @@ pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
 }
 
 pub fn render_card(card: &Card) -> String {
-    let mut lines = vec![
-        format!("🏁 {}", card.game.name),
+    let mut lines = vec![format!("🏁 {}", card.game.name)];
+    if !card.game.description.is_empty() {
+        lines.push(card.game.description.clone());
+    }
+    lines.extend([
         format!("Card for {} · game: {}", card.owner, card.game.slug),
         String::new(),
-    ];
+    ]);
     lines.extend(card.cells.iter().map(|cell| {
         let marker = if cell.is_free {
             "★"

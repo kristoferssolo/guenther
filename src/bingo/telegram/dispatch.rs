@@ -107,6 +107,17 @@ async fn execute_game_admin(
             )
             .await
         }
+        GameAdmin::SetDescription { slug, description } => {
+            let game = store
+                .set_game_description(chat_id, &slug, &description)
+                .await?;
+            let confirmation = if game.description.is_empty() {
+                format!("Cleared the `{}` game description.", game.slug)
+            } else {
+                format!("Updated the `{}` game description.", game.slug)
+            };
+            send_text(bot, message.chat.id, &confirmation).await
+        }
     }
 }
 

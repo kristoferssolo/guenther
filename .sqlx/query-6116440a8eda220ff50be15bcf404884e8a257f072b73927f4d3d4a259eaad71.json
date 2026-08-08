@@ -1,55 +1,11 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT\n    c.id AS card_id, c.user_id, c.owner_name,\n    c.bingo_announced AS `bingo_announced: bool`,\n    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text,\n    g.state, g.is_default AS `is_default: bool`\nFROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
+  "query": "SELECT\n    id, chat_id, slug, name, description, center_text, state,\n    is_default AS `is_default: bool`\nFROM bingo_games WHERE chat_id = ? ORDER BY id DESC",
   "describe": {
     "columns": [
       {
-        "name": "card_id",
+        "name": "id",
         "ordinal": 0,
-        "type_info": "Integer",
-        "origin": {
-          "Table": {
-            "table": "bingo_cards",
-            "name": "id"
-          }
-        }
-      },
-      {
-        "name": "user_id",
-        "ordinal": 1,
-        "type_info": "Integer",
-        "origin": {
-          "Table": {
-            "table": "bingo_cards",
-            "name": "user_id"
-          }
-        }
-      },
-      {
-        "name": "owner_name",
-        "ordinal": 2,
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "bingo_cards",
-            "name": "owner_name"
-          }
-        }
-      },
-      {
-        "name": "bingo_announced: bool",
-        "ordinal": 3,
-        "type_info": "Integer",
-        "origin": {
-          "Table": {
-            "table": "bingo_cards",
-            "name": "bingo_announced"
-          }
-        }
-      },
-      {
-        "name": "game_id",
-        "ordinal": 4,
         "type_info": "Integer",
         "origin": {
           "Table": {
@@ -60,7 +16,7 @@
       },
       {
         "name": "chat_id",
-        "ordinal": 5,
+        "ordinal": 1,
         "type_info": "Integer",
         "origin": {
           "Table": {
@@ -71,7 +27,7 @@
       },
       {
         "name": "slug",
-        "ordinal": 6,
+        "ordinal": 2,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -81,8 +37,8 @@
         }
       },
       {
-        "name": "game_name",
-        "ordinal": 7,
+        "name": "name",
+        "ordinal": 3,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -92,8 +48,19 @@
         }
       },
       {
+        "name": "description",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "description"
+          }
+        }
+      },
+      {
         "name": "center_text",
-        "ordinal": 8,
+        "ordinal": 5,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -104,7 +71,7 @@
       },
       {
         "name": "state",
-        "ordinal": 9,
+        "ordinal": 6,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -115,7 +82,7 @@
       },
       {
         "name": "is_default: bool",
-        "ordinal": 10,
+        "ordinal": 7,
         "type_info": "Integer",
         "origin": {
           "Table": {
@@ -136,11 +103,8 @@
       false,
       false,
       false,
-      false,
-      false,
-      false,
       false
     ]
   },
-  "hash": "16ec3be493263501effdf02ab6a7d6ccd1cfd3f98f08717235e1aeebe1bae2e3"
+  "hash": "6116440a8eda220ff50be15bcf404884e8a257f072b73927f4d3d4a259eaad71"
 }

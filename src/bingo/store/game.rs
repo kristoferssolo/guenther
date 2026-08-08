@@ -1,6 +1,6 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{Game, GameState},
+    model::{Game, GameState, MAX_GAME_DESCRIPTION_CHARS},
     store::{
         BingoStore,
         id::db_user_id,
@@ -16,6 +16,7 @@ struct GameRow {
     chat_id: i64,
     slug: String,
     name: String,
+    description: String,
     center_text: String,
     state: String,
     is_default: bool,
@@ -51,7 +52,7 @@ impl BingoStore {
             r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
 VALUES (?, ?, ?, ?, ?)
 RETURNING
-    id, chat_id, slug, name, center_text, state,
+    id, chat_id, slug, name, description, center_text, state,
     is_default AS `is_default: bool`"#,
             chat_id,
             normalized_slug,
@@ -72,7 +73,7 @@ RETURNING
         let rows = sqlx::query_as!(
             GameRow,
             r#"SELECT
-    id, chat_id, slug, name, center_text, state,
+    id, chat_id, slug, name, description, center_text, state,
     is_default AS `is_default: bool`
 FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
             chat_id,
@@ -98,7 +99,7 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
             r#"UPDATE bingo_games SET state = ?
 WHERE chat_id = ? AND slug = ? COLLATE NOCASE
 RETURNING
-    id, chat_id, slug, name, center_text, state,
+    id, chat_id, slug, name, description, center_text, state,
     is_default AS `is_default: bool`"#,
             state.as_str(),
             chat_id,
@@ -124,7 +125,7 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, center_text, state,
+    id, chat_id, slug, name, description, center_text, state,
     is_default AS `is_default: bool`"#,
             game.id,
         )
@@ -143,9 +144,37 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET center_text = ? WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, center_text, state,
+    id, chat_id, slug, name, description, center_text, state,
     is_default AS `is_default: bool`"#,
             text.trim(),
+            game.id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        row.try_into()
+    }
+
+    pub async fn set_game_description(
+        &self,
+        chat_id: ChatId,
+        slug: &str,
+        description: &str,
+    ) -> Result<Game> {
+        let description = description.trim();
+        if description.chars().count() > MAX_GAME_DESCRIPTION_CHARS {
+            return Err(BingoError::InvalidCommand(format!(
+                "game description must contain at most {MAX_GAME_DESCRIPTION_CHARS} characters"
+            )));
+        }
+        let game = self.game(chat_id, Some(slug)).await?;
+        ensure_editable(&game)?;
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET description = ? WHERE id = ?
+RETURNING
+    id, chat_id, slug, name, description, center_text, state,
+    is_default AS `is_default: bool`"#,
+            description,
             game.id,
         )
         .fetch_one(&self.pool)
@@ -163,6 +192,7 @@ impl TryFrom<GameRow> for Game {
             chat_id: ChatId(row.chat_id),
             slug: row.slug,
             name: row.name,
+            description: row.description,
             center_text: row.center_text,
             state: row.state.parse()?,
             is_default: row.is_default,
@@ -179,7 +209,7 @@ async fn fetch_game<'e>(
     let row = sqlx::query_as!(
         GameRow,
         r#"SELECT
-    id, chat_id, slug, name, center_text, state,
+    id, chat_id, slug, name, description, center_text, state,
     is_default AS `is_default: bool`
 FROM bingo_games
 WHERE chat_id = ?1
