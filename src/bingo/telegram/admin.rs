@@ -67,11 +67,7 @@ impl AdminCache {
     }
 }
 
-pub(super) async fn is_chat_admin(
-    bot: &Bot,
-    message: &Message,
-    cache: &AdminCache,
-) -> Result<bool> {
+pub async fn is_chat_admin(bot: &Bot, message: &Message, cache: &AdminCache) -> Result<bool> {
     let Some(user) = message.from.as_ref() else {
         return Ok(false);
     };
