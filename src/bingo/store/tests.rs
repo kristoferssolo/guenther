@@ -115,6 +115,54 @@ async fn numbers_entries_independently_for_each_game() {
 }
 
 #[tokio::test]
+async fn deletes_games_with_their_contents_and_promotes_a_new_default() {
+    let store = store().await;
+    let owner = user(10, "driver");
+    let card = setup_card(&store, &owner).await;
+    let deleted_game_id = card.game.id;
+    assert_ok!(
+        store
+            .create_game(CHAT_ID, "sprint", "Sprint", owner.user_id)
+            .await
+    );
+
+    assert_ok!(store.delete_game(CHAT_ID, "season").await);
+
+    assert_err!(store.game(CHAT_ID, Some("season")).await);
+    let default = assert_ok!(store.game(CHAT_ID, None).await);
+    assert_eq!(default.slug, "sprint");
+    assert!(default.is_default);
+    let entry_count = assert_ok!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS `count!: i64`
+FROM bingo_entries WHERE game_id = ?"#,
+            deleted_game_id.get(),
+        )
+        .fetch_one(&store.pool)
+        .await
+    );
+    let card_count = assert_ok!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS `count!: i64`
+FROM bingo_cards WHERE game_id = ?"#,
+            deleted_game_id.get(),
+        )
+        .fetch_one(&store.pool)
+        .await
+    );
+    let cell_count = assert_ok!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS `count!: i64`
+FROM bingo_card_cells WHERE card_id = ?"#,
+            card.id.get(),
+        )
+        .fetch_one(&store.pool)
+        .await
+    );
+    assert_eq!((entry_count, card_count, cell_count), (0, 0, 0));
+}
+
+#[tokio::test]
 async fn stores_updates_and_clears_game_descriptions() {
     let store = store().await;
     assert_ok!(

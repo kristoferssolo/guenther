@@ -79,6 +79,15 @@ async fn execute_game_admin(
             )
             .await
         }
+        GameAdmin::Delete { slug } => {
+            store.delete_game(chat_id, &slug).await?;
+            send_text(
+                bot,
+                message.chat.id,
+                &format!("Deleted game `{slug}` and all of its cards and entries."),
+            )
+            .await
+        }
         GameAdmin::SetState { slug, state } => {
             let game = store.set_game_state(chat_id, &slug, state).await?;
             send_text(

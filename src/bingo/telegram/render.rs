@@ -23,6 +23,7 @@ Everyone:
 
 Chat administrators:
 /bingo game create <slug> <name>
+/bingo game delete <slug>
 /bingo game activate <slug>
 /bingo game close <slug>
 /bingo game default <slug>

@@ -29,6 +29,7 @@ pub enum BingoCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameAdmin {
     Create { slug: String, name: String },
+    Delete { slug: String },
     SetState { slug: String, state: GameState },
     SetDefault { slug: String },
     SetCenter { slug: String, text: String },
@@ -282,5 +283,19 @@ mod tests {
             })
         );
         assert_err!(BingoCommand::parse("game description"));
+    }
+
+    #[test]
+    fn parses_game_deletion_as_an_admin_command() {
+        let command = assert_ok!(BingoCommand::parse("game delete season"));
+        assert_eq!(
+            command,
+            BingoCommand::Game(GameAdmin::Delete {
+                slug: "season".to_owned(),
+            })
+        );
+        assert!(command.requires_admin());
+        assert_err!(BingoCommand::parse("game delete"));
+        assert_err!(BingoCommand::parse("game delete season trailing"));
     }
 }

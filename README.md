@@ -186,6 +186,7 @@ or delete entries, and manage other users' cards:
 
 ```text
 /bingo game create <slug> <name>
+/bingo game delete <slug>
 /bingo game activate <slug>
 /bingo game close <slug>
 /bingo game default <slug>
@@ -203,6 +204,7 @@ or delete entries, and manage other users' cards:
 ```
 
 Omitting the text from `game description` clears the current description.
+Deleting a game permanently removes all of its entries and cards.
 
 Games start in `draft`. Add at least 24 entries and activate the game before
 generating randomized cards. Generation samples without replacement and stores

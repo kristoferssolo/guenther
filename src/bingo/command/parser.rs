@@ -61,6 +61,11 @@ fn parse_game(input: &str) -> Result<BingoCommand> {
                 name: name.to_owned(),
             }))
         }
+        value if value.eq_ignore_ascii_case("delete") => {
+            Ok(BingoCommand::Game(GameAdmin::Delete {
+                slug: required_word(rest, "game delete <slug>")?.to_owned(),
+            }))
+        }
         value if value.eq_ignore_ascii_case("activate") => {
             Ok(BingoCommand::Game(GameAdmin::SetState {
                 slug: required_word(rest, "game activate <slug>")?.to_owned(),
@@ -96,7 +101,8 @@ fn parse_game(input: &str) -> Result<BingoCommand> {
             }))
         }
         _ => Err(BingoError::InvalidCommand(
-            "usage: /bingo game <create|activate|close|default|center|description> ...".to_owned(),
+            "usage: /bingo game <create|delete|activate|close|default|center|description> ..."
+                .to_owned(),
         )),
     }
 }

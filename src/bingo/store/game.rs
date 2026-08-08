@@ -83,6 +83,28 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
         rows.into_iter().map(Game::try_from).collect()
     }
 
+    pub async fn delete_game(&self, chat_id: ChatId, slug: &str) -> Result<()> {
+        let mut transaction = self.pool.begin().await?;
+        let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
+        sqlx::query!(r#"DELETE FROM bingo_games WHERE id = ?"#, game.id.get())
+            .execute(&mut *transaction)
+            .await?;
+        if game.is_default {
+            let chat_id = chat_id.0;
+            sqlx::query!(
+                r#"UPDATE bingo_games SET is_default = 1
+WHERE id = (
+    SELECT id FROM bingo_games WHERE chat_id = ? ORDER BY id DESC LIMIT 1
+)"#,
+                chat_id,
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn game(&self, chat_id: ChatId, slug: Option<&str>) -> Result<Game> {
         fetch_game(&self.pool, chat_id, slug).await
     }
