@@ -17,8 +17,8 @@ pub struct BingoStore {
 mod tests {
     use crate::bingo::{
         model::{
-            CELL_COUNT, Card, GameState, KnownUser, MAX_GAME_DESCRIPTION_CHARS, Position,
-            REQUIRED_ENTRIES,
+            CELL_COUNT, Card, GameState, ImportedCell, KnownUser, MAX_GAME_DESCRIPTION_CHARS,
+            Position, REQUIRED_ENTRIES,
         },
         store::BingoStore,
     };
@@ -279,5 +279,48 @@ mod tests {
                 .cells[1],
             card.cells[1]
         );
+    }
+
+    #[tokio::test]
+    async fn imports_cards_from_active_game_entry_ids() {
+        let store = store().await;
+        let owner = user(10, "driver");
+        let original = setup_card(&store, &owner).await;
+        let (_, entries) = store
+            .list_entries(CHAT_ID, Some("season"))
+            .await
+            .expect("list game entries");
+        let mut entries = entries.iter();
+        let imported = Position::iter()
+            .map(|cell_position| ImportedCell {
+                entry_id: (cell_position != Position::FREE)
+                    .then(|| entries.next().expect("24 entries are available").id),
+                marked: cell_position == position(0) || cell_position == Position::FREE,
+                is_free: cell_position == Position::FREE,
+            })
+            .collect::<Vec<_>>();
+        let card = store
+            .import_card(CHAT_ID, "season", &owner, &imported, true)
+            .await
+            .expect("reimport card from entry IDs");
+        assert!(card.cells[0].marked);
+        assert_eq!(card.cells[0].text, "Entry 0");
+        assert!(card.cells[Position::FREE.index()].is_free);
+
+        let mut invalid = imported;
+        invalid[0].entry_id = Some(i64::MAX);
+        assert_err!(
+            store
+                .import_card(CHAT_ID, "season", &owner, &invalid, true)
+                .await
+        );
+        assert_eq!(
+            store
+                .card(CHAT_ID, Some("season"), owner.user_id)
+                .await
+                .expect("failed reimport was rolled back"),
+            card
+        );
+        assert_ne!(card.id, original.id);
     }
 }

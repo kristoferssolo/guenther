@@ -36,7 +36,7 @@ Chat administrators:
 /bingo card set <game> [@user] <A1-E5> <entry_id>
 
 You can omit @user when replying to that user 's message.
-Use /bingo import or /bingo reimport with a five-row, pipe-separated grid to migrate a manual card.";
+Use /bingo import or /bingo reimport with a five-row, pipe-separated entry-ID grid.";
 
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;

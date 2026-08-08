@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT\n    id, chat_id, slug, name, description, center_text, state,\n    is_default AS `is_default: bool`\nFROM bingo_games\nWHERE chat_id = ?1\n  AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))",
+  "query": "INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)\nVALUES (?, ?, ?, ?, ?)\nRETURNING\nid, chat_id, slug, name, description, center_text, state,\nis_default AS `is_default: bool`",
   "describe": {
     "columns": [
       {
@@ -93,7 +93,7 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 5
     },
     "nullable": [
       false,
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "0d8ec35ca9fef978e068a6c86012b16e955f9b7ed192b49186d08833a3ea5aa9"
+  "hash": "72d4fda47e5894cded966fa0214f8fff4b756f7c1bd9fba4b1c2c0a8f5f0542f"
 }

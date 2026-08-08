@@ -190,7 +190,7 @@ impl Card {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedCell {
-    pub text: String,
+    pub entry_id: Option<i64>,
     pub marked: bool,
     pub is_free: bool,
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)\nVALUES (?, ?, ?, ?, ?)\nRETURNING\n    id, chat_id, slug, name, description, center_text, state,\n    is_default AS `is_default: bool`",
+  "query": "UPDATE bingo_games SET description = ? WHERE id = ?\nRETURNING\nid, chat_id, slug, name, description, center_text, state,\nis_default AS `is_default: bool`",
   "describe": {
     "columns": [
       {
@@ -93,7 +93,7 @@
       }
     ],
     "parameters": {
-      "Right": 5
+      "Right": 2
     },
     "nullable": [
       false,
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "3b7c9d931d7e90ddde9dda949289a9f93043aa7ebc442c0baa9fdd92b8276b6f"
+  "hash": "6be477c3026dbabf0d2117810aec434f6272286c2006dd1dcf9df12959af6476"
 }

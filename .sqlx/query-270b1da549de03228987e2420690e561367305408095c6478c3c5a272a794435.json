@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE bingo_games SET description = ? WHERE id = ?\nRETURNING\n    id, chat_id, slug, name, description, center_text, state,\n    is_default AS `is_default: bool`",
+  "query": "UPDATE bingo_games SET state = ?\nWHERE chat_id = ? AND slug = ? COLLATE NOCASE\nRETURNING\nid, chat_id, slug, name, description, center_text, state,\nis_default AS `is_default: bool`",
   "describe": {
     "columns": [
       {
@@ -93,7 +93,7 @@
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 3
     },
     "nullable": [
       false,
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "836642bbacbd5affc578dce6dd31c70ee3f2c473655773732fe199a7ccb86989"
+  "hash": "270b1da549de03228987e2420690e561367305408095c6478c3c5a272a794435"
 }

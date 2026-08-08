@@ -154,21 +154,20 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
         for raw in columns {
             let position = cells.len();
             let raw = raw.trim();
-            let (marked, text) = raw
+            let (marked, value) = raw
                 .strip_prefix("[x]")
                 .or_else(|| raw.strip_prefix("[X]"))
-                .map_or((false, raw), |text| (true, text.trim()));
+                .map_or((false, raw), |value| (true, value.trim()));
             let is_free = position == FREE_POSITION;
-            if is_free && text != "*" {
+            if is_free && value != "*" {
                 return Err(BingoError::InvalidCommand(
                     "The center import cell (C3) must be `*`".to_owned(),
                 ));
             }
-            if !is_free {
-                validate_text(text, "imported cell")?;
-            }
             cells.push(ImportedCell {
-                text: text.to_owned(),
+                entry_id: (!is_free)
+                    .then(|| parse_id(value, "entry ID"))
+                    .transpose()?,
                 marked: marked || is_free,
                 is_free,
             });

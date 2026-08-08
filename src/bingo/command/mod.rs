@@ -103,19 +103,24 @@ mod tests {
 
     #[test]
     fn parses_marked_import_grid() {
-        let input = "import 2026-season @driver\n[x] A1 | A2 | A3 | A4 | A5\nB1 | B2 | B3 | B4 | B5\nC1 | C2 | * | C4 | C5\nD1 | D2 | D3 | D4 | D5\nE1 | E2 | E3 | E4 | E5";
+        let input = "import 2026-season @driver\n[x] 81 | 60 | 38 | 41 | 39\n66 | 55 | 67 | 77 | 43\n35 | 3 | * | 17 | 1\n24 | 61 | 13 | 28 | 19\n63 | 30 | 37 | 29 | 33";
         let command = BingoCommand::parse(input).expect("parse import");
         let BingoCommand::Card(CardAdmin::Import { cells, .. }) = command else {
             panic!("expected import")
         };
         assert!(cells[0].marked);
+        assert_eq!(cells[0].entry_id, Some(81));
         assert!(cells[FREE_POSITION].marked);
         assert!(cells[FREE_POSITION].is_free);
+        assert_eq!(cells[FREE_POSITION].entry_id, None);
     }
 
     #[test]
     fn rejects_malformed_import() {
         assert_err!(BingoCommand::parse("import season\nA | B"));
+        assert_err!(BingoCommand::parse(
+            "import season\nA | 2 | 3 | 4 | 5\n6 | 7 | 8 | 9 | 10\n11 | 12 | * | 14 | 15\n16 | 17 | 18 | 19 | 20\n21 | 22 | 23 | 24 | 25"
+        ));
     }
 
     #[test]

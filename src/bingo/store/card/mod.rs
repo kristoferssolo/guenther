@@ -12,7 +12,6 @@ use crate::bingo::{
             NewCell, card_id_in, delete_or_reject_existing, fetch_card, fetch_cells, insert_card,
             insert_cell,
         },
-        entry::upsert_entry,
         id::db_user_id,
         validation::{ensure_active, ensure_editable, require_changed},
     },
@@ -106,14 +105,31 @@ impl BingoStore {
                 .await?;
                 continue;
             }
-            let entry_id = upsert_entry(&mut *transaction, game.id, &cell.text).await?;
+            let entry_id = cell.entry_id.ok_or_else(|| {
+                BingoError::InvalidCommand(
+                    "non-free imported cells must contain entry IDs".to_owned(),
+                )
+            })?;
+            let entry = sqlx::query!(
+                r#"SELECT id, text FROM bingo_entries
+WHERE id = ? AND game_id = ? AND active = 1"#,
+                entry_id,
+                game.id,
+            )
+            .fetch_optional(&mut *transaction)
+            .await?
+            .ok_or_else(|| {
+                BingoError::NotFound(format!(
+                    "active entry `{entry_id}` was not found in game `{slug}`"
+                ))
+            })?;
             insert_cell(
                 &mut transaction,
                 card_id,
                 NewCell {
                     position,
-                    entry_id: Some(entry_id),
-                    text: &cell.text,
+                    entry_id: Some(entry.id),
+                    text: &entry.text,
                     marked: cell.marked,
                     is_free: false,
                 },

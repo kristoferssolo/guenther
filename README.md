@@ -255,29 +255,29 @@ just bingo-card-preview
 
 ### Importing existing cards
 
-Use `import` to copy a paper card exactly; it does not shuffle the supplied
-cells. The five rows map to A through E and each row's five values map to
-columns 1 through 5. The center at C3 must be `*`. Prefix an already-marked
-cell with `[x]`.
+Use `import` to assemble a card from existing entry IDs without shuffling them.
+The five rows map to A through E and each row's five values map to columns 1
+through 5. Every ID must identify an active entry in the selected game. The
+center at C3 must be `*`. Prefix an already-marked ID with `[x]`.
 
 The safest way to select the owner is to reply to one of their messages and
 omit `@username`:
 
 ```text
-/bingo import 2026-season
-[x] Safety car | Wet race | Team orders | Red flag | Rookie points
-Pit stop error | Photo finish | DNS | Fastest lap | Engine failure
-Pole sitter wins | Rain delay | * | Surprise podium | Penalty
-Double stack | Radio rant | VSC | First-lap crash | Strategy gamble
-Undercut works | Yellow flag | Track limits | Late overtake | Debris
+/bingo reimport 2026-season
+[x] 81 | 60 | 38 | 41 | 39
+66 | 55 | 67 | 77 | 43
+35 | 3 | * | 17 | 1
+24 | 61 | 13 | 28 | 19
+63 | 30 | 37 | 29 | 33
 ```
 
 If the bot already knows the owner, use `/bingo import 2026-season @driver` as
 the first line instead, followed by the same five grid rows.
 
-Use `/bingo reimport ...` with the same format to explicitly replace an
-existing imported card. Imported entry texts are also added to that game's
-entry pool. Individual mistakes can be corrected later with `/bingo card set`.
+Use `/bingo import ...` when the user does not have a card yet, or
+`/bingo reimport ...` to explicitly replace an existing card. Individual
+mistakes can be corrected later with `/bingo card set`.
 Use the numeric entry ID shown by `/bingo entries <game>`; the selected entry
 must be active and belong to that game.
 Set the game's center text before importing if the paper cards use a different
