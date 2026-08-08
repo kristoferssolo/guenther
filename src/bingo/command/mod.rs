@@ -66,7 +66,12 @@ impl BingoCommand {
 
     #[must_use]
     pub const fn requires_admin(&self) -> bool {
-        matches!(self, Self::Game(_) | Self::Entry(_) | Self::Card(_))
+        matches!(
+            self,
+            Self::Game(_)
+                | Self::Entry(EntryAdmin::Edit { .. } | EntryAdmin::Delete { .. })
+                | Self::Card(_)
+        )
     }
 }
 
@@ -150,5 +155,14 @@ mod tests {
                 text: "incident".to_owned(),
             })
         );
+    }
+
+    #[test]
+    fn adding_entries_does_not_require_an_administrator() {
+        let add = BingoCommand::parse("add safety car").expect("parse entry addition");
+        let edit = BingoCommand::parse("edit 1 red flag").expect("parse entry edit");
+
+        assert!(!add.requires_admin());
+        assert!(edit.requires_admin());
     }
 }
