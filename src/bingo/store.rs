@@ -193,8 +193,8 @@ WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
             r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
 VALUES (?, ?, ?, ?, ?)
 RETURNING
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, center_text, state,
+is_default AS `is_default: bool`"#,
             chat_id,
             normalized_slug,
             name,
@@ -233,8 +233,8 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
             r#"UPDATE bingo_games SET state = ?
 WHERE chat_id = ? AND slug = ? COLLATE NOCASE
 RETURNING
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, center_text, state,
+is_default AS `is_default: bool`"#,
             state.as_str(),
             chat_id,
             slug,
@@ -258,8 +258,8 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, center_text, state,
+is_default AS `is_default: bool`"#,
             game.id,
         )
         .fetch_one(&mut *transaction)
@@ -277,8 +277,8 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET center_text = ? WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, center_text, state,
+is_default AS `is_default: bool`"#,
             text.trim(),
             game.id,
         )
@@ -687,7 +687,7 @@ async fn fetch_game<'e>(
     is_default AS `is_default: bool`
 FROM bingo_games
 WHERE chat_id = ?1
-  AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
+AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
         chat_id,
         slug,
     )
@@ -928,21 +928,29 @@ mod tests {
             .expect("create in-memory bingo store")
     }
 
-    #[tokio::test]
-    async fn generates_persistent_card_with_free_center() {
-        let store = store().await;
-        let owner = user(10, "driver");
-        assert_ok!(store.observe_user(1, &owner).await);
-        assert_ok!(store.create_game(1, "season", "Season", 10).await);
+    async fn setup_card(store: &BingoStore, owner: &KnownUser) -> Card {
+        assert_ok!(store.observe_user(1, owner).await);
+        assert_ok!(
+            store
+                .create_game(1, "season", "Season", owner.user_id)
+                .await
+        );
         assert_ok!(store.set_game_state(1, "season", GameState::Active).await);
         for index in 0..REQUIRED_ENTRIES {
             assert_ok!(store.add_entry(1, None, &format!("Entry {index}")).await);
         }
-        let card = store
-            .generate_card(1, None, &owner, false)
+        store
+            .generate_card(1, None, owner, false)
             .await
-            .expect("generate card");
-        assert_eq!(card.cells.len(), 25);
+            .expect("generate card")
+    }
+
+    #[tokio::test]
+    async fn generates_persistent_card_with_free_center() {
+        let store = store().await;
+        let owner = user(10, "driver");
+        let card = setup_card(&store, &owner).await;
+        assert_eq!(card.cells.len(), CELL_COUNT);
         assert!(card.cells[FREE_POSITION].is_free);
         assert!(card.cells[FREE_POSITION].marked);
         let fetched = store
@@ -956,13 +964,7 @@ mod tests {
     async fn rejects_duplicate_generation_without_replace() {
         let store = store().await;
         let owner = user(10, "driver");
-        assert_ok!(store.observe_user(1, &owner).await);
-        assert_ok!(store.create_game(1, "season", "Season", 10).await);
-        assert_ok!(store.set_game_state(1, "season", GameState::Active).await);
-        for index in 0..REQUIRED_ENTRIES {
-            assert_ok!(store.add_entry(1, None, &format!("Entry {index}")).await);
-        }
-        assert_ok!(store.generate_card(1, None, &owner, false).await);
+        setup_card(&store, &owner).await;
         assert_err!(store.generate_card(1, None, &owner, false).await);
         assert_ok!(store.generate_card(1, None, &owner, true).await);
     }
@@ -971,16 +973,7 @@ mod tests {
     async fn only_owner_can_mark_and_first_line_is_announced_once() {
         let store = store().await;
         let owner = user(10, "driver");
-        assert_ok!(store.observe_user(1, &owner).await);
-        assert_ok!(store.create_game(1, "season", "Season", 10).await);
-        assert_ok!(store.set_game_state(1, "season", GameState::Active).await);
-        for index in 0..REQUIRED_ENTRIES {
-            assert_ok!(store.add_entry(1, None, &format!("Entry {index}")).await);
-        }
-        let card = store
-            .generate_card(1, None, &owner, false)
-            .await
-            .expect("generate card");
+        let card = setup_card(&store, &owner).await;
 
         assert_err!(store.toggle_cell(card.id, 99, 0).await);
         for position in 0..4 {
@@ -1009,16 +1002,7 @@ mod tests {
     async fn edits_do_not_change_existing_card_snapshots() {
         let store = store().await;
         let owner = user(10, "driver");
-        assert_ok!(store.observe_user(1, &owner).await);
-        assert_ok!(store.create_game(1, "season", "Season", 10).await);
-        assert_ok!(store.set_game_state(1, "season", GameState::Active).await);
-        for index in 0..REQUIRED_ENTRIES {
-            assert_ok!(store.add_entry(1, None, &format!("Entry {index}")).await);
-        }
-        let card = store
-            .generate_card(1, None, &owner, false)
-            .await
-            .expect("generate card");
+        let card = setup_card(&store, &owner).await;
         let original_texts = card
             .cells
             .iter()
