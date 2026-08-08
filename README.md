@@ -4,26 +4,28 @@ Guenther is a Rust Telegram bot that takes social media links and sends back the
 
 It currently supports:
 
-- Instagram reels and TV posts (borked)
+- Instagram reels and TV posts
 - TikTok short links
 - X/Twitter posts
-- YouTube Shorts (borked)
+- YouTube Shorts
 
 ## Features
 
 - Accepts supported URLs in chat and replies with downloaded media
 - Uses random caption lines from `comments.txt`
 - Extracts post text from image-only X/Twitter posts when available
-- Supports optional cookie files for platforms that need authenticated access
+- Uses a private Cobalt instance for public Instagram and YouTube media
+- Supports optional cookie files for TikTok and X/Twitter
 - Can answer inline queries with saved voice lines
 - Can optionally capture incoming voice and audio messages into `voice_lines.toml`
 - Can show the next F1 weekend, qualifying, sprint, and race times
 
 ## Requirements
 
-Guenther expects these tools at runtime:
+Guenther expects these services and tools at runtime:
 
-- `yt-dlp`
+- [Cobalt](https://github.com/imputnet/cobalt) for Instagram and YouTube
+- `yt-dlp` for TikTok and X/Twitter
 - `ffmpeg` (when creating/saving voice lines)
 - a Telegram bot token exposed as `TELOXIDE_TOKEN`
 
@@ -38,11 +40,10 @@ Required:
 Optional:
 
 - `CHAT_ID`: admin/debug chat that receives internal error messages
-- `IG_SESSION_COOKIE_PATH`: path to Instagram cookies file
+- `COBALT_API_URL`: Cobalt processing endpoint; defaults to `http://127.0.0.1:9000/`
+- `COBALT_API_KEY`: API key for a protected external Cobalt instance; omit for the private Compose service
 - `TIKTOK_SESSION_COOKIE_PATH`: path to TikTok cookies file
 - `TWITTER_SESSION_COOKIE_PATH`: path to X/Twitter cookies file
-- `YOUTUBE_SESSION_COOKIE_PATH`: path to YouTube cookies file
-- `YOUTUBE_POSTPROCESSOR_ARGS`: custom `yt-dlp` postprocessor arguments for YouTube downloads
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
 - `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture
@@ -52,16 +53,15 @@ Sample `.env`:
 ```env
 TELOXIDE_TOKEN=123456:telegram-token
 CHAT_ID=123456789
-IG_SESSION_COOKIE_PATH=./cookies/www.instagram.com_cookies.txt
+COBALT_API_URL=http://127.0.0.1:9000/
 TIKTOK_SESSION_COOKIE_PATH=./cookies/www.tiktok.com_cookies.txt
 TWITTER_SESSION_COOKIE_PATH=./cookies/www.twitter.com_cookies.txt
-YOUTUBE_SESSION_COOKIE_PATH=./cookies/www.youtube.com_cookies.txt
 F1_UTC_OFFSET=+3
 ```
 
 ## Running Locally
 
-Install dependencies first:
+Start a local Cobalt instance, then install dependencies:
 
 ```bash
 cargo build
@@ -73,10 +73,10 @@ Then run the Telegram bot:
 cargo run
 ```
 
-To disable specific platforms, use Cargo features:
+To enable only specific platforms, disable the default feature set first:
 
 ```bash
-cargo run --features instagram,tiktok
+cargo run --no-default-features --features instagram,tiktok
 ```
 
 To enable automatic voice-line capture:
@@ -95,12 +95,16 @@ Build and start:
 docker compose up --build
 ```
 
-The compose setup mounts:
+The Compose setup starts a private Cobalt sidecar that is reachable only from
+Guenther's Docker network. It does not expose Cobalt on a host port or provide
+Instagram/YouTube account cookies.
+
+The setup also mounts:
 
 - `.env`
 - `comments.txt`
 - `voice_lines.toml`
-- platform cookie files into `/app/*.txt`
+- optional TikTok and X/Twitter cookie files into `/app/*.txt`
 
 The runtime image bundles `yt-dlp` and installs `ffmpeg`.
 
@@ -124,8 +128,10 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 
 ## Notes
 
-- The downloader relies on `yt-dlp`, so platform breakage can happen whenever sites change their internals.
-- Cookie files are optional, but in practice they help a lot for rate limits, age gates, and platform restrictions.
+- Instagram and YouTube downloads use Cobalt without account cookies and support public media only.
+- Do not point `COBALT_API_URL` at `api.cobalt.tools`; hosted Cobalt instances are not intended for third-party projects without permission.
+- TikTok and X/Twitter still rely on `yt-dlp`, so platform changes can break those integrations.
+- TikTok and X/Twitter cookie files are optional, but may help with rate limits and platform restrictions.
 - Guenther is intended for self-hosting.
 
 ## License
