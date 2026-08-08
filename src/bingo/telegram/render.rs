@@ -3,11 +3,12 @@ use crate::bingo::{
     error::Result,
     model::{Card, GRID_SIDE, Position},
     store::BingoStore,
+    telegram::callback::format_callback,
 };
 use teloxide::{
     payloads::SendMessageSetters,
     prelude::{Bot, ChatId, Requester},
-    types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile},
+    types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MessageId},
 };
 
 pub const HELP: &str = r"F1 bingo commands
@@ -80,7 +81,7 @@ pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
         .await?;
     let text_result = bot
         .send_message(chat_id, render_card(card))
-        .reply_markup(card_keyboard(card))
+        .reply_markup(card_keyboard(card, Some(photo.id)))
         .await;
     if let Err(error) = text_result {
         let _ = bot.delete_message(chat_id, photo.id).await;
@@ -115,7 +116,7 @@ pub fn render_card(card: &Card) -> String {
     lines.join("\n")
 }
 
-pub fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
+pub fn card_keyboard(card: &Card, image_message_id: Option<MessageId>) -> InlineKeyboardMarkup {
     let rows = card
         .cells
         .chunks(GRID_SIDE)
@@ -132,7 +133,7 @@ pub fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
                     };
                     InlineKeyboardButton::callback(
                         label,
-                        format!("b:{}:{}", card.id, cell.position.index()),
+                        format_callback(card.id, image_message_id, cell.position),
                     )
                 })
                 .collect::<Vec<_>>()
