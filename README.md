@@ -168,16 +168,19 @@ one game is the default for commands that omit a game slug. Each card has 24
 entries and a pre-marked F1-themed center cell. `LIGHTS OUT!` is the default
 center text and chat administrators can customize it per game.
 
-Anyone in the chat can list games and entries or retrieve a card:
+Anyone in the chat can list games and entries, add entries, or retrieve a card:
 
 ```text
 /bingo games
 /bingo entries [game]
+/bingo add <entry>
+/bingo add <game> | <entry>
 /bingo get
 /bingo get [game] @username
 ```
 
-Only Telegram chat administrators can manage games, entries, and cards:
+Only Telegram chat administrators can manage games, bulk-import entries, edit
+or delete entries, and manage cards:
 
 ```text
 /bingo game create <slug> <name>
@@ -186,8 +189,7 @@ Only Telegram chat administrators can manage games, entries, and cards:
 /bingo game default <slug>
 /bingo game center <slug> <text>
 
-/bingo add <entry>
-/bingo add <game> | <entry>
+/bingo entries import <game>
 /bingo edit <entry_id> <text>
 /bingo delete <entry_id>
 
@@ -202,6 +204,20 @@ generating randomized cards. Generation samples without replacement and stores
 the resulting order. Editing or deleting an entry affects future cards only;
 existing cards retain their original text. `regenerate` explicitly replaces an
 existing card.
+
+### Importing an entry list
+
+Chat administrators can upload a UTF-8 text file containing one entry per
+line. Blank lines are ignored. Attach the file as a Telegram document and use
+this as its caption:
+
+```text
+/bingo entries import season-2026
+```
+
+The file may contain up to 1,000 non-empty lines and be up to 64 KiB. Duplicate
+entries are normalized and merged. The entire import is transactional, so an
+invalid entry rejects the file without partially importing it.
 
 Telegram cannot reliably resolve an arbitrary username that the bot has never
 seen. If `@username` is unavailable or has changed, reply to one of that user's
@@ -218,12 +234,16 @@ further marking while leaving its cards available through `/bingo get`.
 
 ### Importing existing cards
 
-Use `import` to preserve a manually created card. The first line selects the
-game and owner; the following five lines contain five `|`-separated cells each.
-The center must be `*`. Prefix an already-completed cell with `[x]`:
+Use `import` to copy a paper card exactly; it does not shuffle the supplied
+cells. The five rows map to A through E and each row's five values map to
+columns 1 through 5. The center at C3 must be `*`. Prefix an already-marked
+cell with `[x]`.
+
+The safest way to select the owner is to reply to one of their messages and
+omit `@username`:
 
 ```text
-/bingo import 2026-season @driver
+/bingo import 2026-season
 [x] Safety car | Wet race | Team orders | Red flag | Rookie points
 Pit stop error | Photo finish | DNS | Fastest lap | Engine failure
 Pole sitter wins | Rain delay | * | Surprise podium | Penalty
@@ -231,9 +251,14 @@ Double stack | Radio rant | VSC | First-lap crash | Strategy gamble
 Undercut works | Yellow flag | Track limits | Late overtake | Debris
 ```
 
+If the bot already knows the owner, use `/bingo import 2026-season @driver` as
+the first line instead, followed by the same five grid rows.
+
 Use `/bingo reimport ...` with the same format to explicitly replace an
 existing imported card. Imported entry texts are also added to that game's
 entry pool. Individual mistakes can be corrected later with `/bingo card set`.
+Set the game's center text before importing if the paper cards use a different
+F1-themed center phrase; all cards in one game share that center text.
 
 The database schema is applied automatically at startup through embedded SQLx
 migrations. For local runs, back up `data/bingo.sqlite3`; Compose deployments
