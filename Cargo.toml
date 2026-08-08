@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["bingo"]
-bingo = ["dep:sqlx"]
+bingo = ["dep:image", "dep:noto-sans-mono-bitmap", "dep:sqlx"]
 voice-line-capture = []
 
 [dependencies]
@@ -18,6 +18,18 @@ color-eyre = "0.6"
 dotenv = "0.15"
 futures = "0.3"
 infer = "0.22"
+image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = [
+  "bold",
+  "regular",
+  "size_16",
+  "size_24",
+  "size_32",
+  "unicode-basic-latin",
+  "unicode-latin-1-supplement",
+  "unicode-latin-extended-a",
+  "unicode-specials",
+], optional = true }
 rand = "0.10"
 regex = "1.12"
 reqwest = { version = "0.13", default-features = false, features = [

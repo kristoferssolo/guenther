@@ -85,6 +85,11 @@ sqlx-prepare:
     cargo sqlx migrate run
     cargo sqlx prepare -- --all-targets --all-features
 
+[group("dev")]
+bingo-card-preview:
+    SQLX_OFFLINE=true cargo test --features bingo bingo_card_preview -- --ignored --nocapture
+    @echo "Wrote target/bingo-card-preview.png"
+
 [group("services")]
 cobalt-up:
     podman run --rm -p 9000:9000 -e API_URL=http://127.0.0.1:9000/ ghcr.io/imputnet/cobalt:11

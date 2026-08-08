@@ -19,6 +19,12 @@ pub enum BingoError {
     #[error("Telegram file download failed: {0}")]
     Download(#[from] teloxide::DownloadError),
 
+    #[error("card image encoding failed: {0}")]
+    Image(#[from] image::ImageError),
+
+    #[error("invalid bingo card layout: {0}")]
+    InvalidCardLayout(String),
+
     #[error("{0}")]
     InvalidCommand(String),
 
