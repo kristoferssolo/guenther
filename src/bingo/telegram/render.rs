@@ -33,10 +33,10 @@ Chat administrators:
 /bingo generate [game] @user
 /bingo regenerate [game] @user
 /bingo reset [game] @user
-/bingo card set <game> [@user] <A1-E5> <text>
+/bingo card set <game> [@user] <A1-E5> <entry_id>
 
-You can omit @user when replying to that user
-'s message. Use /bingo import or /bingo reimport with a five-row, pipe-separated grid to migrate a manual card.";
+You can omit @user when replying to that user 's message.
+Use /bingo import or /bingo reimport with a five-row, pipe-separated grid to migrate a manual card.";
 
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
@@ -63,7 +63,7 @@ pub async fn send_entries(
     slug: Option<String>,
 ) -> Result<()> {
     let (game, entries) = store.list_entries(chat_id, slug.as_deref()).await?;
-    let mut lines = vec![format!("Entries for {} ({}):", game.name, entries.len())];
+    let mut lines = vec![format!("Entries for {} ({}):\n", game.name, entries.len())];
     lines.extend(
         entries
             .into_iter()
@@ -91,12 +91,12 @@ pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
 }
 
 pub fn render_card(card: &Card) -> String {
-    let mut lines = vec![format!("🏁 {}", card.game.name)];
+    let mut lines = vec![format!("🏁 {}\n", card.game.name)];
     if !card.game.description.is_empty() {
         lines.push(card.game.description.clone());
     }
     lines.extend([
-        format!("Card for {} · game: {}", card.owner, card.game.slug),
+        format!("\nCard for {} · game: {}", card.owner, card.game.slug),
         String::new(),
     ]);
     lines.extend(card.cells.iter().map(|cell| {

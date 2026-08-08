@@ -161,7 +161,7 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
             let is_free = position == FREE_POSITION;
             if is_free && text != "*" {
                 return Err(BingoError::InvalidCommand(
-                    "the center import cell (C3) must be `*`".to_owned(),
+                    "The center import cell (C3) must be `*`".to_owned(),
                 ));
             }
             if !is_free {
@@ -187,35 +187,39 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
     let (action, rest) = split_once_whitespace(input);
     if !action.eq_ignore_ascii_case("set") {
         return Err(BingoError::InvalidCommand(
-            "usage: /bingo card set <slug> [@user] <A1-E5> <text>".to_owned(),
+            "usage: /bingo card set <slug> [@user] <A1-E5> <entry_id>".to_owned(),
         ));
     }
 
     let mut parts = rest.split_whitespace();
     let slug = parts
         .next()
-        .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?;
+        .ok_or_else(|| usage("card set <slug> [@user] <cell> <entry_id>"))?;
     let next = parts
         .next()
-        .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?;
+        .ok_or_else(|| usage("card set <slug> [@user] <cell> <entry_id>"))?;
     let (target, coordinate) = if is_target_token(next) {
         (
             Some(next.to_owned()),
             parts
                 .next()
-                .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?,
+                .ok_or_else(|| usage("card set <slug> [@user] <cell> <entry_id>"))?,
         )
     } else {
         (None, next)
     };
     let position = coordinate.parse()?;
-    let text = parts.collect::<Vec<_>>().join(" ");
-    validate_text(&text, "cell")?;
+    let raw_entry_id = parts
+        .next()
+        .ok_or_else(|| usage("card set <slug> [@user] <cell> <entry_id>"))?;
+    if parts.next().is_some() {
+        return Err(usage("card set <slug> [@user] <cell> <entry_id>"));
+    }
     Ok(BingoCommand::Card(CardAdmin::Set {
         slug: slug.to_owned(),
         target,
         position,
-        text,
+        entry_id: parse_id(raw_entry_id, "entry ID")?,
     }))
 }
 

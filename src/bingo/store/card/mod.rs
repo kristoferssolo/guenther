@@ -3,8 +3,8 @@ mod queries;
 use crate::bingo::{
     error::{BingoError, Result},
     model::{
-        CELL_COUNT, Card, GameState, ImportedCell, KnownUser, MAX_ENTRY_CHARS, Position,
-        REQUIRED_ENTRIES, ToggleResult, has_bingo,
+        CELL_COUNT, Card, GameState, ImportedCell, KnownUser, Position, REQUIRED_ENTRIES,
+        ToggleResult, has_bingo,
     },
     store::{
         BingoStore,
@@ -14,7 +14,7 @@ use crate::bingo::{
         },
         entry::upsert_entry,
         id::db_user_id,
-        validation::{ensure_active, ensure_editable, require_changed, validate_nonempty},
+        validation::{ensure_active, ensure_editable, require_changed},
     },
 };
 use rand::seq::SliceRandom;
@@ -152,23 +152,34 @@ impl BingoStore {
         slug: &str,
         user_id: UserId,
         position: Position,
-        text: &str,
+        entry_id: i64,
     ) -> Result<Card> {
         if position == Position::FREE {
             return Err(BingoError::FreeCell);
         }
-        validate_nonempty(text, "cell", MAX_ENTRY_CHARS)?;
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
-        let entry_id = upsert_entry(&mut *transaction, game.id, text).await?;
+        let entry = sqlx::query!(
+            r#"SELECT id, text FROM bingo_entries
+WHERE id = ? AND game_id = ? AND active = 1"#,
+            entry_id,
+            game.id,
+        )
+        .fetch_optional(&mut *transaction)
+        .await?
+        .ok_or_else(|| {
+            BingoError::NotFound(format!(
+                "active entry `{entry_id}` was not found in game `{slug}`"
+            ))
+        })?;
         let position = i64::from(position);
         sqlx::query!(
             r#"UPDATE bingo_card_cells SET entry_id = ?, text = ?
 WHERE card_id = ? AND position = ?"#,
-            entry_id,
-            text.trim(),
+            entry.id,
+            entry.text,
             card_id,
             position,
         )

@@ -56,7 +56,7 @@ pub enum CardAdmin {
         slug: String,
         target: Option<String>,
         position: Position,
-        text: String,
+        entry_id: i64,
     },
     Reset {
         slug: Option<String>,
@@ -145,16 +145,27 @@ mod tests {
 
     #[test]
     fn validates_card_position_while_parsing() {
-        assert_err!(BingoCommand::parse("card set season Z9 incident"));
+        assert_err!(BingoCommand::parse("card set season Z9 42"));
         assert_ok_eq!(
-            BingoCommand::parse("card set season C2 incident"),
+            BingoCommand::parse("card set season C2 42"),
             BingoCommand::Card(CardAdmin::Set {
                 slug: "season".to_owned(),
                 target: None,
                 position: "C2".parse().expect("test position is valid"),
-                text: "incident".to_owned(),
+                entry_id: 42,
             })
         );
+        assert_ok_eq!(
+            BingoCommand::parse("card set season @driver C2 42"),
+            BingoCommand::Card(CardAdmin::Set {
+                slug: "season".to_owned(),
+                target: Some("@driver".to_owned()),
+                position: "C2".parse().expect("test position is valid"),
+                entry_id: 42,
+            })
+        );
+        assert_err!(BingoCommand::parse("card set season C2 incident"));
+        assert_err!(BingoCommand::parse("card set season C2 42 trailing"));
     }
 
     #[test]

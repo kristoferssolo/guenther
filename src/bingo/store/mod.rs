@@ -231,4 +231,53 @@ mod tests {
             original_texts
         );
     }
+
+    #[tokio::test]
+    async fn sets_card_cells_from_active_game_entry_ids() {
+        let store = store().await;
+        let owner = user(10, "driver");
+        let card = setup_card(&store, &owner).await;
+        let (_, entries) = store
+            .list_entries(CHAT_ID, Some("season"))
+            .await
+            .expect("list game entries");
+        let entry = entries
+            .iter()
+            .find(|entry| entry.text != card.cells[0].text)
+            .expect("another active entry is available");
+        let changed = store
+            .set_card_cell(CHAT_ID, "season", owner.user_id, position(0), entry.id)
+            .await
+            .expect("set card cell from entry ID");
+        assert_eq!(changed.cells[0].text, entry.text);
+
+        assert_ok!(
+            store
+                .create_game(CHAT_ID, "sprint", "Sprint", owner.user_id)
+                .await
+        );
+        let other_entry = store
+            .add_entry(CHAT_ID, Some("sprint"), "Sprint-only entry")
+            .await
+            .expect("add entry to other game");
+        assert_err!(
+            store
+                .set_card_cell(
+                    CHAT_ID,
+                    "season",
+                    owner.user_id,
+                    position(1),
+                    other_entry.id,
+                )
+                .await
+        );
+        assert_eq!(
+            store
+                .card(CHAT_ID, Some("season"), owner.user_id)
+                .await
+                .expect("fetch unchanged card")
+                .cells[1],
+            card.cells[1]
+        );
+    }
 }

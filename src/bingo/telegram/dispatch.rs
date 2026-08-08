@@ -195,11 +195,11 @@ async fn execute_card_admin(
             slug,
             target,
             position,
-            text,
+            entry_id,
         } => {
             let owner = resolve_target(store, message, target.as_deref(), false).await?;
             let card = store
-                .set_card_cell(chat_id, &slug, owner.user_id, position, &text)
+                .set_card_cell(chat_id, &slug, owner.user_id, position, entry_id)
                 .await?;
             send_card(bot, message.chat.id, &card).await
         }

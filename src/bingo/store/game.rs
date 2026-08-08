@@ -52,8 +52,8 @@ impl BingoStore {
             r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
 VALUES (?, ?, ?, ?, ?)
 RETURNING
-    id, chat_id, slug, name, description, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, description, center_text, state,
+is_default AS `is_default: bool`"#,
             chat_id,
             normalized_slug,
             name,
@@ -99,8 +99,8 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
             r#"UPDATE bingo_games SET state = ?
 WHERE chat_id = ? AND slug = ? COLLATE NOCASE
 RETURNING
-    id, chat_id, slug, name, description, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, description, center_text, state,
+is_default AS `is_default: bool`"#,
             state.as_str(),
             chat_id,
             slug,
@@ -125,8 +125,8 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, description, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, description, center_text, state,
+is_default AS `is_default: bool`"#,
             game.id,
         )
         .fetch_one(&mut *transaction)
@@ -144,8 +144,8 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET center_text = ? WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, description, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, description, center_text, state,
+is_default AS `is_default: bool`"#,
             text.trim(),
             game.id,
         )
@@ -172,8 +172,8 @@ RETURNING
             GameRow,
             r#"UPDATE bingo_games SET description = ? WHERE id = ?
 RETURNING
-    id, chat_id, slug, name, description, center_text, state,
-    is_default AS `is_default: bool`"#,
+id, chat_id, slug, name, description, center_text, state,
+is_default AS `is_default: bool`"#,
             description,
             game.id,
         )
@@ -213,7 +213,7 @@ async fn fetch_game<'e>(
     is_default AS `is_default: bool`
 FROM bingo_games
 WHERE chat_id = ?1
-  AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
+AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
         chat_id,
         slug,
     )

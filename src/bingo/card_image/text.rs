@@ -1,7 +1,6 @@
+use crate::bingo::card_image::layout::Rect;
 use image::{Rgba, RgbaImage};
 use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster, get_raster_width};
-
-use crate::bingo::card_image::layout::Rect;
 
 const LINE_GAP: u32 = 5;
 

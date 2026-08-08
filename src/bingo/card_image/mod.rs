@@ -1,16 +1,13 @@
 mod layout;
 mod text;
 
-use std::io::Cursor;
-
-use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
-
 use crate::bingo::{
     error::{BingoError, Result},
     model::{CELL_COUNT, Card, CardCell},
 };
-
-use self::{
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
+use std::io::Cursor;
+use {
     layout::{
         BLACK, CELL_PADDING, CIRCLE_DIAMETER, CellFill, DESCRIPTION, FOOTER, FREE_GOLD, GRID,
         GRID_LINE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, MARKED_RED, Rect, TITLE, WHITE, cell_fill,
@@ -25,8 +22,8 @@ const TITLE_FONTS: [Font; 3] = [
     Font::new(Size::Medium, Weight::Bold),
 ];
 const DESCRIPTION_FONTS: [Font; 2] = [
+    Font::new(Size::Large, Weight::Regular),
     Font::new(Size::Medium, Weight::Regular),
-    Font::new(Size::Small, Weight::Regular),
 ];
 const CELL_FONTS: [Font; 3] = [
     Font::new(Size::Large, Weight::Regular),

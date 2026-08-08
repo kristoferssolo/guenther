@@ -198,7 +198,7 @@ or delete entries, and manage cards:
 /bingo generate [game] @username
 /bingo regenerate [game] @username
 /bingo reset [game] @username
-/bingo card set <game> [@username] <A1-E5> <text>
+/bingo card set <game> [@username] <A1-E5> <entry_id>
 ```
 
 Omitting the text from `game description` clears the current description.
@@ -278,6 +278,8 @@ the first line instead, followed by the same five grid rows.
 Use `/bingo reimport ...` with the same format to explicitly replace an
 existing imported card. Imported entry texts are also added to that game's
 entry pool. Individual mistakes can be corrected later with `/bingo card set`.
+Use the numeric entry ID shown by `/bingo entries <game>`; the selected entry
+must be active and belong to that game.
 Set the game's center text before importing if the paper cards use a different
 F1-themed center phrase; all cards in one game share that center text.
 
