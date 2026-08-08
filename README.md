@@ -41,6 +41,7 @@ Optional:
 - `CHAT_ID`: admin/debug chat that receives internal error messages
 - `COBALT_API_URL`: Cobalt processing endpoint; defaults to `http://127.0.0.1:9000/`
 - `COBALT_API_KEY`: API key for a protected external Cobalt instance; omit for the private Compose service
+- `ENABLED_PLATFORMS`: comma-separated platforms to enable; defaults to all platforms
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
 - `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture
@@ -51,8 +52,14 @@ Sample `.env`:
 TELOXIDE_TOKEN=123456:telegram-token
 CHAT_ID=123456789
 COBALT_API_URL=http://127.0.0.1:9000/
+ENABLED_PLATFORMS=instagram,tiktok,twitter,youtube
 F1_UTC_OFFSET=+3
 ```
+
+Supported platform names are `instagram`, `tiktok`, `twitter` (or `x`), and
+`youtube`. Use `all` or leave the variable unset to enable everything. Set it
+to an empty value to disable all media handlers. Changes take effect when the
+bot restarts.
 
 ## Running Locally
 
@@ -68,10 +75,10 @@ Then run the Telegram bot:
 cargo run
 ```
 
-To enable only specific platforms, disable the default feature set first:
+To enable only specific platforms at runtime:
 
 ```bash
-cargo run --no-default-features --features instagram,tiktok
+ENABLED_PLATFORMS=instagram,tiktok cargo run
 ```
 
 To enable automatic voice-line capture:
@@ -88,6 +95,12 @@ Build and start:
 
 ```bash
 docker compose up --build
+```
+
+Platform selection can also be passed directly to Compose:
+
+```bash
+ENABLED_PLATFORMS=instagram,youtube docker compose up --build
 ```
 
 The Compose setup starts a private Cobalt sidecar that is reachable only from
