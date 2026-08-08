@@ -64,10 +64,7 @@ async fn finish_toggle(
         let announcement_result = if toggle.newly_completed {
             bot.send_message(
                 message.chat.id,
-                format!(
-                    "🏁 BINGO! {} completed a line on {}.",
-                    toggle.card.owner, toggle.card.game.name
-                ),
+                win_message(&toggle.card.owner.to_string(), &toggle.card.game.name),
             )
             .await
             .map(|_| ())
@@ -79,6 +76,12 @@ async fn finish_toggle(
         announcement_result?;
     }
     Ok(())
+}
+
+fn win_message(owner: &str, game_name: &str) -> String {
+    format!(
+        "🏁 FOKING BINGO! {owner} completed a line on {game_name}. Finally, somebody did their foking job."
+    )
 }
 
 async fn edit_card_image(
@@ -135,7 +138,7 @@ fn parse_callback(data: &str) -> Option<CardCallback> {
 mod tests {
     use crate::bingo::{
         model::Position,
-        telegram::callback::{CardCallback, format_callback, parse_callback},
+        telegram::callback::{CardCallback, format_callback, parse_callback, win_message},
     };
     use claims::{assert_none, assert_some_eq};
     use teloxide::types::MessageId;
@@ -173,5 +176,13 @@ mod tests {
         assert_eq!(current, format!("b:{}:{}:24", i64::MIN, i32::MIN));
         assert!(legacy.len() <= 64);
         assert!(current.len() <= 64);
+    }
+
+    #[test]
+    fn renders_a_guenther_style_win_message() {
+        assert_eq!(
+            win_message("@driver", "2026 Season"),
+            "🏁 FOKING BINGO! @driver completed a line on 2026 Season. Finally, somebody did their foking job."
+        );
     }
 }
