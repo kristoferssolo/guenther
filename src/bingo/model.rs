@@ -7,7 +7,7 @@ pub const GRID_SIDE: usize = 5;
 pub const CELL_COUNT: usize = GRID_SIDE * GRID_SIDE;
 pub const FREE_POSITION: usize = 12;
 pub const REQUIRED_ENTRIES: usize = CELL_COUNT - 1;
-pub const MAX_ENTRY_CHARS: usize = 60;
+pub const MAX_ENTRY_CHARS: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position(u8);

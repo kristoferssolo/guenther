@@ -111,7 +111,7 @@ mod tests {
             1
         );
 
-        let invalid = vec!["Wet race".to_owned(), "x".repeat(61)];
+        let invalid = vec!["Wet race".to_owned(), "x".repeat(129)];
         assert_err!(store.import_entries(CHAT_ID, "season", &invalid).await);
         let (_, entries) = store
             .list_entries(CHAT_ID, Some("season"))

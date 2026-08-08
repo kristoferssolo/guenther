@@ -166,6 +166,18 @@ mod tests {
     }
 
     #[test]
+    fn accepts_entries_up_to_128_characters() {
+        assert_ok_eq!(
+            BingoCommand::parse(&format!("add {}", "x".repeat(128))),
+            BingoCommand::Add {
+                slug: None,
+                text: "x".repeat(128),
+            }
+        );
+        assert_err!(BingoCommand::parse(&format!("add {}", "x".repeat(129))));
+    }
+
+    #[test]
     fn parses_admin_entry_file_imports() {
         let command =
             BingoCommand::parse("entries import season-2026").expect("parse entry file import");
