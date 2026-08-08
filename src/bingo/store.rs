@@ -852,6 +852,7 @@ fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
 
 fn validate_slug(slug: &str) -> Result<()> {
     let valid = (2..=50).contains(&slug.len())
+        && !slug.bytes().all(|byte| byte.is_ascii_digit())
         && slug
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
@@ -859,7 +860,8 @@ fn validate_slug(slug: &str) -> Result<()> {
         Ok(())
     } else {
         Err(BingoError::InvalidCommand(
-            "game slugs must be 2-50 lowercase letters, numbers, or hyphens".to_owned(),
+            "game slugs must be 2-50 lowercase letters, numbers, or hyphens and cannot be purely numeric"
+                .to_owned(),
         ))
     }
 }
@@ -943,6 +945,12 @@ mod tests {
             .generate_card(1, None, owner, false)
             .await
             .expect("generate card")
+    }
+
+    #[tokio::test]
+    async fn rejects_numeric_game_slugs() {
+        let store = store().await;
+        assert_err!(store.create_game(1, "2026", "Season", 10).await);
     }
 
     #[tokio::test]

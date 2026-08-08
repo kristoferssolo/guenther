@@ -1,49 +1,45 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{CELL_COUNT, FREE_POSITION, ImportedCell, MAX_ENTRY_CHARS},
+    model::{CELL_COUNT, FREE_POSITION, GameState, ImportedCell, MAX_ENTRY_CHARS},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BingoCommand {
     Help,
     Games,
-    GameCreate {
-        slug: String,
-        name: String,
-    },
-    GameState {
-        slug: String,
-        state: GameStateCommand,
-    },
-    GameDefault {
-        slug: String,
-    },
-    GameCenter {
-        slug: String,
-        text: String,
-    },
     Entries {
         slug: Option<String>,
-    },
-    Add {
-        slug: Option<String>,
-        text: String,
-    },
-    Edit {
-        entry_id: i64,
-        text: String,
-    },
-    Delete {
-        entry_id: i64,
-    },
-    Generate {
-        slug: Option<String>,
-        target: Option<String>,
-        replace: bool,
     },
     Get {
         slug: Option<String>,
         target: Option<String>,
+    },
+    Game(GameAdmin),
+    Entry(EntryAdmin),
+    Card(CardAdmin),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GameAdmin {
+    Create { slug: String, name: String },
+    SetState { slug: String, state: GameState },
+    SetDefault { slug: String },
+    SetCenter { slug: String, text: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EntryAdmin {
+    Add { slug: Option<String>, text: String },
+    Edit { entry_id: i64, text: String },
+    Delete { entry_id: i64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CardAdmin {
+    Generate {
+        slug: Option<String>,
+        target: Option<String>,
+        replace: bool,
     },
     Import {
         slug: String,
@@ -51,7 +47,7 @@ pub enum BingoCommand {
         cells: Vec<ImportedCell>,
         replace: bool,
     },
-    CardSet {
+    Set {
         slug: String,
         target: Option<String>,
         coordinate: String,
@@ -61,12 +57,6 @@ pub enum BingoCommand {
         slug: Option<String>,
         target: Option<String>,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GameStateCommand {
-    Activate,
-    Close,
 }
 
 impl BingoCommand {
@@ -86,13 +76,13 @@ impl BingoCommand {
             "add" => parse_add(rest),
             "edit" => parse_edit(rest),
             "delete" => parse_delete(rest),
-            "generate" => Ok(parse_card_target(rest, false)),
-            "regenerate" => Ok(parse_card_target(rest, true)),
-            "get" => Ok(parse_get(rest)),
+            "generate" => parse_card_target(rest, false),
+            "regenerate" => parse_card_target(rest, true),
+            "get" => parse_get(rest),
             "import" => parse_import(rest, false),
             "reimport" => parse_import(rest, true),
             "card" => parse_card(rest),
-            "reset" => Ok(parse_reset(rest)),
+            "reset" => parse_reset(rest),
             unknown => Err(BingoError::InvalidCommand(format!(
                 "unknown bingo command `{unknown}`; use /bingo help"
             ))),
@@ -101,10 +91,7 @@ impl BingoCommand {
 
     #[must_use]
     pub const fn requires_admin(&self) -> bool {
-        !matches!(
-            self,
-            Self::Help | Self::Games | Self::Entries { .. } | Self::Get { .. }
-        )
+        matches!(self, Self::Game(_) | Self::Entry(_) | Self::Card(_))
     }
 }
 
@@ -113,22 +100,22 @@ fn parse_game(input: &str) -> Result<BingoCommand> {
     match action.to_ascii_lowercase().as_str() {
         "create" => {
             let (slug, name) = required_pair(rest, "game create <slug> <name>")?;
-            Ok(BingoCommand::GameCreate { slug, name })
+            Ok(BingoCommand::Game(GameAdmin::Create { slug, name }))
         }
-        "activate" => Ok(BingoCommand::GameState {
+        "activate" => Ok(BingoCommand::Game(GameAdmin::SetState {
             slug: required_word(rest, "game activate <slug>")?,
-            state: GameStateCommand::Activate,
-        }),
-        "close" => Ok(BingoCommand::GameState {
+            state: GameState::Active,
+        })),
+        "close" => Ok(BingoCommand::Game(GameAdmin::SetState {
             slug: required_word(rest, "game close <slug>")?,
-            state: GameStateCommand::Close,
-        }),
-        "default" => Ok(BingoCommand::GameDefault {
+            state: GameState::Closed,
+        })),
+        "default" => Ok(BingoCommand::Game(GameAdmin::SetDefault {
             slug: required_word(rest, "game default <slug>")?,
-        }),
+        })),
         "center" => {
             let (slug, text) = required_pair(rest, "game center <slug> <text>")?;
-            Ok(BingoCommand::GameCenter { slug, text })
+            Ok(BingoCommand::Game(GameAdmin::SetCenter { slug, text }))
         }
         _ => Err(BingoError::InvalidCommand(
             "usage: /bingo game <create|activate|close|default|center> ...".to_owned(),
@@ -146,44 +133,44 @@ fn parse_add(input: &str) -> Result<BingoCommand> {
         (None, input.trim())
     };
     validate_text(text, "entry")?;
-    Ok(BingoCommand::Add {
+    Ok(BingoCommand::Entry(EntryAdmin::Add {
         slug,
         text: text.to_owned(),
-    })
+    }))
 }
 
 fn parse_edit(input: &str) -> Result<BingoCommand> {
     let (raw_id, text) = required_pair(input, "edit <entry_id> <text>")?;
     validate_text(&text, "entry")?;
-    Ok(BingoCommand::Edit {
+    Ok(BingoCommand::Entry(EntryAdmin::Edit {
         entry_id: parse_id(&raw_id, "entry ID")?,
         text,
-    })
+    }))
 }
 
 fn parse_delete(input: &str) -> Result<BingoCommand> {
-    Ok(BingoCommand::Delete {
+    Ok(BingoCommand::Entry(EntryAdmin::Delete {
         entry_id: parse_id(&required_word(input, "delete <entry_id>")?, "entry ID")?,
-    })
+    }))
 }
 
-fn parse_card_target(input: &str, replace: bool) -> BingoCommand {
-    let (slug, target) = parse_slug_and_target(input);
-    BingoCommand::Generate {
+fn parse_card_target(input: &str, replace: bool) -> Result<BingoCommand> {
+    let (slug, target) = parse_slug_and_target(input, "generate [game] [@user]")?;
+    Ok(BingoCommand::Card(CardAdmin::Generate {
         slug,
         target,
         replace,
-    }
+    }))
 }
 
-fn parse_get(input: &str) -> BingoCommand {
-    let (slug, target) = parse_slug_and_target(input);
-    BingoCommand::Get { slug, target }
+fn parse_get(input: &str) -> Result<BingoCommand> {
+    let (slug, target) = parse_slug_and_target(input, "get [game] [@user]")?;
+    Ok(BingoCommand::Get { slug, target })
 }
 
-fn parse_reset(input: &str) -> BingoCommand {
-    let (slug, target) = parse_slug_and_target(input);
-    BingoCommand::Reset { slug, target }
+fn parse_reset(input: &str) -> Result<BingoCommand> {
+    let (slug, target) = parse_slug_and_target(input, "reset [game] [@user]")?;
+    Ok(BingoCommand::Card(CardAdmin::Reset { slug, target }))
 }
 
 fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
@@ -230,12 +217,12 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
         }
     }
 
-    Ok(BingoCommand::Import {
+    Ok(BingoCommand::Card(CardAdmin::Import {
         slug,
         target,
         cells,
         replace,
-    })
+    }))
 }
 
 fn parse_card(input: &str) -> Result<BingoCommand> {
@@ -253,38 +240,42 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
     let next = parts
         .next()
         .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?;
-    let (target, coordinate) =
-        if next.starts_with('@') || next.chars().all(|value| value.is_ascii_digit()) {
-            (
-                Some(next.to_owned()),
-                parts
-                    .next()
-                    .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?
-                    .to_owned(),
-            )
-        } else {
-            (None, next.to_owned())
-        };
+    let (target, coordinate) = if is_target_token(next) {
+        (
+            Some(next.to_owned()),
+            parts
+                .next()
+                .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?
+                .to_owned(),
+        )
+    } else {
+        (None, next.to_owned())
+    };
     let text = parts.collect::<Vec<_>>().join(" ");
     validate_text(&text, "cell")?;
-    Ok(BingoCommand::CardSet {
+    Ok(BingoCommand::Card(CardAdmin::Set {
         slug: slug.to_owned(),
         target,
         coordinate,
         text,
-    })
+    }))
 }
 
-fn parse_slug_and_target(input: &str) -> (Option<String>, Option<String>) {
+fn parse_slug_and_target(input: &str, expected: &str) -> Result<(Option<String>, Option<String>)> {
     let words = input.split_whitespace().collect::<Vec<_>>();
     match words.as_slice() {
-        [] => (None, None),
-        [only] if only.starts_with('@') || only.chars().all(|value| value.is_ascii_digit()) => {
-            (None, Some((*only).to_owned()))
+        [] => Ok((None, None)),
+        [only] if is_target_token(only) => Ok((None, Some((*only).to_owned()))),
+        [slug] => Ok((Some((*slug).to_owned()), None)),
+        [slug, target] if is_target_token(target) => {
+            Ok((Some((*slug).to_owned()), Some((*target).to_owned())))
         }
-        [slug] => (Some((*slug).to_owned()), None),
-        [slug, target, ..] => (Some((*slug).to_owned()), Some((*target).to_owned())),
+        _ => Err(usage(expected)),
     }
+}
+
+fn is_target_token(word: &str) -> bool {
+    word.starts_with('@') || (!word.is_empty() && word.chars().all(|value| value.is_ascii_digit()))
 }
 
 fn parse_required_slug_and_optional_target(input: &str) -> Result<(String, Option<String>)> {
@@ -292,7 +283,14 @@ fn parse_required_slug_and_optional_target(input: &str) -> Result<(String, Optio
     if slug.is_empty() {
         return Err(usage("import <slug> [@user] followed by five grid rows"));
     }
-    Ok((slug.to_owned(), optional_word(rest)))
+    if rest.is_empty() {
+        return Ok((slug.to_owned(), None));
+    }
+    let target = required_word(rest, "import <slug> [@user] followed by five grid rows")?;
+    if !is_target_token(&target) {
+        return Err(usage("import <slug> [@user] followed by five grid rows"));
+    }
+    Ok((slug.to_owned(), Some(target)))
 }
 
 fn required_pair(input: &str, expected: &str) -> Result<(String, String)> {
@@ -305,7 +303,7 @@ fn required_pair(input: &str, expected: &str) -> Result<(String, String)> {
 
 fn required_word(input: &str, expected: &str) -> Result<String> {
     let word = input.trim();
-    if word.is_empty() || word.split_whitespace().count() != 1 {
+    if word.is_empty() || word.contains(char::is_whitespace) {
         return Err(usage(expected));
     }
     Ok(word.to_owned())
@@ -351,17 +349,17 @@ mod tests {
     fn parses_entry_add_with_optional_game() {
         assert_ok_eq!(
             BingoCommand::parse("add safety car"),
-            BingoCommand::Add {
+            BingoCommand::Entry(EntryAdmin::Add {
                 slug: None,
                 text: "safety car".to_owned()
-            }
+            })
         );
         assert_ok_eq!(
             BingoCommand::parse("add 2026-season | safety car"),
-            BingoCommand::Add {
+            BingoCommand::Entry(EntryAdmin::Add {
                 slug: Some("2026-season".to_owned()),
                 text: "safety car".to_owned()
-            }
+            })
         );
     }
 
@@ -369,7 +367,7 @@ mod tests {
     fn parses_marked_import_grid() {
         let input = "import 2026-season @driver\n[x] A1 | A2 | A3 | A4 | A5\nB1 | B2 | B3 | B4 | B5\nC1 | C2 | * | C4 | C5\nD1 | D2 | D3 | D4 | D5\nE1 | E2 | E3 | E4 | E5";
         let command = BingoCommand::parse(input).expect("parse import");
-        let BingoCommand::Import { cells, .. } = command else {
+        let BingoCommand::Card(CardAdmin::Import { cells, .. }) = command else {
             panic!("expected import")
         };
         assert!(cells[0].marked);
@@ -386,11 +384,11 @@ mod tests {
     fn parses_card_targets_with_and_without_game() {
         assert_ok_eq!(
             BingoCommand::parse("generate @driver"),
-            BingoCommand::Generate {
+            BingoCommand::Card(CardAdmin::Generate {
                 slug: None,
                 target: Some("@driver".to_owned()),
                 replace: false,
-            }
+            })
         );
         assert_ok_eq!(
             BingoCommand::parse("get australian-gp @driver"),
@@ -399,5 +397,11 @@ mod tests {
                 target: Some("@driver".to_owned()),
             }
         );
+    }
+
+    #[test]
+    fn rejects_trailing_target_words() {
+        assert_err!(BingoCommand::parse("get season @driver extra"));
+        assert_err!(BingoCommand::parse("generate season driver"));
     }
 }

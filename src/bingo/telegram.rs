@@ -1,7 +1,7 @@
 use crate::bingo::{
-    command::{BingoCommand, GameStateCommand},
+    command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
     error::{BingoError, Result},
-    model::{Card, GameState, KnownUser, ToggleResult, parse_coordinate},
+    model::{Card, KnownUser, ToggleResult, parse_coordinate},
     store::BingoStore,
 };
 use teloxide::{
@@ -115,18 +115,11 @@ async fn execute_bingo(
             let card = store.card(chat_id, slug.as_deref(), owner.user_id).await?;
             send_card(bot, message.chat.id, &card).await
         }
-        command @ (BingoCommand::GameCreate { .. }
-        | BingoCommand::GameState { .. }
-        | BingoCommand::GameDefault { .. }
-        | BingoCommand::GameCenter { .. }) => {
-            execute_game_admin(bot, message, store, command).await
-        }
-        command @ (BingoCommand::Add { .. }
-        | BingoCommand::Edit { .. }
-        | BingoCommand::Delete { .. }) => {
+        BingoCommand::Game(command) => execute_game_admin(bot, message, store, command).await,
+        BingoCommand::Entry(command) => {
             execute_entry_admin(bot, message.chat.id, store, command).await
         }
-        command => execute_card_admin(bot, message, store, command).await,
+        BingoCommand::Card(command) => execute_card_admin(bot, message, store, command).await,
     }
 }
 
@@ -134,11 +127,11 @@ async fn execute_game_admin(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
-    command: BingoCommand,
+    command: GameAdmin,
 ) -> Result<()> {
     let chat_id = message.chat.id.0;
     match command {
-        BingoCommand::GameCreate { slug, name } => {
+        GameAdmin::Create { slug, name } => {
             let actor = message
                 .from
                 .as_ref()
@@ -154,11 +147,7 @@ async fn execute_game_admin(
             )
             .await
         }
-        BingoCommand::GameState { slug, state } => {
-            let state = match state {
-                GameStateCommand::Activate => GameState::Active,
-                GameStateCommand::Close => GameState::Closed,
-            };
+        GameAdmin::SetState { slug, state } => {
             let game = store.set_game_state(chat_id, &slug, state).await?;
             send_text(
                 bot,
@@ -167,7 +156,7 @@ async fn execute_game_admin(
             )
             .await
         }
-        BingoCommand::GameDefault { slug } => {
+        GameAdmin::SetDefault { slug } => {
             let game = store.set_default_game(chat_id, &slug).await?;
             send_text(
                 bot,
@@ -176,7 +165,7 @@ async fn execute_game_admin(
             )
             .await
         }
-        BingoCommand::GameCenter { slug, text } => {
+        GameAdmin::SetCenter { slug, text } => {
             let game = store.set_center_text(chat_id, &slug, &text).await?;
             send_text(
                 bot,
@@ -188,9 +177,6 @@ async fn execute_game_admin(
             )
             .await
         }
-        _ => Err(BingoError::InvalidCommand(
-            "invalid game command".to_owned(),
-        )),
     }
 }
 
@@ -198,10 +184,10 @@ async fn execute_entry_admin(
     bot: &Bot,
     chat_id: ChatId,
     store: &BingoStore,
-    command: BingoCommand,
+    command: EntryAdmin,
 ) -> Result<()> {
     match command {
-        BingoCommand::Add { slug, text } => {
+        EntryAdmin::Add { slug, text } => {
             let entry = store.add_entry(chat_id.0, slug.as_deref(), &text).await?;
             send_text(
                 bot,
@@ -210,7 +196,7 @@ async fn execute_entry_admin(
             )
             .await
         }
-        BingoCommand::Edit { entry_id, text } => {
+        EntryAdmin::Edit { entry_id, text } => {
             let entry = store.edit_entry(chat_id.0, entry_id, &text).await?;
             send_text(
                 bot,
@@ -219,7 +205,7 @@ async fn execute_entry_admin(
             )
             .await
         }
-        BingoCommand::Delete { entry_id } => {
+        EntryAdmin::Delete { entry_id } => {
             store.delete_entry(chat_id.0, entry_id).await?;
             send_text(
                 bot,
@@ -228,9 +214,6 @@ async fn execute_entry_admin(
             )
             .await
         }
-        _ => Err(BingoError::InvalidCommand(
-            "invalid entry command".to_owned(),
-        )),
     }
 }
 
@@ -238,11 +221,11 @@ async fn execute_card_admin(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
-    command: BingoCommand,
+    command: CardAdmin,
 ) -> Result<()> {
     let chat_id = message.chat.id.0;
     match command {
-        BingoCommand::Generate {
+        CardAdmin::Generate {
             slug,
             target,
             replace,
@@ -253,7 +236,7 @@ async fn execute_card_admin(
                 .await?;
             send_card(bot, message.chat.id, &card).await
         }
-        BingoCommand::Import {
+        CardAdmin::Import {
             slug,
             target,
             cells,
@@ -265,7 +248,7 @@ async fn execute_card_admin(
                 .await?;
             send_card(bot, message.chat.id, &card).await
         }
-        BingoCommand::CardSet {
+        CardAdmin::Set {
             slug,
             target,
             coordinate: raw_coordinate,
@@ -278,16 +261,13 @@ async fn execute_card_admin(
                 .await?;
             send_card(bot, message.chat.id, &card).await
         }
-        BingoCommand::Reset { slug, target } => {
+        CardAdmin::Reset { slug, target } => {
             let owner = resolve_target(store, message, target.as_deref(), false).await?;
             let card = store
                 .reset_card(chat_id, slug.as_deref(), owner.user_id)
                 .await?;
             send_card(bot, message.chat.id, &card).await
         }
-        _ => Err(BingoError::InvalidCommand(
-            "invalid card command".to_owned(),
-        )),
     }
 }
 
