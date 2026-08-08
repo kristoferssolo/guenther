@@ -6,12 +6,13 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [features]
+default = ["bingo"]
 bingo = ["dep:sqlx"]
 voice-line-capture = []
 
 [dependencies]
 async-trait = "0.1"
-capitalize = "0.3.4"
+capitalize = "0.3"
 chrono = "0.4"
 color-eyre = "0.6"
 dotenv = "0.15"

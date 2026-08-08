@@ -1,0 +1,9 @@
+[sqlfluff]
+dialect = sqlite
+indent_unit = space
+tab_space_size = 4
+max_line_length = 120
+
+[sqlfluff:indentation]
+indented_joins = True
+indented_ctes = True

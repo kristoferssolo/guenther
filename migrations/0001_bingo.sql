@@ -1,24 +1,24 @@
 CREATE TABLE bingo_users (
     chat_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
-    username TEXT COLLATE NOCASE,
+    username TEXT COLLATE nocase,
     display_name TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (chat_id, user_id)
 );
 
 CREATE UNIQUE INDEX bingo_users_chat_username
-    ON bingo_users (chat_id, username)
-    WHERE username IS NOT NULL;
+ON bingo_users (chat_id, username)
+WHERE username IS NOT NULL;
 
 CREATE TABLE bingo_games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chat_id INTEGER NOT NULL,
-    slug TEXT NOT NULL COLLATE NOCASE,
+    slug TEXT NOT NULL COLLATE nocase,
     name TEXT NOT NULL,
     center_text TEXT NOT NULL DEFAULT 'LIGHTS OUT!',
     state TEXT NOT NULL DEFAULT 'draft'
-        CHECK (state IN ('draft', 'active', 'closed')),
+    CHECK (state IN ('draft', 'active', 'closed')),
     is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
     created_by INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -26,8 +26,8 @@ CREATE TABLE bingo_games (
 );
 
 CREATE UNIQUE INDEX bingo_games_one_default
-    ON bingo_games (chat_id)
-    WHERE is_default = 1;
+ON bingo_games (chat_id)
+WHERE is_default = 1;
 
 CREATE TABLE bingo_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +40,7 @@ CREATE TABLE bingo_entries (
 );
 
 CREATE INDEX bingo_entries_game_active
-    ON bingo_entries (game_id, active);
+ON bingo_entries (game_id, active);
 
 CREATE TABLE bingo_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +48,7 @@ CREATE TABLE bingo_cards (
     user_id INTEGER NOT NULL,
     owner_name TEXT NOT NULL,
     bingo_announced INTEGER NOT NULL DEFAULT 0
-        CHECK (bingo_announced IN (0, 1)),
+    CHECK (bingo_announced IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (game_id, user_id)
 );
