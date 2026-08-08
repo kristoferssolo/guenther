@@ -8,8 +8,6 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("CHAT_ID", None::<&str>),
             ("COBALT_API_URL", None),
             ("COBALT_API_KEY", None),
-            ("TIKTOK_SESSION_COOKIE_PATH", None),
-            ("TWITTER_SESSION_COOKIE_PATH", None),
             ("F1_UTC_OFFSET", None),
         ],
         f,

@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use std::{env, fmt::Debug, path::PathBuf, sync::OnceLock};
+use std::{env, fmt::Debug, sync::OnceLock};
 use time::UtcOffset;
 use tracing::warn;
 
@@ -10,8 +10,6 @@ static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 pub struct Config {
     pub chat_id: Option<i64>,
     pub cobalt: CobaltConfig,
-    pub tiktok: TiktokConfig,
-    pub twitter: TwitterConfig,
     pub f1: F1Config,
 }
 
@@ -19,16 +17,6 @@ pub struct Config {
 pub struct CobaltConfig {
     pub api_url: String,
     pub api_key: Option<String>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct TiktokConfig {
-    pub cookies_path: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct TwitterConfig {
-    pub cookies_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -57,8 +45,6 @@ impl Config {
         Self {
             chat_id,
             cobalt: CobaltConfig::from_env(),
-            tiktok: TiktokConfig::from_env(),
-            twitter: TwitterConfig::from_env(),
             f1: F1Config::from_env(),
         }
     }
@@ -97,22 +83,6 @@ impl CobaltConfig {
     }
 }
 
-impl TiktokConfig {
-    fn from_env() -> Self {
-        Self {
-            cookies_path: get_path_from_env("TIKTOK_SESSION_COOKIE_PATH"),
-        }
-    }
-}
-
-impl TwitterConfig {
-    fn from_env() -> Self {
-        Self {
-            cookies_path: get_path_from_env("TWITTER_SESSION_COOKIE_PATH"),
-        }
-    }
-}
-
 impl F1Config {
     fn from_env() -> Self {
         let utc_offset = match env::var("F1_UTC_OFFSET") {
@@ -128,25 +98,6 @@ impl F1Config {
         };
 
         Self { utc_offset }
-    }
-}
-
-fn get_path_from_env(env_key: &str) -> Option<PathBuf> {
-    match env::var(env_key) {
-        Ok(raw) => {
-            let path = PathBuf::from(&raw);
-            if path.is_file() {
-                Some(path)
-            } else {
-                warn!(env_key = env_key, path = %path.display(), "cookie path is set but not a file");
-                None
-            }
-        }
-        Err(env::VarError::NotPresent) => None,
-        Err(env::VarError::NotUnicode(_)) => {
-            warn!(env_key = env_key, "env var is not valid unicode");
-            None
-        }
     }
 }
 

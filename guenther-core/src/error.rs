@@ -5,9 +5,6 @@ pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] tokio::io::Error),
 
-    #[error("yt-dlp failed: {0}")]
-    YTDLPFailed(String),
-
     #[error("cobalt request failed: {0}")]
     CobaltRequest(#[source] reqwest::Error),
 
@@ -62,11 +59,6 @@ impl Error {
     #[inline]
     pub fn other(text: impl Into<String>) -> Self {
         Self::Other(text.into())
-    }
-
-    #[inline]
-    pub fn ytdlp_failed(text: impl Into<String>) -> Self {
-        Self::YTDLPFailed(text.into())
     }
 
     #[inline]
