@@ -593,26 +593,26 @@ FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
         .fetch_optional(&self.pool)
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
-        let user = sqlx::query!(
+        let known_user = sqlx::query!(
             r#"SELECT user_id, username, display_name FROM bingo_users
 WHERE chat_id = ? AND user_id = ?"#,
             row.chat_id,
             row.user_id,
         )
         .fetch_optional(&self.pool)
-        .await?
-        .map_or_else(
-            || KnownUser {
-                user_id: row.user_id,
-                username: None,
-                display_name: row.owner_name.clone(),
-            },
-            |known| KnownUser {
+        .await?;
+        let user = match known_user {
+            Some(known) => KnownUser {
                 user_id: known.user_id,
                 username: known.username,
                 display_name: known.display_name,
             },
-        );
+            None => KnownUser {
+                user_id: row.user_id,
+                username: None,
+                display_name: row.owner_name,
+            },
+        };
         let cells = fetch_cells(&self.pool, card_id).await?;
         Ok(Card {
             id: row.card_id,
