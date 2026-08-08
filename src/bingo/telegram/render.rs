@@ -28,15 +28,15 @@ Chat administrators:
 /bingo game center <slug> <text>
 /bingo game description <slug> [text]
 /bingo entries import <game> (attach a UTF-8 text file)
-/bingo edit <entry_id> <text>
-/bingo delete <entry_id>
+/bingo edit [game] <entry_number> <text>
+/bingo delete [game] <entry_number>
 /bingo generate [game] @user
 /bingo regenerate [game] @user
 /bingo reset [game] @user
-/bingo card set <game> [@user] <A1-E5> <entry_id>
+/bingo card set <game> [@user] <A1-E5> <entry_number>
 
 You can omit @user when replying to that user 's message.
-Use /bingo import or /bingo reimport with a five-row, pipe-separated entry-ID grid.";
+Use /bingo import or /bingo reimport with a five-row, pipe-separated entry-number grid.";
 
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
@@ -67,7 +67,7 @@ pub async fn send_entries(
     lines.extend(
         entries
             .into_iter()
-            .map(|entry| format!("#{} – {}", entry.id, entry.text)),
+            .map(|entry| format!("#{} – {}", entry.number, entry.text)),
     );
     send_lines(bot, chat_id, lines).await
 }

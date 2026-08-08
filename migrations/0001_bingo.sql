@@ -33,6 +33,7 @@ WHERE is_default = 1;
 CREATE TABLE bingo_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id INTEGER NOT NULL REFERENCES bingo_games(id) ON DELETE CASCADE,
+    number INTEGER NOT NULL CHECK (number > 0),
     text TEXT NOT NULL,
     normalized_text TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
@@ -42,6 +43,9 @@ CREATE TABLE bingo_entries (
 
 CREATE INDEX bingo_entries_game_active
 ON bingo_entries (game_id, active);
+
+CREATE UNIQUE INDEX bingo_entries_game_number
+ON bingo_entries (game_id, number);
 
 CREATE TABLE bingo_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

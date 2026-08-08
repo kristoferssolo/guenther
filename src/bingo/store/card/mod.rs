@@ -3,7 +3,7 @@ mod queries;
 use crate::bingo::{
     error::{BingoError, Result},
     model::{
-        CELL_COUNT, Card, CardId, EntryId, GameState, ImportedCell, KnownUser, Position,
+        CELL_COUNT, Card, CardId, EntryNumber, GameState, ImportedCell, KnownUser, Position,
         REQUIRED_ENTRIES, ToggleResult, has_bingo,
     },
     store::{
@@ -101,12 +101,12 @@ impl BingoStore {
                 .await?;
                 continue;
             }
-            let entry_id = cell.entry_id.ok_or_else(|| {
+            let entry_number = cell.entry_number.ok_or_else(|| {
                 BingoError::InvalidCommand(
-                    "non-free imported cells must contain entry IDs".to_owned(),
+                    "non-free imported cells must contain entry numbers".to_owned(),
                 )
             })?;
-            let entry = fetch_active_entry(&mut transaction, game.id, entry_id, slug).await?;
+            let entry = fetch_active_entry(&mut transaction, game.id, entry_number, slug).await?;
             insert_cell(
                 &mut transaction,
                 card_id,
@@ -143,7 +143,7 @@ impl BingoStore {
         slug: &str,
         user_id: UserId,
         position: Position,
-        entry_id: EntryId,
+        entry_number: EntryNumber,
     ) -> Result<Card> {
         if position == Position::FREE {
             return Err(BingoError::FreeCell);
@@ -152,7 +152,7 @@ impl BingoStore {
         ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
-        let entry = fetch_active_entry(&mut transaction, game.id, entry_id, slug).await?;
+        let entry = fetch_active_entry(&mut transaction, game.id, entry_number, slug).await?;
         update_cell(&mut transaction, card_id, position, entry).await?;
         transaction.commit().await?;
         fetch_card(&self.pool, card_id).await

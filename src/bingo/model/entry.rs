@@ -3,6 +3,7 @@ pub const MAX_ENTRY_CHARS: usize = 128;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
     pub id: EntryId,
+    pub number: EntryNumber,
     pub game_id: GameId,
     pub text: String,
 }
@@ -14,4 +15,4 @@ pub fn normalize_entry(text: &str) -> String {
         .join(" ")
         .to_lowercase()
 }
-use crate::bingo::model::{EntryId, GameId};
+use crate::bingo::model::{EntryId, EntryNumber, GameId};

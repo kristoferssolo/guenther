@@ -43,7 +43,7 @@ pub async fn execute_bingo(
             send_text(
                 bot,
                 message.chat.id,
-                &format!("Added entry #{}: {}", entry.id, entry.text),
+                &format!("Added entry #{}: {}", entry.number, entry.text),
             )
             .await
         }
@@ -139,21 +139,29 @@ async fn execute_entry_admin(
             )
             .await
         }
-        EntryAdmin::Edit { entry_id, text } => {
-            let entry = store.edit_entry(chat_id, entry_id, &text).await?;
+        EntryAdmin::Edit {
+            slug,
+            entry_number,
+            text,
+        } => {
+            let entry = store
+                .edit_entry(chat_id, slug.as_deref(), entry_number, &text)
+                .await?;
             send_text(
                 bot,
                 chat_id,
-                &format!("Updated entry #{}: {}", entry.id, entry.text),
+                &format!("Updated entry #{}: {}", entry.number, entry.text),
             )
             .await
         }
-        EntryAdmin::Delete { entry_id } => {
-            store.delete_entry(chat_id, entry_id).await?;
+        EntryAdmin::Delete { slug, entry_number } => {
+            store
+                .delete_entry(chat_id, slug.as_deref(), entry_number)
+                .await?;
             send_text(
                 bot,
                 chat_id,
-                &format!("Deleted entry #{entry_id} from future cards."),
+                &format!("Deleted entry #{entry_number} from future cards."),
             )
             .await
         }
@@ -195,11 +203,11 @@ async fn execute_card_admin(
             slug,
             target,
             position,
-            entry_id,
+            entry_number,
         } => {
             let owner = resolve_target(store, message, target.as_deref(), false).await?;
             let card = store
-                .set_card_cell(chat_id, &slug, owner.user_id, position, entry_id)
+                .set_card_cell(chat_id, &slug, owner.user_id, position, entry_number)
                 .await?;
             send_card(bot, message.chat.id, &card).await
         }

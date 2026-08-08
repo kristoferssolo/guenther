@@ -8,7 +8,7 @@ use crate::bingo::{
     },
     error::{BingoError, Result},
     model::{
-        CELL_COUNT, EntryId, FREE_POSITION, GRID_SIDE, GameState, ImportedCell, MAX_ENTRY_CHARS,
+        CELL_COUNT, EntryNumber, FREE_POSITION, GRID_SIDE, GameState, ImportedCell, MAX_ENTRY_CHARS,
     },
 };
 
@@ -118,17 +118,33 @@ fn parse_add(input: &str) -> Result<BingoCommand> {
 }
 
 fn parse_edit(input: &str) -> Result<BingoCommand> {
-    let (raw_id, text) = required_pair(input, "edit <entry_id> <text>")?;
+    const USAGE: &str = "edit [game] <entry_number> <text>";
+    let (first, rest) = required_pair(input, USAGE)?;
+    let (slug, raw_number, text) = if first.chars().all(|character| character.is_ascii_digit()) {
+        (None, first, rest)
+    } else {
+        let (raw_number, text) = required_pair(rest, USAGE)?;
+        (Some(first.to_owned()), raw_number, text)
+    };
     validate_text(text, "entry")?;
     Ok(BingoCommand::Entry(EntryAdmin::Edit {
-        entry_id: parse_id(raw_id, "entry ID")?,
+        slug,
+        entry_number: parse_id(raw_number, "entry number")?,
         text: text.to_owned(),
     }))
 }
 
 fn parse_delete(input: &str) -> Result<BingoCommand> {
+    const USAGE: &str = "delete [game] <entry_number>";
+    let (first, rest) = split_once_whitespace(input);
+    let (slug, raw_number) = if rest.is_empty() {
+        (None, required_word(first, USAGE)?)
+    } else {
+        (Some(first.to_owned()), required_word(rest, USAGE)?)
+    };
     Ok(BingoCommand::Entry(EntryAdmin::Delete {
-        entry_id: parse_id(required_word(input, "delete <entry_id>")?, "entry ID")?,
+        slug,
+        entry_number: parse_id(raw_number, "entry number")?,
     }))
 }
 
@@ -185,8 +201,8 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
                 ));
             }
             cells.push(ImportedCell {
-                entry_id: (!is_free)
-                    .then(|| parse_id::<EntryId>(value, "entry ID"))
+                entry_number: (!is_free)
+                    .then(|| parse_id::<EntryNumber>(value, "entry number"))
                     .transpose()?,
                 marked: marked || is_free,
                 is_free,
@@ -203,12 +219,12 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
 }
 
 fn parse_card(input: &str) -> Result<BingoCommand> {
-    const USAGE: &str = "card set <slug> [@user] <cell> <entry_id>";
+    const USAGE: &str = "card set <slug> [@user] <cell> <entry_number>";
 
     let (action, rest) = split_once_whitespace(input);
     if !action.eq_ignore_ascii_case("set") {
         return Err(BingoError::InvalidCommand(
-            "usage: /bingo card set <slug> [@user] <A1-E5> <entry_id>".to_owned(),
+            "usage: /bingo card set <slug> [@user] <A1-E5> <entry_number>".to_owned(),
         ));
     }
 
@@ -224,7 +240,7 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
         (None, next)
     };
     let position = coordinate.parse()?;
-    let raw_entry_id = parts.next().ok_or_else(|| usage(USAGE))?;
+    let raw_entry_number = parts.next().ok_or_else(|| usage(USAGE))?;
     if parts.next().is_some() {
         return Err(usage(USAGE));
     }
@@ -232,7 +248,7 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
         slug: slug.to_owned(),
         target,
         position,
-        entry_id: parse_id(raw_entry_id, "entry ID")?,
+        entry_number: parse_id(raw_entry_number, "entry number")?,
     }))
 }
 

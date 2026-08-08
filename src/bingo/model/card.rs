@@ -1,4 +1,4 @@
-use super::{CELL_COUNT, CardId, EntryId, GRID_SIDE, Game, KnownUser, Position};
+use super::{CELL_COUNT, CardId, EntryNumber, GRID_SIDE, Game, KnownUser, Position};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardCell {
@@ -26,7 +26,7 @@ impl Card {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportedCell {
-    pub entry_id: Option<EntryId>,
+    pub entry_number: Option<EntryNumber>,
     pub marked: bool,
     pub is_free: bool,
 }

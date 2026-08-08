@@ -1,6 +1,6 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{Card, CardCell, CardId, EntryId, Game, GameId, KnownUser, Position},
+    model::{Card, CardCell, CardId, EntryId, EntryNumber, Game, GameId, KnownUser, Position},
     store::id::{db_user_id, user_id_from_db},
 };
 use sqlx::{Sqlite, SqliteExecutor, SqlitePool, Transaction};
@@ -163,13 +163,13 @@ pub async fn find_card_id(
 pub async fn fetch_active_entry(
     transaction: &mut Transaction<'_, Sqlite>,
     game_id: GameId,
-    entry_id: EntryId,
+    entry_number: EntryNumber,
     slug: &str,
 ) -> Result<ActiveEntry> {
     sqlx::query!(
         r#"SELECT id, text FROM bingo_entries
-WHERE id = ? AND game_id = ? AND active = 1"#,
-        entry_id.get(),
+WHERE number = ? AND game_id = ? AND active = 1"#,
+        entry_number.get(),
         game_id.get(),
     )
     .fetch_optional(&mut **transaction)
@@ -180,7 +180,7 @@ WHERE id = ? AND game_id = ? AND active = 1"#,
     })
     .ok_or_else(|| {
         BingoError::NotFound(format!(
-            "active entry `{entry_id}` was not found in game `{slug}`"
+            "active entry `{entry_number}` was not found in game `{slug}`"
         ))
     })
 }

@@ -1,6 +1,6 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{Entry, EntryId, Game, GameId, MAX_ENTRY_CHARS, normalize_entry},
+    model::{Entry, EntryId, EntryNumber, Game, GameId, MAX_ENTRY_CHARS, normalize_entry},
     store::{
         BingoStore,
         validation::{ensure_editable, map_unique, require_changed, validate_nonempty},
@@ -13,8 +13,15 @@ use teloxide::types::ChatId;
 #[derive(Debug)]
 struct EntryRow {
     id: i64,
+    number: i64,
     game_id: i64,
     text: String,
+}
+
+#[derive(Debug)]
+struct UpsertedEntry {
+    id: EntryId,
+    number: EntryNumber,
 }
 
 impl BingoStore {
@@ -26,9 +33,10 @@ impl BingoStore {
     ) -> Result<Entry> {
         let game = self.game(chat_id, slug).await?;
         ensure_editable(&game)?;
-        let id = upsert_entry(&self.pool, game.id, text).await?;
+        let upserted = upsert_entry(&self.pool, game.id, text).await?;
         Ok(Entry {
-            id,
+            id: upserted.id,
+            number: upserted.number,
             game_id: game.id,
             text: text.trim().to_owned(),
         })
@@ -42,13 +50,17 @@ impl BingoStore {
         let game = self.game(chat_id, slug).await?;
         let rows = sqlx::query_as!(
             EntryRow,
-            r#"SELECT id, game_id, text FROM bingo_entries
-WHERE game_id = ? AND active = 1 ORDER BY id"#,
+            r#"SELECT id, number, game_id, text FROM bingo_entries
+WHERE game_id = ? AND active = 1 ORDER BY number"#,
             game.id.get(),
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok((game, rows.into_iter().map(Entry::from).collect()))
+        let entries = rows
+            .into_iter()
+            .map(Entry::try_from)
+            .collect::<Result<Vec<_>>>()?;
+        Ok((game, entries))
     }
 
     pub async fn import_entries(
@@ -67,8 +79,8 @@ WHERE game_id = ? AND active = 1 ORDER BY id"#,
         let mut transaction = self.pool.begin().await?;
         let mut imported_ids = HashSet::with_capacity(entries.len());
         for entry in entries {
-            let id = upsert_entry(&mut *transaction, game.id, entry).await?;
-            imported_ids.insert(id);
+            let upserted = upsert_entry(&mut *transaction, game.id, entry).await?;
+            imported_ids.insert(upserted.id);
         }
         transaction.commit().await?;
         Ok(imported_ids.len())
@@ -77,76 +89,102 @@ WHERE game_id = ? AND active = 1 ORDER BY id"#,
     pub async fn edit_entry(
         &self,
         chat_id: ChatId,
-        entry_id: EntryId,
+        slug: Option<&str>,
+        entry_number: EntryNumber,
         text: &str,
     ) -> Result<Entry> {
         validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
+        let game = self.game(chat_id, slug).await?;
+        ensure_editable(&game)?;
         let normalized = normalize_entry(text);
-        let chat_id = chat_id.0;
         let row = sqlx::query_as!(
             EntryRow,
             r#"UPDATE bingo_entries SET text = ?, normalized_text = ?
-WHERE id = ? AND game_id IN
-(SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1
-RETURNING id, game_id, text"#,
+WHERE game_id = ? AND number = ? AND active = 1
+RETURNING id, number, game_id, text"#,
             text.trim(),
             normalized,
-            entry_id.get(),
-            chat_id,
+            game.id.get(),
+            entry_number.get(),
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(|error| map_unique(error, || "that entry already exists".to_owned()))?
-        .ok_or_else(|| BingoError::NotFound(format!("entry `{entry_id}` was not found")))?;
-        Ok(row.into())
+        .ok_or_else(|| {
+            BingoError::NotFound(format!(
+                "entry `{entry_number}` was not found in game `{}`",
+                game.slug
+            ))
+        })?;
+        row.try_into()
     }
 
-    pub async fn delete_entry(&self, chat_id: ChatId, entry_id: EntryId) -> Result<()> {
-        let chat_id = chat_id.0;
+    pub async fn delete_entry(
+        &self,
+        chat_id: ChatId,
+        slug: Option<&str>,
+        entry_number: EntryNumber,
+    ) -> Result<()> {
+        let game = self.game(chat_id, slug).await?;
+        ensure_editable(&game)?;
         let result = sqlx::query!(
             r#"UPDATE bingo_entries SET active = 0
-WHERE id = ? AND game_id IN
-(SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1"#,
-            entry_id.get(),
-            chat_id,
+WHERE game_id = ? AND number = ? AND active = 1"#,
+            game.id.get(),
+            entry_number.get(),
         )
         .execute(&self.pool)
         .await?;
         require_changed(result.rows_affected(), || {
-            format!("entry `{entry_id}` was not found")
+            format!(
+                "entry `{entry_number}` was not found in game `{}`",
+                game.slug
+            )
         })
     }
 }
 
-impl From<EntryRow> for Entry {
-    fn from(row: EntryRow) -> Self {
-        Self {
+impl TryFrom<EntryRow> for Entry {
+    type Error = BingoError;
+
+    fn try_from(row: EntryRow) -> Result<Self> {
+        Ok(Self {
             id: row.id.into(),
+            number: row.number.try_into()?,
             game_id: row.game_id.into(),
             text: row.text,
-        }
+        })
     }
 }
 
-pub async fn upsert_entry<'e>(
+async fn upsert_entry<'e>(
     executor: impl SqliteExecutor<'e>,
     game_id: GameId,
     text: &str,
-) -> Result<EntryId> {
+) -> Result<UpsertedEntry> {
     validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
     let normalized = normalize_entry(text);
     let text = text.trim();
-    Ok(sqlx::query_scalar!(
-        r#"INSERT INTO bingo_entries (game_id, text, normalized_text)
-VALUES (?, ?, ?)
+    let row = sqlx::query!(
+        r#"INSERT INTO bingo_entries (game_id, number, text, normalized_text)
+VALUES (
+    ?,
+    (SELECT COALESCE(MAX(number), 0) + 1 FROM bingo_entries WHERE game_id = ?),
+    ?,
+    ?
+)
 ON CONFLICT(game_id, normalized_text)
 DO UPDATE SET text = excluded.text, active = 1
-RETURNING id"#,
+RETURNING id, number"#,
+        game_id.get(),
         game_id.get(),
         text,
         normalized,
     )
     .fetch_one(executor)
-    .await?
-    .into())
+    .await?;
+    Ok(UpsertedEntry {
+        id: row.id.into(),
+        number: row.number.try_into()?,
+    })
 }

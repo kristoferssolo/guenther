@@ -51,6 +51,9 @@ pub enum BingoError {
 
     #[error("database contains invalid Telegram user ID {0}")]
     InvalidStoredUserId(i64),
+
+    #[error("database contains invalid bingo entry number {0}")]
+    InvalidStoredEntryNumber(i64),
 }
 
 impl BingoError {

@@ -3,7 +3,7 @@ mod parser;
 
 use crate::bingo::{
     error::Result,
-    model::{EntryId, GameState, ImportedCell, Position},
+    model::{EntryNumber, GameState, ImportedCell, Position},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,9 +37,18 @@ pub enum GameAdmin {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryAdmin {
-    Import { slug: String },
-    Edit { entry_id: EntryId, text: String },
-    Delete { entry_id: EntryId },
+    Import {
+        slug: String,
+    },
+    Edit {
+        slug: Option<String>,
+        entry_number: EntryNumber,
+        text: String,
+    },
+    Delete {
+        slug: Option<String>,
+        entry_number: EntryNumber,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +68,7 @@ pub enum CardAdmin {
         slug: String,
         target: Option<String>,
         position: Position,
-        entry_id: EntryId,
+        entry_number: EntryNumber,
     },
     Reset {
         slug: Option<String>,
@@ -82,7 +91,7 @@ impl BingoCommand {
 mod tests {
     use crate::bingo::{
         command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
-        model::{EntryId, FREE_POSITION},
+        model::FREE_POSITION,
     };
     use claims::{assert_err, assert_matches, assert_ok, assert_ok_eq, assert_some};
 
@@ -115,10 +124,10 @@ mod tests {
         let first = assert_some!(cells.first());
         let free = assert_some!(cells.get(FREE_POSITION));
         assert!(first.marked);
-        assert_eq!(first.entry_id, Some(EntryId::from(81)));
+        assert_eq!(first.entry_number, Some(assert_ok!("81".parse())));
         assert!(free.marked);
         assert!(free.is_free);
-        assert_eq!(free.entry_id, None);
+        assert_eq!(free.entry_number, None);
     }
 
     #[test]
@@ -163,7 +172,7 @@ mod tests {
                 slug: "season".to_owned(),
                 target: None,
                 position: assert_ok!("C2".parse()),
-                entry_id: EntryId::from(42),
+                entry_number: assert_ok!("42".parse()),
             })
         );
         assert_ok_eq!(
@@ -172,7 +181,7 @@ mod tests {
                 slug: "season".to_owned(),
                 target: Some("@driver".to_owned()),
                 position: assert_ok!("C2".parse()),
-                entry_id: EntryId::from(42),
+                entry_number: assert_ok!("42".parse()),
             })
         );
         assert_err!(BingoCommand::parse("card set season C2 incident"));
@@ -182,10 +191,38 @@ mod tests {
     #[test]
     fn adding_entries_does_not_require_an_administrator() {
         let add = assert_ok!(BingoCommand::parse("add safety car"));
-        let edit = assert_ok!(BingoCommand::parse("edit 1 red flag"));
+        let edit = assert_ok!(BingoCommand::parse("edit season 1 red flag"));
 
         assert!(!add.requires_admin());
         assert!(edit.requires_admin());
+    }
+
+    #[test]
+    fn parses_game_scoped_entry_edits_and_deletions() {
+        assert_ok_eq!(
+            BingoCommand::parse("edit 1 red flag"),
+            BingoCommand::Entry(EntryAdmin::Edit {
+                slug: None,
+                entry_number: assert_ok!("1".parse()),
+                text: "red flag".to_owned(),
+            })
+        );
+        assert_ok_eq!(
+            BingoCommand::parse("edit sprint 1 red flag"),
+            BingoCommand::Entry(EntryAdmin::Edit {
+                slug: Some("sprint".to_owned()),
+                entry_number: assert_ok!("1".parse()),
+                text: "red flag".to_owned(),
+            })
+        );
+        assert_ok_eq!(
+            BingoCommand::parse("delete sprint 1"),
+            BingoCommand::Entry(EntryAdmin::Delete {
+                slug: Some("sprint".to_owned()),
+                entry_number: assert_ok!("1".parse()),
+            })
+        );
+        assert_err!(BingoCommand::parse("delete sprint 0"));
     }
 
     #[test]

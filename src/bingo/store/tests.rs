@@ -1,6 +1,6 @@
 use super::*;
 use crate::bingo::model::{
-    CELL_COUNT, Card, EntryId, GameState, ImportedCell, KnownUser, MAX_GAME_DESCRIPTION_CHARS,
+    CELL_COUNT, Card, EntryNumber, GameState, ImportedCell, KnownUser, MAX_GAME_DESCRIPTION_CHARS,
     Position, REQUIRED_ENTRIES,
 };
 use claims::{assert_err, assert_ok, assert_ok_eq, assert_some};
@@ -92,6 +92,26 @@ async fn imports_entry_files_atomically_and_deduplicates_entries() {
     assert_err!(store.import_entries(CHAT_ID, "season", &invalid).await);
     let (_, entries) = assert_ok!(store.list_entries(CHAT_ID, Some("season")).await);
     assert_eq!(entries.len(), 1);
+}
+
+#[tokio::test]
+async fn numbers_entries_independently_for_each_game() {
+    let store = store().await;
+    for slug in ["season", "sprint"] {
+        assert_ok!(store.create_game(CHAT_ID, slug, slug, UserId(10)).await);
+        let first = assert_ok!(store.add_entry(CHAT_ID, Some(slug), "First").await);
+        let second = assert_ok!(store.add_entry(CHAT_ID, Some(slug), "Second").await);
+        assert_eq!(first.number, assert_ok!(EntryNumber::try_from(1)));
+        assert_eq!(second.number, assert_ok!(EntryNumber::try_from(2)));
+    }
+
+    let first = assert_ok!(EntryNumber::try_from(1));
+    assert_ok!(store.delete_entry(CHAT_ID, Some("season"), first).await);
+    let (_, sprint_entries) = assert_ok!(store.list_entries(CHAT_ID, Some("sprint")).await);
+    assert_eq!(sprint_entries.len(), 2);
+
+    let restored = assert_ok!(store.add_entry(CHAT_ID, Some("season"), "First").await);
+    assert_eq!(restored.number, first);
 }
 
 #[tokio::test]
@@ -187,7 +207,11 @@ async fn edits_do_not_change_existing_card_snapshots() {
         .collect::<Vec<_>>();
     let (_, entries) = assert_ok!(store.list_entries(CHAT_ID, None).await);
     let entry = assert_some!(entries.first());
-    assert_ok!(store.edit_entry(CHAT_ID, entry.id, "Changed entry").await);
+    assert_ok!(
+        store
+            .edit_entry(CHAT_ID, Some("season"), entry.number, "Changed entry")
+            .await
+    );
 
     let fetched = assert_ok!(store.card(CHAT_ID, None, owner.user_id).await);
     assert_eq!(
@@ -201,7 +225,7 @@ async fn edits_do_not_change_existing_card_snapshots() {
 }
 
 #[tokio::test]
-async fn sets_card_cells_from_active_game_entry_ids() {
+async fn sets_card_cells_from_game_scoped_entry_numbers() {
     let store = store().await;
     let owner = user(10, "driver");
     let card = setup_card(&store, &owner).await;
@@ -210,7 +234,7 @@ async fn sets_card_cells_from_active_game_entry_ids() {
     let entry = assert_some!(entries.iter().find(|entry| entry.text != *current_text));
     let changed = assert_ok!(
         store
-            .set_card_cell(CHAT_ID, "season", owner.user_id, position(0), entry.id)
+            .set_card_cell(CHAT_ID, "season", owner.user_id, position(0), entry.number,)
             .await
     );
     assert_eq!(assert_some!(changed.cells.first()).text, entry.text);
@@ -225,27 +249,24 @@ async fn sets_card_cells_from_active_game_entry_ids() {
             .add_entry(CHAT_ID, Some("sprint"), "Sprint-only entry")
             .await
     );
-    assert_err!(
+    assert_eq!(other_entry.number, assert_ok!(EntryNumber::try_from(1)));
+    let changed = assert_ok!(
         store
             .set_card_cell(
                 CHAT_ID,
                 "season",
                 owner.user_id,
                 position(1),
-                other_entry.id,
+                other_entry.number,
             )
             .await
     );
-    let unchanged = assert_ok!(store.card(CHAT_ID, Some("season"), owner.user_id).await);
-    assert_eq!(
-        unchanged.cells.get(1),
-        card.cells.get(1),
-        "failed updates must not alter the card"
-    );
+    assert_eq!(assert_some!(changed.cells.get(1)).text, "Entry 0");
+    assert_ne!(assert_some!(changed.cells.get(1)).text, other_entry.text);
 }
 
 #[tokio::test]
-async fn imports_cards_from_active_game_entry_ids() {
+async fn imports_cards_from_game_scoped_entry_numbers() {
     let store = store().await;
     let owner = user(10, "driver");
     let original = setup_card(&store, &owner).await;
@@ -253,8 +274,8 @@ async fn imports_cards_from_active_game_entry_ids() {
     let mut entries = entries.iter();
     let imported = Position::iter()
         .map(|cell_position| ImportedCell {
-            entry_id: (cell_position != Position::FREE)
-                .then(|| entries.next().map(|entry| entry.id))
+            entry_number: (cell_position != Position::FREE)
+                .then(|| entries.next().map(|entry| entry.number))
                 .flatten(),
             marked: cell_position == position(0) || cell_position == Position::FREE,
             is_free: cell_position == Position::FREE,
@@ -271,7 +292,8 @@ async fn imports_cards_from_active_game_entry_ids() {
     assert!(assert_some!(card.cells.get(Position::FREE.index())).is_free);
 
     let mut invalid = imported;
-    assert_some!(invalid.first_mut()).entry_id = Some(EntryId::from(i64::MAX));
+    assert_some!(invalid.first_mut()).entry_number =
+        Some(assert_ok!(EntryNumber::try_from(i64::MAX)));
     assert_err!(
         store
             .import_card(CHAT_ID, "season", &owner, &invalid, true)

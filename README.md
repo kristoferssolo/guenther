@@ -192,13 +192,13 @@ or delete entries, and manage cards:
 /bingo game description <slug> [text]
 
 /bingo entries import <game>
-/bingo edit <entry_id> <text>
-/bingo delete <entry_id>
+/bingo edit [game] <entry_number> <text>
+/bingo delete [game] <entry_number>
 
 /bingo generate [game] @username
 /bingo regenerate [game] @username
 /bingo reset [game] @username
-/bingo card set <game> [@username] <A1-E5> <entry_id>
+/bingo card set <game> [@username] <A1-E5> <entry_number>
 ```
 
 Omitting the text from `game description` clears the current description.
@@ -255,10 +255,10 @@ just bingo-card-preview
 
 ### Importing existing cards
 
-Use `import` to assemble a card from existing entry IDs without shuffling them.
+Use `import` to assemble a card from existing game-local entry numbers without shuffling them.
 The five rows map to A through E and each row's five values map to columns 1
-through 5. Every ID must identify an active entry in the selected game. The
-center at C3 must be `*`. Prefix an already-marked ID with `[x]`.
+through 5. Every number must identify an active entry in the selected game. The
+center at C3 must be `*`. Prefix an already-marked number with `[x]`.
 
 The safest way to select the owner is to reply to one of their messages and
 omit `@username`:
@@ -278,7 +278,7 @@ the first line instead, followed by the same five grid rows.
 Use `/bingo import ...` when the user does not have a card yet, or
 `/bingo reimport ...` to explicitly replace an existing card. Individual
 mistakes can be corrected later with `/bingo card set`.
-Use the numeric entry ID shown by `/bingo entries <game>`; the selected entry
+Use the game-local entry number shown by `/bingo entries <game>`; the selected entry
 must be active and belong to that game.
 Set the game's center text before importing if the paper cards use a different
 F1-themed center phrase; all cards in one game share that center text.
