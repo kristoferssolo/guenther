@@ -1,6 +1,7 @@
 mod admin;
 mod callback;
 mod dispatch;
+mod document;
 mod render;
 
 use crate::bingo::{error::Result, model::KnownUser, store::BingoStore};

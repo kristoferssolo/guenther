@@ -19,7 +19,7 @@ mod tests {
         model::{CELL_COUNT, Card, GameState, KnownUser, Position, REQUIRED_ENTRIES},
         store::BingoStore,
     };
-    use claims::{assert_err, assert_ok};
+    use claims::{assert_err, assert_ok, assert_ok_eq};
     use teloxide::types::{ChatId, UserId};
 
     const CHAT_ID: ChatId = ChatId(1);
@@ -90,6 +90,34 @@ mod tests {
             .await
             .expect("fetch card");
         assert_eq!(fetched.cells, card.cells);
+    }
+
+    #[tokio::test]
+    async fn imports_entry_files_atomically_and_deduplicates_entries() {
+        let store = store().await;
+        assert_ok!(
+            store
+                .create_game(CHAT_ID, "season", "Season", UserId(10))
+                .await
+        );
+        assert_ok_eq!(
+            store
+                .import_entries(
+                    CHAT_ID,
+                    "season",
+                    &["Safety car".to_owned(), "safety   car".to_owned()],
+                )
+                .await,
+            1
+        );
+
+        let invalid = vec!["Wet race".to_owned(), "x".repeat(61)];
+        assert_err!(store.import_entries(CHAT_ID, "season", &invalid).await);
+        let (_, entries) = store
+            .list_entries(CHAT_ID, Some("season"))
+            .await
+            .expect("list imported entries");
+        assert_eq!(entries.len(), 1);
     }
 
     #[tokio::test]

@@ -14,9 +14,7 @@ pub fn parse(input: &str) -> Result<BingoCommand> {
     match head.to_ascii_lowercase().as_str() {
         "games" => Ok(BingoCommand::Games),
         "game" => parse_game(rest),
-        "entries" => Ok(BingoCommand::Entries {
-            slug: optional_word(rest),
-        }),
+        "entries" => parse_entries(rest),
         "add" => parse_add(rest),
         "edit" => parse_edit(rest),
         "delete" => parse_delete(rest),
@@ -31,6 +29,18 @@ pub fn parse(input: &str) -> Result<BingoCommand> {
             "unknown bingo command `{unknown}`; use /bingo help"
         ))),
     }
+}
+
+fn parse_entries(input: &str) -> Result<BingoCommand> {
+    let (action, rest) = split_once_whitespace(input);
+    if action.eq_ignore_ascii_case("import") {
+        return Ok(BingoCommand::Entry(EntryAdmin::Import {
+            slug: required_word(rest, "entries import <game>")?,
+        }));
+    }
+    Ok(BingoCommand::Entries {
+        slug: optional_word(input),
+    })
 }
 
 fn parse_game(input: &str) -> Result<BingoCommand> {
@@ -71,10 +81,10 @@ fn parse_add(input: &str) -> Result<BingoCommand> {
         (None, input.trim())
     };
     validate_text(text, "entry")?;
-    Ok(BingoCommand::Entry(EntryAdmin::Add {
+    Ok(BingoCommand::Add {
         slug,
         text: text.to_owned(),
-    }))
+    })
 }
 
 fn parse_edit(input: &str) -> Result<BingoCommand> {

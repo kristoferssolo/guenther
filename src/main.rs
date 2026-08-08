@@ -98,7 +98,7 @@ async fn message_handler(
         warn!(%err, "failed to capture incoming voice line metadata");
     }
 
-    let text = msg.text().map(str::to_owned);
+    let text = msg.text().or_else(|| msg.caption()).map(str::to_owned);
 
     #[cfg(feature = "bingo")]
     if let Err(err) = observe_message_users(&bingo_store, &msg).await {

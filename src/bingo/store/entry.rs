@@ -7,6 +7,7 @@ use crate::bingo::{
     },
 };
 use sqlx::SqliteExecutor;
+use std::collections::HashSet;
 use teloxide::types::ChatId;
 
 #[derive(Debug)]
@@ -48,6 +49,29 @@ WHERE game_id = ? AND active = 1 ORDER BY id"#,
         .fetch_all(&self.pool)
         .await?;
         Ok((game, rows.into_iter().map(Entry::from).collect()))
+    }
+
+    pub async fn import_entries(
+        &self,
+        chat_id: ChatId,
+        slug: &str,
+        entries: &[String],
+    ) -> Result<usize> {
+        if entries.is_empty() {
+            return Err(BingoError::InvalidCommand(
+                "the entry file does not contain any entries".to_owned(),
+            ));
+        }
+        let game = self.game(chat_id, Some(slug)).await?;
+        ensure_editable(&game)?;
+        let mut transaction = self.pool.begin().await?;
+        let mut imported_ids = HashSet::with_capacity(entries.len());
+        for entry in entries {
+            let id = upsert_entry(&mut *transaction, game.id, entry).await?;
+            imported_ids.insert(id);
+        }
+        transaction.commit().await?;
+        Ok(imported_ids.len())
     }
 
     pub async fn edit_entry(&self, chat_id: ChatId, entry_id: i64, text: &str) -> Result<Entry> {

@@ -16,6 +16,9 @@ pub enum BingoError {
     #[error("Telegram request failed: {0}")]
     Telegram(#[from] teloxide::RequestError),
 
+    #[error("Telegram file download failed: {0}")]
+    Download(#[from] teloxide::DownloadError),
+
     #[error("{0}")]
     InvalidCommand(String),
 

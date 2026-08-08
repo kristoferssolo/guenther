@@ -5,12 +5,13 @@ use crate::bingo::{
     store::BingoStore,
     telegram::{
         admin::{AdminCache, is_chat_admin},
+        document::read_entry_file,
         known_user, observe_message_users,
         render::{HELP, send_card, send_entries, send_games, send_text},
     },
 };
 use teloxide::{
-    prelude::{Bot, ChatId},
+    prelude::Bot,
     types::{Message, UserId},
 };
 
@@ -37,10 +38,17 @@ pub async fn execute_bingo(
             let card = store.card(chat_id, slug.as_deref(), owner.user_id).await?;
             send_card(bot, message.chat.id, &card).await
         }
-        BingoCommand::Game(command) => execute_game_admin(bot, message, store, command).await,
-        BingoCommand::Entry(command) => {
-            execute_entry_admin(bot, message.chat.id, store, command).await
+        BingoCommand::Add { slug, text } => {
+            let entry = store.add_entry(chat_id, slug.as_deref(), &text).await?;
+            send_text(
+                bot,
+                message.chat.id,
+                &format!("Added entry #{}: {}", entry.id, entry.text),
+            )
+            .await
         }
+        BingoCommand::Game(command) => execute_game_admin(bot, message, store, command).await,
+        BingoCommand::Entry(command) => execute_entry_admin(bot, message, store, command).await,
         BingoCommand::Card(command) => execute_card_admin(bot, message, store, command).await,
     }
 }
@@ -104,17 +112,19 @@ async fn execute_game_admin(
 
 async fn execute_entry_admin(
     bot: &Bot,
-    chat_id: ChatId,
+    message: &Message,
     store: &BingoStore,
     command: EntryAdmin,
 ) -> Result<()> {
+    let chat_id = message.chat.id;
     match command {
-        EntryAdmin::Add { slug, text } => {
-            let entry = store.add_entry(chat_id, slug.as_deref(), &text).await?;
+        EntryAdmin::Import { slug } => {
+            let entries = read_entry_file(bot, message).await?;
+            let imported = store.import_entries(chat_id, &slug, &entries).await?;
             send_text(
                 bot,
                 chat_id,
-                &format!("Added entry #{}: {}", entry.id, entry.text),
+                &format!("Imported {imported} entries into `{slug}`."),
             )
             .await
         }

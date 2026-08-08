@@ -14,6 +14,10 @@ pub enum BingoCommand {
         slug: Option<String>,
         target: Option<String>,
     },
+    Add {
+        slug: Option<String>,
+        text: String,
+    },
     Game(GameAdmin),
     Entry(EntryAdmin),
     Card(CardAdmin),
@@ -29,7 +33,7 @@ pub enum GameAdmin {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryAdmin {
-    Add { slug: Option<String>, text: String },
+    Import { slug: String },
     Edit { entry_id: i64, text: String },
     Delete { entry_id: i64 },
 }
@@ -66,12 +70,7 @@ impl BingoCommand {
 
     #[must_use]
     pub const fn requires_admin(&self) -> bool {
-        matches!(
-            self,
-            Self::Game(_)
-                | Self::Entry(EntryAdmin::Edit { .. } | EntryAdmin::Delete { .. })
-                | Self::Card(_)
-        )
+        matches!(self, Self::Game(_) | Self::Entry(_) | Self::Card(_))
     }
 }
 
@@ -87,17 +86,17 @@ mod tests {
     fn parses_entry_add_with_optional_game() {
         assert_ok_eq!(
             BingoCommand::parse("add safety car"),
-            BingoCommand::Entry(EntryAdmin::Add {
+            BingoCommand::Add {
                 slug: None,
                 text: "safety car".to_owned()
-            })
+            }
         );
         assert_ok_eq!(
             BingoCommand::parse("add 2026-season | safety car"),
-            BingoCommand::Entry(EntryAdmin::Add {
+            BingoCommand::Add {
                 slug: Some("2026-season".to_owned()),
                 text: "safety car".to_owned()
-            })
+            }
         );
     }
 
@@ -164,5 +163,20 @@ mod tests {
 
         assert!(!add.requires_admin());
         assert!(edit.requires_admin());
+    }
+
+    #[test]
+    fn parses_admin_entry_file_imports() {
+        let command =
+            BingoCommand::parse("entries import season-2026").expect("parse entry file import");
+
+        assert_eq!(
+            command,
+            BingoCommand::Entry(EntryAdmin::Import {
+                slug: "season-2026".to_owned()
+            })
+        );
+        assert!(command.requires_admin());
+        assert_err!(BingoCommand::parse("entries import"));
     }
 }

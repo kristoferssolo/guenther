@@ -15,6 +15,8 @@ Everyone:
 /bingo games
 /bingo entries [game]
 /bingo get [game] [@user]
+/bingo add <entry>
+/bingo add <game> | <entry>
 
 Chat administrators:
 /bingo game create <slug> <name>
@@ -22,8 +24,7 @@ Chat administrators:
 /bingo game close <slug>
 /bingo game default <slug>
 /bingo game center <slug> <text>
-/bingo add <entry>
-/bingo add <game> | <entry>
+/bingo entries import <game> (attach a UTF-8 text file)
 /bingo edit <entry_id> <text>
 /bingo delete <entry_id>
 /bingo generate [game] @user
