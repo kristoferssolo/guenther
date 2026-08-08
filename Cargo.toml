@@ -6,6 +6,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [features]
+bingo = ["dep:sqlx"]
 voice-line-capture = []
 
 [dependencies]
@@ -25,6 +26,12 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sqlx = { version = "0.9", default-features = false, features = [
+  "macros",
+  "migrate",
+  "runtime-tokio",
+  "sqlite",
+], optional = true }
 teloxide = { version = "0.17", default-features = false, features = [
   "ctrlc_handler",
   "macros",

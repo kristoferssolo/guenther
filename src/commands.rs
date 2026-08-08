@@ -5,6 +5,9 @@ use guenther::{
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 
+#[cfg(feature = "bingo")]
+use crate::bingo::{BingoStore, answer_bingo};
+
 #[derive(Debug, Clone, PartialEq, Eq, BotCommands)]
 #[command(rename_rule = "lowercase")]
 pub enum Command {
@@ -23,9 +26,18 @@ pub enum Command {
     /// Show the next F1 race schedule
     #[command()]
     Race,
+    /// Manage and play F1 bingo
+    #[cfg(feature = "bingo")]
+    Bingo(String),
 }
 
-pub async fn answer(bot: &Bot, chat_id: ChatId, cmd: Command) -> ResponseResult<()> {
+pub async fn answer(
+    bot: &Bot,
+    message: &Message,
+    cmd: Command,
+    #[cfg(feature = "bingo")] bingo_store: &BingoStore,
+) -> color_eyre::Result<()> {
+    let chat_id = message.chat.id;
     match cmd {
         Command::Help => {
             bot.send_message(chat_id, Command::descriptions().to_string())
@@ -38,6 +50,11 @@ pub async fn answer(bot: &Bot, chat_id: ChatId, cmd: Command) -> ResponseResult<
         Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend).await?,
         Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying).await?,
         Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race).await?,
+        #[cfg(feature = "bingo")]
+        Command::Bingo(input) => {
+            answer_bingo(bot, message, bingo_store, &input).await?;
+            return Ok(());
+        }
     };
 
     Ok(())

@@ -1,3 +1,5 @@
+#[cfg(feature = "bingo")]
+mod bingo;
 mod commands;
 mod handler;
 mod inline;
@@ -20,6 +22,9 @@ use guenther::{
 use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{error, info, warn};
+
+#[cfg(feature = "bingo")]
+use crate::bingo::{BingoStore, answer_callback, observe_message_users};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -45,16 +50,37 @@ async fn main() -> color_eyre::Result<()> {
     let handlers = create_handlers(&global_config().platforms);
     let enabled_platforms = handlers.iter().map(Handler::name).collect::<Vec<_>>();
     info!(?enabled_platforms, "platform handlers configured");
-    let schema = dptree::entry()
-        .branch(Update::filter_message().endpoint(message_handler))
-        .branch(Update::filter_inline_query().endpoint(answer_inline_query));
 
-    Dispatcher::builder(bot, schema)
-        .dependencies(dptree::deps![handlers, bot_name])
-        .enable_ctrlc_handler()
-        .build()
-        .dispatch()
-        .await;
+    #[cfg(feature = "bingo")]
+    {
+        let bingo_store = BingoStore::connect_from_env().await?;
+        info!("bingo database initialized");
+        let schema = dptree::entry()
+            .branch(Update::filter_message().endpoint(message_handler))
+            .branch(Update::filter_callback_query().endpoint(bingo_callback_handler))
+            .branch(Update::filter_inline_query().endpoint(answer_inline_query));
+
+        Dispatcher::builder(bot, schema)
+            .dependencies(dptree::deps![handlers, bot_name, bingo_store])
+            .enable_ctrlc_handler()
+            .build()
+            .dispatch()
+            .await;
+    }
+
+    #[cfg(not(feature = "bingo"))]
+    {
+        let schema = dptree::entry()
+            .branch(Update::filter_message().endpoint(message_handler))
+            .branch(Update::filter_inline_query().endpoint(answer_inline_query));
+
+        Dispatcher::builder(bot, schema)
+            .dependencies(dptree::deps![handlers, bot_name])
+            .enable_ctrlc_handler()
+            .build()
+            .dispatch()
+            .await;
+    }
 
     Ok(())
 }
@@ -64,17 +90,30 @@ async fn message_handler(
     msg: Message,
     handlers: Arc<[Handler]>,
     bot_name: Arc<str>,
+    #[cfg(feature = "bingo")] bingo_store: BingoStore,
 ) -> color_eyre::Result<()> {
     if let Err(err) = capture_incoming_voice_line(&bot, &msg).await {
         warn!(%err, "failed to capture incoming voice line metadata");
     }
 
-    let chat_id = msg.chat.id;
     let text = msg.text().map(str::to_owned);
+
+    #[cfg(feature = "bingo")]
+    if let Err(err) = observe_message_users(&bingo_store, &msg).await {
+        warn!(%err, "failed to remember Telegram user for bingo");
+    }
 
     match decide_route(text.as_deref(), &bot_name) {
         RouteAction::HandleCommand(cmd) => {
-            if let Err(e) = answer(&bot, chat_id, cmd).await {
+            if let Err(e) = answer(
+                &bot,
+                &msg,
+                cmd,
+                #[cfg(feature = "bingo")]
+                &bingo_store,
+            )
+            .await
+            {
                 error!(%e, "failed to answer command");
             }
         }
@@ -82,6 +121,16 @@ async fn message_handler(
         RouteAction::Ignore => {}
     }
 
+    Ok(())
+}
+
+#[cfg(feature = "bingo")]
+async fn bingo_callback_handler(
+    bot: Bot,
+    query: teloxide::types::CallbackQuery,
+    bingo_store: BingoStore,
+) -> color_eyre::Result<()> {
+    answer_callback(bot, query, bingo_store).await?;
     Ok(())
 }
 
