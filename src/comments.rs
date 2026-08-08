@@ -7,9 +7,9 @@ static GLOBAL_COMMENTS: OnceLock<Comments> = OnceLock::new();
 
 pub const TELEGRAM_CAPTION_LIMIT: usize = 4096;
 const FALLBACK_COMMENTS: &[&str] = &[
-    "Oh come on, that's brilliant — and slightly chaotic, like always.",
-    "That is a proper bit of craftsmanship — then someone presses the red button.",
-    "Nice shot — looks good on the trailer, not so good on the gearbox.",
+    "Oh come on, that's brilliant – and slightly chaotic, like always.",
+    "That is a proper bit of craftsmanship – then someone presses the red button.",
+    "Nice shot – looks good on the trailer, not so good on the gearbox.",
     "Here you go. Judge for yourself.",
 ];
 const FAILURE_COMMENTS: &[&str] = &[

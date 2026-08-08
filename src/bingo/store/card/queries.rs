@@ -29,18 +29,15 @@ struct CellRow {
     is_free: bool,
 }
 
-pub(in crate::bingo::store::card) struct NewCell<'a> {
-    pub(in crate::bingo::store::card) position: Position,
-    pub(in crate::bingo::store::card) entry_id: Option<i64>,
-    pub(in crate::bingo::store::card) text: &'a str,
-    pub(in crate::bingo::store::card) marked: bool,
-    pub(in crate::bingo::store::card) is_free: bool,
+pub struct NewCell<'a> {
+    pub position: Position,
+    pub entry_id: Option<i64>,
+    pub text: &'a str,
+    pub marked: bool,
+    pub is_free: bool,
 }
 
-pub(in crate::bingo::store::card) async fn fetch_card(
-    pool: &SqlitePool,
-    card_id: i64,
-) -> Result<Card> {
+pub async fn fetch_card(pool: &SqlitePool, card_id: i64) -> Result<Card> {
     let row = sqlx::query_as!(
         CardRow,
         r#"SELECT
@@ -93,7 +90,7 @@ WHERE chat_id = ? AND user_id = ?"#,
     })
 }
 
-pub(in crate::bingo::store::card) async fn delete_or_reject_existing(
+pub async fn delete_or_reject_existing(
     transaction: &mut Transaction<'_, Sqlite>,
     game_id: i64,
     user_id: UserId,
@@ -120,7 +117,7 @@ pub(in crate::bingo::store::card) async fn delete_or_reject_existing(
     Ok(())
 }
 
-pub(in crate::bingo::store::card) async fn insert_card(
+pub async fn insert_card(
     transaction: &mut Transaction<'_, Sqlite>,
     game_id: i64,
     owner: &KnownUser,
@@ -138,7 +135,7 @@ pub(in crate::bingo::store::card) async fn insert_card(
     Ok(result.last_insert_rowid())
 }
 
-pub(in crate::bingo::store::card) async fn insert_cell(
+pub async fn insert_cell(
     transaction: &mut Transaction<'_, Sqlite>,
     card_id: i64,
     cell: NewCell<'_>,
@@ -167,7 +164,7 @@ pub(in crate::bingo::store::card) async fn insert_cell(
     Ok(())
 }
 
-pub(in crate::bingo::store::card) async fn fetch_cells<'e>(
+pub async fn fetch_cells<'e>(
     executor: impl SqliteExecutor<'e>,
     card_id: i64,
 ) -> Result<Vec<CardCell>> {
@@ -185,7 +182,7 @@ WHERE card_id = ? ORDER BY position"#,
     convert_cells(rows)
 }
 
-pub(in crate::bingo::store::card) async fn card_id_in(
+pub async fn card_id_in(
     transaction: &mut Transaction<'_, Sqlite>,
     game_id: i64,
     user_id: UserId,

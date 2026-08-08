@@ -4,7 +4,7 @@ use crate::bingo::{
     model::{CELL_COUNT, FREE_POSITION, GameState, ImportedCell, MAX_ENTRY_CHARS},
 };
 
-pub(in crate::bingo::command) fn parse(input: &str) -> Result<BingoCommand> {
+pub fn parse(input: &str) -> Result<BingoCommand> {
     let input = input.trim();
     if input.is_empty() || input.eq_ignore_ascii_case("help") {
         return Ok(BingoCommand::Help);

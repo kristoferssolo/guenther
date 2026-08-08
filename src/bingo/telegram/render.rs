@@ -9,7 +9,7 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
 };
 
-pub(in crate::bingo::telegram) const HELP: &str = r"F1 bingo commands
+pub const HELP: &str = r"F1 bingo commands
 
 Everyone:
 /bingo games
@@ -31,16 +31,13 @@ Chat administrators:
 /bingo reset [game] @user
 /bingo card set <game> [@user] <A1-E5> <text>
 
-You can omit @user when replying to that user's message. Use /bingo import or /bingo reimport with a five-row, pipe-separated grid to migrate a manual card.";
+You can omit @user when replying to that user
+'s message. Use /bingo import or /bingo reimport with a five-row, pipe-separated grid to migrate a manual card.";
 
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
 
-pub(in crate::bingo::telegram) async fn send_games(
-    bot: &Bot,
-    chat_id: ChatId,
-    store: &BingoStore,
-) -> Result<()> {
+pub async fn send_games(bot: &Bot, chat_id: ChatId, store: &BingoStore) -> Result<()> {
     let games = store.list_games(chat_id).await?;
     let text = if games.is_empty() {
         "No bingo games have been created in this chat.".to_owned()
@@ -48,14 +45,14 @@ pub(in crate::bingo::telegram) async fn send_games(
         let mut lines = vec!["Bingo games:".to_owned()];
         lines.extend(games.into_iter().map(|game| {
             let default = if game.is_default { " · default" } else { "" };
-            format!("{} — {} [{}{}]", game.slug, game.name, game.state, default)
+            format!("{} – {} [{}{}]", game.slug, game.name, game.state, default)
         }));
         lines.join("\n")
     };
     send_text(bot, chat_id, &text).await
 }
 
-pub(in crate::bingo::telegram) async fn send_entries(
+pub async fn send_entries(
     bot: &Bot,
     chat_id: ChatId,
     store: &BingoStore,
@@ -66,23 +63,19 @@ pub(in crate::bingo::telegram) async fn send_entries(
     lines.extend(
         entries
             .into_iter()
-            .map(|entry| format!("#{} — {}", entry.id, entry.text)),
+            .map(|entry| format!("#{} – {}", entry.id, entry.text)),
     );
     send_lines(bot, chat_id, lines).await
 }
 
-pub(in crate::bingo::telegram) async fn send_card(
-    bot: &Bot,
-    chat_id: ChatId,
-    card: &Card,
-) -> Result<()> {
+pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
     bot.send_message(chat_id, render_card(card))
         .reply_markup(card_keyboard(card))
         .await?;
     Ok(())
 }
 
-pub(in crate::bingo::telegram) fn render_card(card: &Card) -> String {
+pub fn render_card(card: &Card) -> String {
     let mut lines = vec![
         format!("🏁 {}", card.game.name),
         format!("Card for {} · game: {}", card.owner, card.game.slug),
@@ -100,12 +93,12 @@ pub(in crate::bingo::telegram) fn render_card(card: &Card) -> String {
     }));
     if card.has_bingo() {
         lines.push(String::new());
-        lines.push("🏆 BINGO — one or more lines completed!".to_owned());
+        lines.push("🏆 BINGO – one or more lines completed!".to_owned());
     }
     lines.join("\n")
 }
 
-pub(in crate::bingo::telegram) fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
+pub fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
     let rows = card
         .cells
         .chunks(GRID_SIDE)
@@ -131,11 +124,7 @@ pub(in crate::bingo::telegram) fn card_keyboard(card: &Card) -> InlineKeyboardMa
     InlineKeyboardMarkup::new(rows)
 }
 
-pub(in crate::bingo::telegram) async fn send_text(
-    bot: &Bot,
-    chat_id: ChatId,
-    text: &str,
-) -> Result<()> {
+pub async fn send_text(bot: &Bot, chat_id: ChatId, text: &str) -> Result<()> {
     bot.send_message(chat_id, text).await?;
     Ok(())
 }

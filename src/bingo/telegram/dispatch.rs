@@ -14,7 +14,7 @@ use teloxide::{
     types::{Message, UserId},
 };
 
-pub(in crate::bingo::telegram) async fn execute_bingo(
+pub async fn execute_bingo(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
@@ -65,7 +65,7 @@ async fn execute_game_admin(
             send_text(
                 bot,
                 message.chat.id,
-                &format!("Created draft bingo game `{}` — {}.", game.slug, game.name),
+                &format!("Created draft bingo game `{}` – {}.", game.slug, game.name),
             )
             .await
         }

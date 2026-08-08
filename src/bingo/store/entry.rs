@@ -99,7 +99,7 @@ impl From<EntryRow> for Entry {
     }
 }
 
-pub(in crate::bingo::store) async fn upsert_entry<'e>(
+pub async fn upsert_entry<'e>(
     executor: impl SqliteExecutor<'e>,
     game_id: i64,
     text: &str,

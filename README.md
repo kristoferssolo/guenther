@@ -163,7 +163,7 @@ The bot currently exposes:
 ## F1 Bingo
 
 Bingo games are isolated per Telegram chat. A chat can have several active
-games at once—for example, a full-season game alongside a race-weekend game—but
+games at once – for example, a full-season game alongside a race-weekend game—but
 one game is the default for commands that omit a game slug. Each card has 24
 entries and a pre-marked F1-themed center cell. `LIGHTS OUT!` is the default
 center text and chat administrators can customize it per game.
