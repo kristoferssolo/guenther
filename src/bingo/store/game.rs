@@ -101,7 +101,7 @@ WHERE chat_id = ? AND slug = ? COLLATE NOCASE
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
 is_default AS `is_default: bool`"#,
-            state.as_str(),
+            state.as_ref(),
             chat_id,
             slug,
         )

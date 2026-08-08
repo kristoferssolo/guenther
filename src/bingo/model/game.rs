@@ -11,9 +11,8 @@ pub enum GameState {
     Closed,
 }
 
-impl GameState {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
+impl AsRef<str> for GameState {
+    fn as_ref(&self) -> &str {
         match self {
             Self::Draft => "draft",
             Self::Active => "active",
@@ -39,7 +38,7 @@ impl FromStr for GameState {
 
 impl fmt::Display for GameState {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
+        formatter.write_str(self.as_ref())
     }
 }
 
