@@ -1,6 +1,5 @@
 use crate::bingo::card_image::layout::Rect;
-use image::{Rgba, RgbaImage};
-use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster, get_raster_width};
+use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster_width};
 
 const LINE_GAP: u32 = 5;
 
@@ -196,76 +195,12 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
     lines
 }
 
-pub fn draw_text_block(image: &mut RgbaImage, bounds: Rect, block: &TextBlock, color: [u8; 4]) {
-    debug_assert!(block.width() <= bounds.width);
-    debug_assert!(block.height() <= bounds.height);
-    let total_height = block.height();
-    let mut y = bounds.y + bounds.height.saturating_sub(total_height) / 2;
-    for line in &block.lines {
-        let width = u32::try_from(line.chars().count()).expect("line length fits in u32")
-            * block.font.character_width();
-        let mut x = bounds.x + bounds.width.saturating_sub(width) / 2;
-        for character in line.chars() {
-            draw_character(image, bounds, x, y, character, block.font, color);
-            x += block.font.character_width();
-        }
-        y += block.font.line_height();
-    }
-}
-
 fn lines_fit(lines: &[String], font: Font, height: u32) -> bool {
     let line_count = u32::try_from(lines.len()).expect("line count fits in u32");
     line_count
         .saturating_mul(font.line_height())
         .saturating_sub(LINE_GAP)
         <= height
-}
-
-fn draw_character(
-    image: &mut RgbaImage,
-    clip: Rect,
-    x: u32,
-    y: u32,
-    character: char,
-    font: Font,
-    color: [u8; 4],
-) {
-    let raster = get_raster(character, font.weight.into(), font.size.into())
-        .or_else(|| get_raster('?', font.weight.into(), font.size.into()))
-        .expect("bundled font includes the fallback character");
-    for (source_y, row) in raster.raster().iter().enumerate() {
-        for (source_x, &coverage) in row.iter().enumerate() {
-            for scale_y in 0..font.scale {
-                for scale_x in 0..font.scale {
-                    let target_x = x
-                        + u32::try_from(source_x).expect("font x coordinate fits in u32")
-                            * font.scale
-                        + scale_x;
-                    let target_y = y
-                        + u32::try_from(source_y).expect("font y coordinate fits in u32")
-                            * font.scale
-                        + scale_y;
-                    if target_x < clip.x
-                        || target_y < clip.y
-                        || target_x >= clip.x + clip.width
-                        || target_y >= clip.y + clip.height
-                    {
-                        continue;
-                    }
-                    blend_pixel(image.get_pixel_mut(target_x, target_y), color, coverage);
-                }
-            }
-        }
-    }
-}
-
-fn blend_pixel(background: &mut Rgba<u8>, foreground: [u8; 4], coverage: u8) {
-    let coverage = u16::from(coverage);
-    let inverse = 255 - coverage;
-    for (background, foreground) in background.0[..3].iter_mut().zip(foreground) {
-        let blended = (u16::from(*background) * inverse + u16::from(foreground) * coverage) / 255;
-        *background = u8::try_from(blended).expect("blended color channel fits in u8");
-    }
 }
 
 #[cfg(test)]

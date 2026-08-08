@@ -1,3 +1,4 @@
+mod draw;
 mod layout;
 mod text;
 
@@ -5,16 +6,14 @@ use crate::bingo::{
     error::{BingoError, Result},
     model::{CELL_COUNT, Card, CardCell},
 };
+use draw::{draw_circle, draw_grid, draw_text_block};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
-use std::io::Cursor;
-use {
-    layout::{
-        BLACK, CELL_PADDING, CIRCLE_DIAMETER, CellFill, DESCRIPTION, FOOTER, FREE_GOLD, GRID,
-        GRID_LINE_WIDTH, IMAGE_HEIGHT, IMAGE_WIDTH, MARKED_RED, Rect, TITLE, WHITE, cell_fill,
-        cell_rect,
-    },
-    text::{Font, Size, Weight, draw_text_block, fit_text},
+use layout::{
+    BLACK, CELL_PADDING, CellFill, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH,
+    MARKED_RED, TITLE, WHITE, cell_fill, cell_rect,
 };
+use std::io::Cursor;
+use text::{Font, Size, Weight, fit_text};
 
 const TITLE_FONTS: [Font; 3] = [
     Font::new(Size::Large, Weight::Bold).scaled(2),
@@ -80,72 +79,32 @@ fn ordered_cells(cells: &[CardCell]) -> Result<[&CardCell; CELL_COUNT]> {
     let mut ordered = [None; CELL_COUNT];
     for cell in cells {
         let index = cell.position.index();
-        if ordered[index].replace(cell).is_some() {
+        let Some(slot) = ordered.get_mut(index) else {
+            return Err(BingoError::InvalidCardLayout(format!(
+                "cell {} has an invalid position",
+                cell.position
+            )));
+        };
+        if slot.replace(cell).is_some() {
             return Err(BingoError::InvalidCardLayout(format!(
                 "cell {} appears more than once",
                 cell.position
             )));
         }
     }
-    ordered
-        .map(|cell| cell.ok_or_else(|| BingoError::InvalidCardLayout("missing cell".to_owned())))
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?
-        .try_into()
-        .map_err(|_| BingoError::InvalidCardLayout("incorrect cell count".to_owned()))
-}
-
-fn draw_circle(image: &mut RgbaImage, bounds: Rect, color: [u8; 4]) {
-    let radius = i64::from(CIRCLE_DIAMETER / 2);
-    let center_x = i64::from(bounds.x + bounds.width / 2);
-    let center_y = i64::from(bounds.y + bounds.height / 2);
-    for y in center_y - radius..=center_y + radius {
-        for x in center_x - radius..=center_x + radius {
-            let dx = x - center_x;
-            let dy = y - center_y;
-            if dx * dx + dy * dy <= radius * radius {
-                let x = u32::try_from(x).expect("circle x coordinate is nonnegative");
-                let y = u32::try_from(y).expect("circle y coordinate is nonnegative");
-                image.put_pixel(x, y, Rgba(color));
-            }
+    let Some(first) = cells.first() else {
+        return Err(BingoError::InvalidCardLayout("missing cells".to_owned()));
+    };
+    let mut complete = [first; CELL_COUNT];
+    for (index, cell) in ordered.into_iter().enumerate() {
+        let Some(cell) = cell else {
+            return Err(BingoError::InvalidCardLayout("missing cell".to_owned()));
+        };
+        if let Some(slot) = complete.get_mut(index) {
+            *slot = cell;
         }
     }
-}
-
-fn draw_grid(image: &mut RgbaImage) {
-    for offset in 0..=5 {
-        let offset = u32::try_from(offset).expect("grid offset fits in u32");
-        let x = GRID.x + offset * layout::CELL_SIZE;
-        let y = GRID.y + offset * layout::CELL_SIZE;
-        draw_filled_rect(
-            image,
-            Rect::new(
-                x.saturating_sub(GRID_LINE_WIDTH / 2),
-                GRID.y,
-                GRID_LINE_WIDTH,
-                GRID.height,
-            ),
-            BLACK,
-        );
-        draw_filled_rect(
-            image,
-            Rect::new(
-                GRID.x,
-                y.saturating_sub(GRID_LINE_WIDTH / 2),
-                GRID.width,
-                GRID_LINE_WIDTH,
-            ),
-            BLACK,
-        );
-    }
-}
-
-fn draw_filled_rect(image: &mut RgbaImage, bounds: Rect, color: [u8; 4]) {
-    for y in bounds.y..bounds.y + bounds.height {
-        for x in bounds.x..bounds.x + bounds.width {
-            image.put_pixel(x, y, Rgba(color));
-        }
-    }
+    Ok(complete)
 }
 
 #[cfg(test)]
@@ -221,6 +180,13 @@ mod tests {
     #[test]
     fn renders_cards_with_empty_descriptions() {
         assert_ok!(render_card_png(&card("")));
+    }
+
+    #[test]
+    fn clips_circles_to_image_bounds() {
+        let mut image = RgbaImage::new(8, 8);
+        draw_circle(&mut image, layout::Rect::new(0, 0, 4, 4), MARKED_RED);
+        assert_eq!(image.get_pixel(0, 0), &Rgba(MARKED_RED));
     }
 
     #[test]
