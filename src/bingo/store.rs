@@ -1,7 +1,7 @@
 use crate::bingo::{
     error::{BingoError, Result},
     model::{
-        Card, CardCell, Entry, FREE_POSITION, Game, GameState, ImportedCell, KnownUser,
+        CELL_COUNT, Card, CardCell, Entry, FREE_POSITION, Game, GameState, ImportedCell, KnownUser,
         MAX_ENTRY_CHARS, REQUIRED_ENTRIES, ToggleResult, has_bingo, normalize_entry,
     },
 };
@@ -56,6 +56,14 @@ struct CardRow {
 struct CellRow {
     position: i64,
     text: String,
+    marked: bool,
+    is_free: bool,
+}
+
+struct NewCell<'a> {
+    position: usize,
+    entry_id: Option<i64>,
+    text: &'a str,
     marked: bool,
     is_free: bool,
 }
@@ -358,33 +366,29 @@ WHERE id = ? AND game_id IN
         let mut transaction = self.pool.begin().await?;
         delete_or_reject_existing(&mut transaction, game.id, owner.user_id, replace).await?;
         let card_id = insert_card(&mut transaction, game.id, owner).await?;
-        let mut entry_index = 0;
-        for position in 0..25 {
-            if position == FREE_POSITION {
-                insert_cell(
-                    &mut transaction,
-                    card_id,
+        let mut entries = entries.iter();
+        for position in 0..CELL_COUNT {
+            let cell = if position == FREE_POSITION {
+                NewCell {
                     position,
-                    None,
-                    &game.center_text,
-                    true,
-                    true,
-                )
-                .await?;
+                    entry_id: None,
+                    text: &game.center_text,
+                    marked: true,
+                    is_free: true,
+                }
             } else {
-                let entry = &entries[entry_index];
-                insert_cell(
-                    &mut transaction,
-                    card_id,
+                let entry = entries
+                    .next()
+                    .expect("entry count was checked before generating the card");
+                NewCell {
                     position,
-                    Some(entry.id),
-                    &entry.text,
-                    false,
-                    false,
-                )
-                .await?;
-                entry_index += 1;
-            }
+                    entry_id: Some(entry.id),
+                    text: &entry.text,
+                    marked: false,
+                    is_free: false,
+                }
+            };
+            insert_cell(&mut transaction, card_id, cell).await?;
         }
         transaction.commit().await?;
         self.card_by_id(card_id).await
@@ -398,10 +402,10 @@ WHERE id = ? AND game_id IN
         imported: &[ImportedCell],
         replace: bool,
     ) -> Result<Card> {
-        if imported.len() != 25 {
-            return Err(BingoError::InvalidCommand(
-                "an imported card must contain 25 cells".to_owned(),
-            ));
+        if imported.len() != CELL_COUNT {
+            return Err(BingoError::InvalidCommand(format!(
+                "an imported card must contain {CELL_COUNT} cells"
+            )));
         }
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
@@ -413,11 +417,13 @@ WHERE id = ? AND game_id IN
                 insert_cell(
                     &mut transaction,
                     card_id,
-                    position,
-                    None,
-                    &game.center_text,
-                    true,
-                    true,
+                    NewCell {
+                        position,
+                        entry_id: None,
+                        text: &game.center_text,
+                        marked: true,
+                        is_free: true,
+                    },
                 )
                 .await?;
                 continue;
@@ -426,11 +432,13 @@ WHERE id = ? AND game_id IN
             insert_cell(
                 &mut transaction,
                 card_id,
-                position,
-                Some(entry_id),
-                &cell.text,
-                cell.marked,
-                false,
+                NewCell {
+                    position,
+                    entry_id: Some(entry_id),
+                    text: &cell.text,
+                    marked: cell.marked,
+                    is_free: false,
+                },
             )
             .await?;
         }
@@ -473,8 +481,7 @@ WHERE id = ? AND game_id IN
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
         let entry_id = upsert_entry(&mut *transaction, game.id, text).await?;
-        let position = i64::try_from(position)
-            .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
+        let position = db_position(position)?;
         sqlx::query!(
             r#"UPDATE bingo_card_cells SET entry_id = ?, text = ?
 WHERE card_id = ? AND position = ?"#,
@@ -518,8 +525,7 @@ WHERE card_id = ? AND position = ?"#,
         if position == FREE_POSITION {
             return Err(BingoError::FreeCell);
         }
-        let position = i64::try_from(position)
-            .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
+        let position = db_position(position)?;
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"SELECT
@@ -737,31 +743,38 @@ async fn insert_card(
     Ok(result.last_insert_rowid())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn insert_cell(
     transaction: &mut Transaction<'_, Sqlite>,
     card_id: i64,
-    position: usize,
-    entry_id: Option<i64>,
-    text: &str,
-    marked: bool,
-    is_free: bool,
+    cell: NewCell<'_>,
 ) -> Result<()> {
-    let position = i64::try_from(position)
-        .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
+    let NewCell {
+        position,
+        entry_id,
+        text,
+        marked,
+        is_free,
+    } = cell;
+    let position = db_position(position)?;
+    let text = text.trim();
     sqlx::query!(
         r#"INSERT INTO bingo_card_cells
 (card_id, position, entry_id, text, marked, is_free) VALUES (?, ?, ?, ?, ?, ?)"#,
         card_id,
         position,
         entry_id,
-        text.trim(),
+        text,
         marked,
         is_free,
     )
     .execute(&mut **transaction)
     .await?;
     Ok(())
+}
+
+fn db_position(position: usize) -> Result<i64> {
+    i64::try_from(position)
+        .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))
 }
 
 async fn upsert_entry<'e>(
