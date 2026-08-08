@@ -1,10 +1,10 @@
-use super::{
-    BingoStore,
-    id::{db_user_id, user_id_from_db},
-};
 use crate::bingo::{
     error::{BingoError, Result},
     model::KnownUser,
+    store::{
+        BingoStore,
+        id::{db_user_id, user_id_from_db},
+    },
 };
 use teloxide::types::{ChatId, UserId};
 

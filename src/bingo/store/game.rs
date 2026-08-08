@@ -1,11 +1,11 @@
-use super::{
-    BingoStore,
-    id::db_user_id,
-    validation::{ensure_editable, map_unique, validate_nonempty, validate_slug},
-};
 use crate::bingo::{
     error::{BingoError, Result},
     model::{Game, GameState},
+    store::{
+        BingoStore,
+        id::db_user_id,
+        validation::{ensure_editable, map_unique, validate_nonempty, validate_slug},
+    },
 };
 use sqlx::SqliteExecutor;
 use teloxide::types::{ChatId, UserId};

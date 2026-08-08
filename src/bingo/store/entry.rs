@@ -1,10 +1,10 @@
-use super::{
-    BingoStore,
-    validation::{ensure_editable, map_unique, require_changed, validate_nonempty},
-};
 use crate::bingo::{
     error::{BingoError, Result},
     model::{Entry, Game, MAX_ENTRY_CHARS, normalize_entry},
+    store::{
+        BingoStore,
+        validation::{ensure_editable, map_unique, require_changed, validate_nonempty},
+    },
 };
 use sqlx::SqliteExecutor;
 use teloxide::types::ChatId;
@@ -99,7 +99,7 @@ impl From<EntryRow> for Entry {
     }
 }
 
-pub(super) async fn upsert_entry<'e>(
+pub(in crate::bingo::store) async fn upsert_entry<'e>(
     executor: impl SqliteExecutor<'e>,
     game_id: i64,
     text: &str,

@@ -14,7 +14,7 @@ use teloxide::{
     types::{Message, UserId},
 };
 
-pub(super) async fn execute_bingo(
+pub(in crate::bingo::telegram) async fn execute_bingo(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,

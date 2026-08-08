@@ -43,7 +43,7 @@ pub async fn answer_bingo(
     }
 }
 
-pub(super) fn known_user(user: &User) -> KnownUser {
+pub(in crate::bingo::telegram) fn known_user(user: &User) -> KnownUser {
     let display_name = user.last_name.as_ref().map_or_else(
         || user.first_name.clone(),
         |last_name| format!("{} {last_name}", user.first_name),

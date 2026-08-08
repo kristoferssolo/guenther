@@ -1,5 +1,4 @@
-use super::BingoStore;
-use crate::bingo::error::Result;
+use crate::bingo::{error::Result, store::BingoStore};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use std::{env, path::Path, str::FromStr, time::Duration};
 

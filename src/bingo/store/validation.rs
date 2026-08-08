@@ -3,7 +3,7 @@ use crate::bingo::{
     model::{Game, GameState},
 };
 
-pub(super) fn validate_slug(slug: &str) -> Result<()> {
+pub(in crate::bingo::store) fn validate_slug(slug: &str) -> Result<()> {
     let valid = (2..=50).contains(&slug.len())
         && !slug.bytes().all(|byte| byte.is_ascii_digit())
         && slug
@@ -19,7 +19,11 @@ pub(super) fn validate_slug(slug: &str) -> Result<()> {
     }
 }
 
-pub(super) fn validate_nonempty(text: &str, label: &str, max_chars: usize) -> Result<()> {
+pub(in crate::bingo::store) fn validate_nonempty(
+    text: &str,
+    label: &str,
+    max_chars: usize,
+) -> Result<()> {
     let length = text.trim().chars().count();
     if length == 0 || length > max_chars {
         Err(BingoError::InvalidCommand(format!(
@@ -30,7 +34,7 @@ pub(super) fn validate_nonempty(text: &str, label: &str, max_chars: usize) -> Re
     }
 }
 
-pub(super) fn ensure_active(game: &Game) -> Result<()> {
+pub(in crate::bingo::store) fn ensure_active(game: &Game) -> Result<()> {
     if game.state == GameState::Active {
         Ok(())
     } else {
@@ -38,7 +42,7 @@ pub(super) fn ensure_active(game: &Game) -> Result<()> {
     }
 }
 
-pub(super) fn ensure_editable(game: &Game) -> Result<()> {
+pub(in crate::bingo::store) fn ensure_editable(game: &Game) -> Result<()> {
     if game.state == GameState::Closed {
         Err(BingoError::Conflict(
             "closed games cannot be changed".to_owned(),
@@ -48,7 +52,10 @@ pub(super) fn ensure_editable(game: &Game) -> Result<()> {
     }
 }
 
-pub(super) fn require_changed(rows_affected: u64, message: impl FnOnce() -> String) -> Result<()> {
+pub(in crate::bingo::store) fn require_changed(
+    rows_affected: u64,
+    message: impl FnOnce() -> String,
+) -> Result<()> {
     if rows_affected == 0 {
         Err(BingoError::NotFound(message()))
     } else {
@@ -56,7 +63,10 @@ pub(super) fn require_changed(rows_affected: u64, message: impl FnOnce() -> Stri
     }
 }
 
-pub(super) fn map_unique(error: sqlx::Error, message: impl FnOnce() -> String) -> BingoError {
+pub(in crate::bingo::store) fn map_unique(
+    error: sqlx::Error,
+    message: impl FnOnce() -> String,
+) -> BingoError {
     if matches!(&error, sqlx::Error::Database(database) if database.is_unique_violation()) {
         BingoError::Conflict(message())
     } else {

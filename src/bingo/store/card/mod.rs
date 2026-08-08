@@ -1,20 +1,20 @@
 mod queries;
 
-use self::queries::{
-    NewCell, card_id_in, delete_or_reject_existing, fetch_card, fetch_cells, insert_card,
-    insert_cell,
-};
-use super::{
-    BingoStore,
-    entry::upsert_entry,
-    id::db_user_id,
-    validation::{ensure_active, ensure_editable, require_changed, validate_nonempty},
-};
 use crate::bingo::{
     error::{BingoError, Result},
     model::{
         CELL_COUNT, Card, GameState, ImportedCell, KnownUser, MAX_ENTRY_CHARS, Position,
         REQUIRED_ENTRIES, ToggleResult, has_bingo,
+    },
+    store::{
+        BingoStore,
+        card::queries::{
+            NewCell, card_id_in, delete_or_reject_existing, fetch_card, fetch_cells, insert_card,
+            insert_cell,
+        },
+        entry::upsert_entry,
+        id::db_user_id,
+        validation::{ensure_active, ensure_editable, require_changed, validate_nonempty},
     },
 };
 use rand::seq::SliceRandom;

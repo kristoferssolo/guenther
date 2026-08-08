@@ -9,7 +9,7 @@ use teloxide::{
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
 };
 
-pub(super) const HELP: &str = r"F1 bingo commands
+pub(in crate::bingo::telegram) const HELP: &str = r"F1 bingo commands
 
 Everyone:
 /bingo games
@@ -36,7 +36,11 @@ You can omit @user when replying to that user's message. Use /bingo import or /b
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
 
-pub(super) async fn send_games(bot: &Bot, chat_id: ChatId, store: &BingoStore) -> Result<()> {
+pub(in crate::bingo::telegram) async fn send_games(
+    bot: &Bot,
+    chat_id: ChatId,
+    store: &BingoStore,
+) -> Result<()> {
     let games = store.list_games(chat_id).await?;
     let text = if games.is_empty() {
         "No bingo games have been created in this chat.".to_owned()
@@ -51,7 +55,7 @@ pub(super) async fn send_games(bot: &Bot, chat_id: ChatId, store: &BingoStore) -
     send_text(bot, chat_id, &text).await
 }
 
-pub(super) async fn send_entries(
+pub(in crate::bingo::telegram) async fn send_entries(
     bot: &Bot,
     chat_id: ChatId,
     store: &BingoStore,
@@ -67,14 +71,18 @@ pub(super) async fn send_entries(
     send_lines(bot, chat_id, lines).await
 }
 
-pub(super) async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
+pub(in crate::bingo::telegram) async fn send_card(
+    bot: &Bot,
+    chat_id: ChatId,
+    card: &Card,
+) -> Result<()> {
     bot.send_message(chat_id, render_card(card))
         .reply_markup(card_keyboard(card))
         .await?;
     Ok(())
 }
 
-pub(super) fn render_card(card: &Card) -> String {
+pub(in crate::bingo::telegram) fn render_card(card: &Card) -> String {
     let mut lines = vec![
         format!("🏁 {}", card.game.name),
         format!("Card for {} · game: {}", card.owner, card.game.slug),
@@ -97,7 +105,7 @@ pub(super) fn render_card(card: &Card) -> String {
     lines.join("\n")
 }
 
-pub(super) fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
+pub(in crate::bingo::telegram) fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
     let rows = card
         .cells
         .chunks(GRID_SIDE)
@@ -123,7 +131,11 @@ pub(super) fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
     InlineKeyboardMarkup::new(rows)
 }
 
-pub(super) async fn send_text(bot: &Bot, chat_id: ChatId, text: &str) -> Result<()> {
+pub(in crate::bingo::telegram) async fn send_text(
+    bot: &Bot,
+    chat_id: ChatId,
+    text: &str,
+) -> Result<()> {
     bot.send_message(chat_id, text).await?;
     Ok(())
 }
