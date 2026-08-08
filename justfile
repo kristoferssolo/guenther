@@ -1,5 +1,6 @@
 export RUSTC_WRAPPER :=  env("RUSTC_WRAPPER", "sccache")
 export RUST_LOG := env("RUST_LOG", "warn")
+export SQLX_OFFLINE := env("SQLX_OFFLINE", "true")
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
