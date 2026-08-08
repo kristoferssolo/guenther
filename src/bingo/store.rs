@@ -7,7 +7,7 @@ use crate::bingo::{
 };
 use rand::seq::SliceRandom;
 use sqlx::{
-    Sqlite, SqlitePool, Transaction,
+    Sqlite, SqliteExecutor, SqlitePool, Transaction,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
 use std::{env, path::Path, str::FromStr, time::Duration};
@@ -179,7 +179,7 @@ WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
         .await?;
         let normalized_slug = slug.to_ascii_lowercase();
         let name = name.trim();
-        let result = sqlx::query!(
+        sqlx::query!(
             r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
 VALUES (?, ?, ?, ?, ?)"#,
             chat_id,
@@ -191,7 +191,7 @@ VALUES (?, ?, ?, ?, ?)"#,
         .execute(&mut *transaction)
         .await
         .map_err(|error| map_unique(error, format!("game `{slug}` already exists")))?;
-        let game = game_by_id_in(&mut transaction, result.last_insert_rowid()).await?;
+        let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
         transaction.commit().await?;
         Ok(game)
     }
@@ -211,41 +211,7 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
     }
 
     pub async fn game(&self, chat_id: i64, slug: Option<&str>) -> Result<Game> {
-        let row = if let Some(slug) = slug {
-            sqlx::query_as!(
-                GameRow,
-                r#"SELECT
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`
-FROM bingo_games WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
-                chat_id,
-                slug,
-            )
-            .fetch_optional(&self.pool)
-            .await?
-        } else {
-            sqlx::query_as!(
-                GameRow,
-                r#"SELECT
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`
-FROM bingo_games WHERE chat_id = ? AND is_default =1"#,
-                chat_id,
-            )
-            .fetch_optional(&self.pool)
-            .await?
-        };
-        row.map(Game::try_from).transpose()?.ok_or_else(|| {
-            slug.map_or_else(
-                || {
-                    BingoError::NotFound(
-                        "this chat has no default bingo game; create one or set a default"
-                            .to_owned(),
-                    )
-                },
-                |slug| BingoError::NotFound(format!("game `{slug}` was not found")),
-            )
-        })
+        fetch_game(&self.pool, chat_id, slug).await
     }
 
     pub async fn set_game_state(&self, chat_id: i64, slug: &str, state: GameState) -> Result<Game> {
@@ -267,7 +233,7 @@ WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
 
     pub async fn set_default_game(&self, chat_id: i64, slug: &str) -> Result<Game> {
         let mut transaction = self.pool.begin().await?;
-        let game = game_by_slug_in(&mut transaction, chat_id, slug).await?;
+        let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
         sqlx::query!(
             r#"UPDATE bingo_games SET is_default = 0 WHERE chat_id = ?"#,
             chat_id,
@@ -299,22 +265,9 @@ WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
     }
 
     pub async fn add_entry(&self, chat_id: i64, slug: Option<&str>, text: &str) -> Result<Entry> {
-        validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
         let game = self.game(chat_id, slug).await?;
         ensure_editable(&game)?;
-        let normalized = normalize_entry(text);
-        let id = sqlx::query_scalar!(
-            r#"INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)
-ON CONFLICT(game_id,
-normalized_text) DO UPDATE SET text = excluded.text,
-active = 1
-RETURNING id"#,
-            game.id,
-            text.trim(),
-            normalized,
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let id = upsert_entry(&self.pool, game.id, text).await?;
         Ok(Entry {
             id,
             game_id: game.id,
@@ -469,7 +422,7 @@ WHERE id = ? AND game_id IN
                 .await?;
                 continue;
             }
-            let entry_id = upsert_entry_in(&mut transaction, game.id, &cell.text).await?;
+            let entry_id = upsert_entry(&mut *transaction, game.id, &cell.text).await?;
             insert_cell(
                 &mut transaction,
                 card_id,
@@ -519,7 +472,7 @@ WHERE id = ? AND game_id IN
         ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
-        let entry_id = upsert_entry_in(&mut transaction, game.id, text).await?;
+        let entry_id = upsert_entry(&mut *transaction, game.id, text).await?;
         let position = i64::try_from(position)
             .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
         sqlx::query!(
@@ -597,18 +550,7 @@ WHERE card_id = ? AND position = ? AND is_free = 0"#,
             result.rows_affected(),
             "that card cell was not found".to_owned(),
         )?;
-        let cell_rows = sqlx::query_as!(
-            CellRow,
-            r#"SELECT
-    position, text, marked AS `marked: bool`,
-    is_free AS `is_free: bool`
-FROM bingo_card_cells
-WHERE card_id = ? ORDER BY position"#,
-            card_id,
-        )
-        .fetch_all(&mut *transaction)
-        .await?;
-        let cells = convert_cells(cell_rows)?;
+        let cells = fetch_cells(&mut *transaction, card_id).await?;
         let newly_completed = !row.bingo_announced && has_bingo(&cells);
         if newly_completed {
             sqlx::query!(
@@ -660,17 +602,7 @@ WHERE chat_id = ? AND user_id = ?"#,
                 display_name: known.display_name,
             },
         );
-        let cells = sqlx::query_as!(
-            CellRow,
-            r#"SELECT
-    position, text, marked AS `marked: bool`,
-    is_free AS `is_free: bool`
-FROM bingo_card_cells
-WHERE card_id = ? ORDER BY position"#,
-            card_id,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let cells = fetch_cells(&self.pool, card_id).await?;
         Ok(Card {
             id: row.card_id,
             game: Game {
@@ -684,7 +616,7 @@ WHERE card_id = ? ORDER BY position"#,
             },
             owner: user,
             bingo_announced: row.bingo_announced,
-            cells: convert_cells(cells)?,
+            cells,
         })
     }
 }
@@ -732,26 +664,10 @@ async fn create_database_parent(database_url: &str) -> Result<()> {
     Ok(())
 }
 
-async fn game_by_id_in(transaction: &mut Transaction<'_, Sqlite>, game_id: i64) -> Result<Game> {
-    let row = sqlx::query_as!(
-        GameRow,
-        r#"SELECT
-    id, chat_id, slug, name, center_text, state,
-    is_default AS `is_default: bool`
-FROM bingo_games
-WHERE id
-= ?"#,
-        game_id,
-    )
-    .fetch_one(&mut **transaction)
-    .await?;
-    row.try_into()
-}
-
-async fn game_by_slug_in(
-    transaction: &mut Transaction<'_, Sqlite>,
+async fn fetch_game<'e>(
+    executor: impl SqliteExecutor<'e>,
     chat_id: i64,
-    slug: &str,
+    slug: Option<&str>,
 ) -> Result<Game> {
     let row = sqlx::query_as!(
         GameRow,
@@ -759,14 +675,23 @@ async fn game_by_slug_in(
     id, chat_id, slug, name, center_text, state,
     is_default AS `is_default: bool`
 FROM bingo_games
-WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
+WHERE chat_id = ?1
+  AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
         chat_id,
         slug,
     )
-    .fetch_optional(&mut **transaction)
-    .await?
-    .ok_or_else(|| BingoError::NotFound(format!("game `{slug}` was not found")))?;
-    row.try_into()
+    .fetch_optional(executor)
+    .await?;
+    row.map(Game::try_from).transpose()?.ok_or_else(|| {
+        slug.map_or_else(
+            || {
+                BingoError::NotFound(
+                    "this chat has no default bingo game; create one or set a default".to_owned(),
+                )
+            },
+            |slug| BingoError::NotFound(format!("game `{slug}` was not found")),
+        )
+    })
 }
 
 async fn delete_or_reject_existing(
@@ -839,25 +764,41 @@ async fn insert_cell(
     Ok(())
 }
 
-async fn upsert_entry_in(
-    transaction: &mut Transaction<'_, Sqlite>,
+async fn upsert_entry<'e>(
+    executor: impl SqliteExecutor<'e>,
     game_id: i64,
     text: &str,
 ) -> Result<i64> {
     validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
     let normalized = normalize_entry(text);
+    let text = text.trim();
     Ok(sqlx::query_scalar!(
-        r#"INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)
-ON CONFLICT(game_id,
-normalized_text) DO UPDATE SET text = excluded.text,
-active = 1
+        r#"INSERT INTO bingo_entries (game_id, text, normalized_text)
+VALUES (?, ?, ?)
+ON CONFLICT(game_id, normalized_text)
+DO UPDATE SET text = excluded.text, active = 1
 RETURNING id"#,
         game_id,
-        text.trim(),
+        text,
         normalized,
     )
-    .fetch_one(&mut **transaction)
+    .fetch_one(executor)
     .await?)
+}
+
+async fn fetch_cells<'e>(executor: impl SqliteExecutor<'e>, card_id: i64) -> Result<Vec<CardCell>> {
+    let rows = sqlx::query_as!(
+        CellRow,
+        r#"SELECT
+    position, text, marked AS `marked: bool`,
+    is_free AS `is_free: bool`
+FROM bingo_card_cells
+WHERE card_id = ? ORDER BY position"#,
+        card_id,
+    )
+    .fetch_all(executor)
+    .await?;
+    convert_cells(rows)
 }
 
 async fn card_id_in(
