@@ -286,14 +286,8 @@ F1-themed center phrase; all cards in one game share that center text.
 The database schema is applied automatically at startup through embedded SQLx
 migrations. For local runs, back up `data/bingo.sqlite3`; Compose deployments
 should back up the `bingo-data` volume.
-
-Bingo queries use SQLx's compile-time checked macros. Offline query metadata is
-stored in `.sqlx`, so builds and CI do not need a live database. After changing
-a query or migration, regenerate that metadata with:
-
-```bash
-just sqlx-prepare
-```
+SQL queries use typed runtime row mappings, so builds do not need a live
+database or generated offline metadata.
 
 ## Inline Voice Lines
 
