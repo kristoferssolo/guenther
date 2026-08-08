@@ -24,7 +24,7 @@ use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{error, info, warn};
 
 #[cfg(feature = "bingo")]
-use crate::bingo::{BingoStore, answer_callback, observe_message_users};
+use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -54,6 +54,7 @@ async fn main() -> color_eyre::Result<()> {
     #[cfg(feature = "bingo")]
     {
         let bingo_store = BingoStore::connect_from_env().await?;
+        let admin_cache = AdminCache::default();
         info!("bingo database initialized");
         let schema = dptree::entry()
             .branch(Update::filter_message().endpoint(message_handler))
@@ -61,7 +62,7 @@ async fn main() -> color_eyre::Result<()> {
             .branch(Update::filter_inline_query().endpoint(answer_inline_query));
 
         Dispatcher::builder(bot, schema)
-            .dependencies(dptree::deps![handlers, bot_name, bingo_store])
+            .dependencies(dptree::deps![handlers, bot_name, bingo_store, admin_cache])
             .enable_ctrlc_handler()
             .build()
             .dispatch()
@@ -91,6 +92,7 @@ async fn message_handler(
     handlers: Arc<[Handler]>,
     bot_name: Arc<str>,
     #[cfg(feature = "bingo")] bingo_store: BingoStore,
+    #[cfg(feature = "bingo")] admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
     if let Err(err) = capture_incoming_voice_line(&bot, &msg).await {
         warn!(%err, "failed to capture incoming voice line metadata");
@@ -111,6 +113,8 @@ async fn message_handler(
                 cmd,
                 #[cfg(feature = "bingo")]
                 &bingo_store,
+                #[cfg(feature = "bingo")]
+                &admin_cache,
             )
             .await
             {

@@ -4,11 +4,17 @@ use crate::bingo::{
     model::{Card, GRID_SIDE, KnownUser, Position, ToggleResult},
     store::BingoStore,
 };
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use teloxide::{
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters, SendMessageSetters},
     prelude::*,
-    types::{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, User},
+    types::{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, User, UserId},
 };
+use tokio::sync::Mutex;
 
 const HELP: &str = r"F1 bingo commands
 
@@ -36,6 +42,62 @@ You can omit @user when replying to that user's message. Use /bingo import or /b
 
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
+const ADMIN_CACHE_TTL: Duration = Duration::from_mins(1);
+
+#[derive(Debug, Clone)]
+pub struct AdminCache {
+    entries: Arc<Mutex<HashMap<ChatId, CachedAdministrators>>>,
+    ttl: Duration,
+}
+
+#[derive(Debug)]
+struct CachedAdministrators {
+    expires_at: Instant,
+    user_ids: HashSet<UserId>,
+}
+
+impl Default for AdminCache {
+    fn default() -> Self {
+        Self {
+            entries: Arc::default(),
+            ttl: ADMIN_CACHE_TTL,
+        }
+    }
+}
+
+impl AdminCache {
+    async fn status(&self, chat_id: ChatId, user_id: UserId) -> Option<bool> {
+        let mut entries = self.entries.lock().await;
+        if entries
+            .get(&chat_id)
+            .is_some_and(|entry| entry.expires_at <= Instant::now())
+        {
+            entries.remove(&chat_id);
+            return None;
+        }
+        entries
+            .get(&chat_id)
+            .map(|entry| entry.user_ids.contains(&user_id))
+    }
+
+    async fn insert(&self, chat_id: ChatId, user_ids: HashSet<UserId>) {
+        self.entries.lock().await.insert(
+            chat_id,
+            CachedAdministrators {
+                expires_at: Instant::now() + self.ttl,
+                user_ids,
+            },
+        );
+    }
+
+    #[cfg(test)]
+    fn with_ttl(ttl: Duration) -> Self {
+        Self {
+            entries: Arc::default(),
+            ttl,
+        }
+    }
+}
 
 pub async fn observe_message_users(store: &BingoStore, message: &Message) -> Result<()> {
     let chat_id = message.chat.id.0;
@@ -53,9 +115,10 @@ pub async fn answer_bingo(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
+    admin_cache: &AdminCache,
     input: &str,
 ) -> Result<()> {
-    let result = execute_bingo(bot, message, store, input).await;
+    let result = execute_bingo(bot, message, store, admin_cache, input).await;
     match result {
         Ok(()) => Ok(()),
         Err(error) if error.is_user_facing() => {
@@ -100,11 +163,12 @@ async fn execute_bingo(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
+    admin_cache: &AdminCache,
     input: &str,
 ) -> Result<()> {
     observe_message_users(store, message).await?;
     let command = BingoCommand::parse(input)?;
-    if command.requires_admin() && !is_chat_admin(bot, message).await? {
+    if command.requires_admin() && !is_chat_admin(bot, message, admin_cache).await? {
         return Err(BingoError::PermissionDenied);
     }
     let chat_id = message.chat.id.0;
@@ -304,17 +368,24 @@ async fn send_entries(
     send_lines(bot, chat_id, lines).await
 }
 
-async fn is_chat_admin(bot: &Bot, message: &Message) -> Result<bool> {
+async fn is_chat_admin(bot: &Bot, message: &Message, cache: &AdminCache) -> Result<bool> {
     let Some(user) = message.from.as_ref() else {
         return Ok(false);
     };
     if message.chat.is_private() {
         return Ok(true);
     }
+    if let Some(is_admin) = cache.status(message.chat.id, user.id).await {
+        return Ok(is_admin);
+    }
     let administrators = bot.get_chat_administrators(message.chat.id).await?;
-    Ok(administrators
-        .iter()
-        .any(|member| member.user.id == user.id))
+    let user_ids = administrators
+        .into_iter()
+        .map(|member| member.user.id)
+        .collect::<HashSet<_>>();
+    let is_admin = user_ids.contains(&user.id);
+    cache.insert(message.chat.id, user_ids).await;
+    Ok(is_admin)
 }
 
 async fn resolve_target(
@@ -477,18 +548,33 @@ async fn send_lines(bot: &Bot, chat_id: ChatId, lines: Vec<String>) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::{assert_none, assert_some_eq};
 
     #[test]
     fn callback_data_round_trips() {
-        assert_eq!(
+        assert_some_eq!(
             parse_callback("b:42:7"),
-            Some((
+            (
                 42,
                 Position::try_from(7_usize).expect("callback test position is valid"),
-            ))
+            )
         );
-        assert_eq!(parse_callback("other:42:7"), None);
-        assert_eq!(parse_callback("b:42"), None);
-        assert_eq!(parse_callback("b:42:25"), None);
+        assert_none!(parse_callback("other:42:7"));
+        assert_none!(parse_callback("b:42"));
+        assert_none!(parse_callback("b:42:25"));
+    }
+
+    #[tokio::test]
+    async fn administrator_cache_respects_expiration() {
+        let chat_id = ChatId(1);
+        let user_id = UserId(2);
+        let cache = AdminCache::with_ttl(Duration::from_mins(1));
+        cache.insert(chat_id, HashSet::from([user_id])).await;
+        assert_some_eq!(cache.status(chat_id, user_id).await, true);
+        assert_some_eq!(cache.status(chat_id, UserId(3)).await, false);
+
+        let expired = AdminCache::with_ttl(Duration::ZERO);
+        expired.insert(chat_id, HashSet::from([user_id])).await;
+        assert_none!(expired.status(chat_id, user_id).await);
     }
 }

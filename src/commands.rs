@@ -6,7 +6,7 @@ use guenther::{
 use teloxide::{prelude::*, utils::command::BotCommands};
 
 #[cfg(feature = "bingo")]
-use crate::bingo::{BingoStore, answer_bingo};
+use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 
 #[derive(Debug, Clone, PartialEq, Eq, BotCommands)]
 #[command(rename_rule = "lowercase")]
@@ -36,6 +36,7 @@ pub async fn answer(
     message: &Message,
     cmd: Command,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
+    #[cfg(feature = "bingo")] admin_cache: &AdminCache,
 ) -> color_eyre::Result<()> {
     let chat_id = message.chat.id;
     match cmd {
@@ -52,7 +53,7 @@ pub async fn answer(
         Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
-            answer_bingo(bot, message, bingo_store, &input).await?;
+            answer_bingo(bot, message, bingo_store, admin_cache, &input).await?;
             return Ok(());
         }
     };
