@@ -15,6 +15,7 @@ services:
     volumes:
       - ./voice_lines.toml:/app/voice_lines.toml:ro
       - ./comments.txt:/app/comments.txt:ro
+      - bingo-data:/app/data
   cobalt:
     image: ghcr.io/imputnet/cobalt:11
     init: true
@@ -25,3 +26,6 @@ services:
       CORS_WILDCARD: "0"
       HTTP_PROXY: ${COBALT_PROXY_URL:-}
       HTTPS_PROXY: ${COBALT_PROXY_URL:-}
+
+volumes:
+  bingo-data:

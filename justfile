@@ -26,6 +26,10 @@ build-release:
 build-all:
     cargo build --release --all-features
 
+[group("build")]
+build-bingo:
+    cargo build --release --features bingo
+
 # Run all checks with every feature enabled
 [group("dev")]
 check: fmt-check clippy docs test
@@ -33,6 +37,12 @@ check: fmt-check clippy docs test
 # Run all checks with default features only
 [group("dev")]
 check-default: fmt-check clippy-default docs-default test-default
+
+# Run the complete bingo feature validation
+[group("dev")]
+check-bingo: fmt-check
+    cargo clippy --all-targets --features bingo -- -D warnings
+    cargo nextest run --features bingo
 
 # Run the development server
 [group("run")]
@@ -42,6 +52,10 @@ run:
 [group("run")]
 run-all:
     cargo run --all-features
+
+[group("run")]
+run-bingo:
+    cargo run --features bingo
 
 # Format code
 [group("dev")]
@@ -100,3 +114,7 @@ docker-build:
 [group("container")]
 docker-build-all:
     docker build --build-arg 'RUST_FEATURES=--all-features' --tag guenther:all-features .
+
+[group("container")]
+docker-build-bingo:
+    docker build --build-arg 'RUST_FEATURES=--features=bingo' --tag guenther:bingo .

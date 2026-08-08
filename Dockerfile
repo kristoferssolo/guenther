@@ -34,7 +34,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update -y\
     && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
-    && useradd -mu 1001 guenther
+    && useradd -mu 1001 guenther \
+    && install -d -o guenther -g guenther /app/data
 
 WORKDIR /app
 COPY --from=builder-rs /app/guenther /usr/local/bin/guenther
