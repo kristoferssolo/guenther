@@ -13,8 +13,8 @@ use crate::{
 };
 use dotenv::dotenv;
 use guenther_core::{
-    comments::Comments,
-    config::{Config, FAILED_FETCH_MEDIA_MESSAGE, global_config},
+    comments::{Comments, failure_comment},
+    config::{Config, global_config},
     telemetry::setup_logger,
 };
 use std::sync::Arc;
@@ -94,9 +94,7 @@ async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
         if let Some(url) = handler.try_extract(text) {
             if let Err(err) = handler.handle(bot, msg.chat.id, url).await {
                 error!(%err, "handler failed");
-                let _ = bot
-                    .send_message(msg.chat.id, FAILED_FETCH_MEDIA_MESSAGE)
-                    .await;
+                let _ = bot.send_message(msg.chat.id, failure_comment()).await;
                 if let Some(chat_id) = global_config().chat_id {
                     let _ = bot.send_message(ChatId(chat_id), err.to_string()).await;
                 }

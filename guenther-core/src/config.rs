@@ -3,7 +3,6 @@ use std::{collections::HashSet, env, fmt::Debug, sync::OnceLock};
 use time::UtcOffset;
 use tracing::warn;
 
-pub const FAILED_FETCH_MEDIA_MESSAGE: &str = "Failed to fetch media, you foking donkey.";
 static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Debug, Clone, Default)]

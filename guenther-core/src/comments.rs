@@ -12,6 +12,23 @@ const FALLBACK_COMMENTS: &[&str] = &[
     "Nice shot — looks good on the trailer, not so good on the gearbox.",
     "Here you go. Judge for yourself.",
 ];
+const FAILURE_COMMENTS: &[&str] = &[
+    "Failed to fetch the media, you foking donkey.",
+    "The link is there, the media is not. What a foking mess.",
+    "I asked for media and got nothing. We look like a bunch of wankers.",
+    "The download foksmashed itself before it even started.",
+    "No video, no photo, no explanation. Fantastic.",
+    "This link has the pace of a foking milk float.",
+    "The server says no. Tell the server to fok off.",
+    "We tried everything. It is still completely foked.",
+    "The media disappeared faster than our race pace.",
+    "Another link, another foking disaster.",
+    "I cannot send what I cannot download. Even I cannot fix this shit.",
+    "The downloader brought back half a file. Useless.",
+    "Nothing came out of this link except disappointment.",
+    "The link promised media and delivered fok all.",
+    "Call Gene. Tell him the download budget is gone.",
+];
 
 #[derive(Debug)]
 pub struct Comments {
@@ -107,6 +124,16 @@ pub fn global_comments() -> &'static Comments {
     GLOBAL_COMMENTS.get().expect("comments not initialized")
 }
 
+/// Pick a random built-in response for a failed media download.
+#[must_use]
+pub fn failure_comment() -> &'static str {
+    let mut rng = rng();
+    FAILURE_COMMENTS
+        .choose(&mut rng)
+        .copied()
+        .unwrap_or("Failed to fetch media.")
+}
+
 impl Display for Comments {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.build_caption())
@@ -151,5 +178,18 @@ mod tests {
     fn pick_fallback() {
         let empty_comment = Comments { lines: Vec::new() };
         assert_eq!(empty_comment.pick(), FALLBACK_COMMENTS[0]);
+    }
+
+    #[test]
+    fn failure_comments_are_valid_telegram_messages() {
+        assert!(!FAILURE_COMMENTS.is_empty());
+        assert!(FAILURE_COMMENTS.iter().all(|comment| {
+            !comment.trim().is_empty() && comment.chars().count() <= TELEGRAM_CAPTION_LIMIT
+        }));
+    }
+
+    #[test]
+    fn picks_failure_comment_from_pool() {
+        assert!(FAILURE_COMMENTS.contains(&failure_comment()));
     }
 }
