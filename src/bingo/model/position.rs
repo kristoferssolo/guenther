@@ -5,6 +5,8 @@ pub const GRID_SIDE: usize = 5;
 pub const CELL_COUNT: usize = GRID_SIDE * GRID_SIDE;
 pub const FREE_POSITION: usize = 12;
 pub const REQUIRED_ENTRIES: usize = CELL_COUNT - 1;
+const GRID_SIDE_U8: u8 = 5;
+const CELL_COUNT_U8: u8 = 25;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position(u8);
@@ -13,13 +15,12 @@ impl Position {
     pub const FREE: Self = Self(12);
 
     #[must_use]
-    pub const fn index(self) -> usize {
-        self.0 as usize
+    pub fn index(self) -> usize {
+        usize::from(self.0)
     }
 
     pub fn iter() -> impl ExactSizeIterator<Item = Self> {
-        let cell_count = u8::try_from(CELL_COUNT).expect("bingo cell count fits in a u8");
-        (0..cell_count).map(Self)
+        (0..CELL_COUNT_U8).map(Self)
     }
 }
 
@@ -37,15 +38,11 @@ impl TryFrom<usize> for Position {
     type Error = BingoError;
 
     fn try_from(index: usize) -> Result<Self> {
-        if index < CELL_COUNT {
-            Ok(Self(
-                u8::try_from(index).expect("validated bingo position fits in a u8"),
-            ))
-        } else {
-            Err(BingoError::InvalidCommand(format!(
-                "invalid cell position `{index}`"
-            )))
-        }
+        u8::try_from(index)
+            .ok()
+            .filter(|index| *index < CELL_COUNT_U8)
+            .map(Self)
+            .ok_or_else(|| BingoError::InvalidCommand(format!("invalid cell position `{index}`")))
     }
 }
 
@@ -60,28 +57,31 @@ impl FromStr for Position {
 
     fn from_str(raw: &str) -> Result<Self> {
         let normalized = raw.trim().to_ascii_uppercase();
-        let bytes = normalized.as_bytes();
-        if bytes.len() != 2
-            || !(b'A'..=b'E').contains(&bytes[0])
-            || !(b'1'..=b'5').contains(&bytes[1])
-        {
+        let mut bytes = normalized.bytes();
+        let coordinates = (bytes.next(), bytes.next(), bytes.next());
+        let (Some(row), Some(column), None) = coordinates else {
+            return Err(BingoError::InvalidCommand(format!(
+                "invalid cell `{raw}`; expected A1 through E5"
+            )));
+        };
+        if !(b'A'..=b'E').contains(&row) || !(b'1'..=b'5').contains(&column) {
             return Err(BingoError::InvalidCommand(format!(
                 "invalid cell `{raw}`; expected A1 through E5"
             )));
         }
 
-        let row = bytes[0] - b'A';
-        let column = bytes[1] - b'1';
-        let grid_side = u8::try_from(GRID_SIDE).expect("bingo grid side fits in a u8");
-        Ok(Self(row * grid_side + column))
+        Ok(Self(
+            row.saturating_sub(b'A')
+                .saturating_mul(GRID_SIDE_U8)
+                .saturating_add(column.saturating_sub(b'1')),
+        ))
     }
 }
 
 impl fmt::Display for Position {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let grid_side = u8::try_from(GRID_SIDE).expect("bingo grid side fits in a u8");
-        let row = char::from(b'A' + self.0 / grid_side);
-        let column = self.0 % grid_side + 1;
+        let row = char::from(b'A'.saturating_add(self.0 / GRID_SIDE_U8));
+        let column = (self.0 % GRID_SIDE_U8).saturating_add(1);
         write!(formatter, "{row}{column}")
     }
 }

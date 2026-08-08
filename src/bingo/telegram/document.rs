@@ -22,8 +22,8 @@ pub async fn read_entry_file(bot: &Bot, message: &Message) -> Result<Vec<String>
     }
 
     let file = bot.get_file(document.file.id.clone()).await?;
-    let capacity =
-        usize::try_from(document.file.size).expect("the entry file size limit fits in usize");
+    let capacity = usize::try_from(document.file.size)
+        .unwrap_or_else(|_| usize::try_from(MAX_ENTRY_FILE_BYTES).unwrap_or_default());
     let mut bytes = Vec::with_capacity(capacity);
     bot.download_file(&file.path, &mut bytes).await?;
     let text = String::from_utf8(bytes).map_err(|_| {

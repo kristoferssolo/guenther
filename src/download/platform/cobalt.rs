@@ -184,7 +184,7 @@ fn extension_for(media_type: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_ok;
+    use claims::{assert_matches, assert_ok, assert_some};
     use serde_json::{Value, from_str, to_value};
 
     #[test]
@@ -201,10 +201,16 @@ mod tests {
         };
 
         let value = assert_ok!(to_value(request));
-        assert_eq!(value["youtubeVideoCodec"], Value::String("h264".into()));
-        assert_eq!(value["convertGif"], Value::Bool(false));
-        assert_eq!(value["alwaysProxy"], Value::Bool(true));
-        assert_eq!(value["localProcessing"], Value::String("disabled".into()));
+        assert_eq!(
+            value.get("youtubeVideoCodec"),
+            Some(&Value::String("h264".into()))
+        );
+        assert_eq!(value.get("convertGif"), Some(&Value::Bool(false)));
+        assert_eq!(value.get("alwaysProxy"), Some(&Value::Bool(true)));
+        assert_eq!(
+            value.get("localProcessing"),
+            Some(&Value::String("disabled".into()))
+        );
     }
 
     #[test]
@@ -213,11 +219,12 @@ mod tests {
             r#"{"status":"picker","picker":[{"type":"photo","url":"https://example.com/a"}]}"#,
         ));
 
+        assert_matches!(&response, CobaltResponse::Picker { .. });
         let CobaltResponse::Picker { picker } = response else {
-            panic!("expected picker response");
+            return;
         };
         assert_eq!(picker.len(), 1);
-        assert_eq!(picker[0].media_type, "photo");
+        assert_eq!(assert_some!(picker.first()).media_type, "photo");
     }
 
     #[test]
@@ -226,8 +233,9 @@ mod tests {
             r#"{"status":"error","error":{"code":"error.api.youtube.login"}}"#,
         ));
 
+        assert_matches!(&response, CobaltResponse::Rejected { .. });
         let CobaltResponse::Rejected { error } = response else {
-            panic!("expected rejected response");
+            return;
         };
         assert_eq!(error.code, "error.api.youtube.login");
     }

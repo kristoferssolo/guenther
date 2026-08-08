@@ -112,6 +112,7 @@ fn normalize(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::assert_ok;
 
     fn sample_line(id: &str, title: &str, tags: &[&str]) -> VoiceLine {
         VoiceLine {
@@ -139,7 +140,7 @@ mod tests {
 
     #[test]
     fn ignores_unknown_fields_in_toml() {
-        let parsed = toml::from_str::<VoiceLine>(
+        let parsed = assert_ok!(toml::from_str::<VoiceLine>(
             r#"
 id = "line_1"
 title = "Sample"
@@ -148,8 +149,7 @@ unique_file_id = "unique-1"
 tags = []
 kind = "voice"
 "#,
-        )
-        .expect("parse voice line");
+        ));
 
         assert_eq!(parsed.id, "line_1");
     }

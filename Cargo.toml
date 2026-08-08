@@ -18,7 +18,9 @@ color-eyre = "0.6"
 dotenv = "0.15"
 futures = "0.3"
 infer = "0.22"
-image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+image = { version = "0.25", default-features = false, features = [
+  "png",
+], optional = true }
 noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = [
   "bold",
   "regular",
@@ -72,6 +74,19 @@ rstest = "0.26"
 temp-env = "0.3"
 
 [lints.clippy]
-nursery = "warn"
-pedantic = "warn"
-unwrap_used = "warn"
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+# DENY PANICS:
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+as_conversions = "deny"

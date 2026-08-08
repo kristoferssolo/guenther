@@ -73,47 +73,41 @@ impl Handler {
 }
 
 macro_rules! handler {
-    ($name:expr, $platform:expr, $regex:expr, $download_fn:path) => {
-        Handler::new($platform, $regex, |url: String| Box::pin($download_fn(url))).expect(concat!(
-            "failed to create ",
-            $name,
-            " handler"
-        ))
+    ($platform:expr, $regex:expr, $download_fn:path) => {
+        Handler::new($platform, $regex, |url: String| Box::pin($download_fn(url)))
     };
 }
 
-#[must_use]
-pub fn create_handlers(platforms: &PlatformConfig) -> Arc<[Handler]> {
-    [
+pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, RegexError> {
+    let handlers = [
         handler!(
-            "instagram",
             Platform::Instagram,
             r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/([A-Za-z0-9_-]+)",
             guenther::download::platform::instagram::download_instagram
         ),
         handler!(
-            "youtube",
             Platform::Youtube,
             r"https?://(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
             guenther::download::platform::youtube::download_youtube
         ),
         handler!(
-            "twitter",
             Platform::Twitter,
             r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
             guenther::download::platform::twitter::download_twitter
         ),
         handler!(
-            "tiktok",
             Platform::Tiktok,
             r"https?://(?:www\.)?(?:vm|vt|tt|tik)\.tiktok\.com/([A-Za-z0-9_-]+)[/?#]?",
             guenther::download::platform::tiktok::download_tiktok
         ),
     ]
     .into_iter()
-    .filter(|handler| platforms.is_enabled(handler.platform()))
-    .collect::<Vec<_>>()
-    .into()
+    .collect::<StdResult<Vec<_>, _>>()?;
+    Ok(handlers
+        .into_iter()
+        .filter(|handler| platforms.is_enabled(handler.platform()))
+        .collect::<Vec<_>>()
+        .into())
 }
 
 async fn send_media_from_path(
@@ -175,12 +169,12 @@ fn compose_caption(quote: &str, source_text: Option<&str>) -> String {
         return combined;
     }
 
-    let reserved = quote.chars().count() + 2;
+    let reserved = quote.chars().count().saturating_add(2);
     if reserved >= TELEGRAM_CAPTION_LIMIT {
         return quote.to_owned();
     }
 
-    let available = TELEGRAM_CAPTION_LIMIT - reserved;
+    let available = TELEGRAM_CAPTION_LIMIT.saturating_sub(reserved);
     let truncated = truncate_with_ellipsis(source_text, available);
     format!("{quote}\n\n{truncated}")
 }

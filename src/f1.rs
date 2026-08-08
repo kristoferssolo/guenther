@@ -214,10 +214,11 @@ fn format_offset(offset: FixedOffset) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::{assert_ok, assert_some};
 
     #[test]
     fn decodes_jolpica_next_race_response() {
-        let response = serde_json::from_str::<JolpicaResponse>(
+        let response = assert_ok!(serde_json::from_str::<JolpicaResponse>(
             r#"{
                 "MRData": {
                     "RaceTable": {
@@ -244,15 +245,9 @@ mod tests {
                     }
                 }
             }"#,
-        )
-        .expect("decode Jolpica response");
+        ));
 
-        let race = response
-            .mr_data
-            .race_table
-            .races
-            .first()
-            .expect("race exists");
+        let race = assert_some!(response.mr_data.race_table.races.first());
 
         assert_eq!(race.name, "Austrian Grand Prix");
         assert_eq!(race.circuit.circuit_name, "Red Bull Ring");
@@ -262,25 +257,25 @@ mod tests {
 
     #[test]
     fn format_session_applies_positive_offset() {
-        let offset = FixedOffset::east_opt(3 * 3_600).expect("valid offset");
+        let offset = assert_some!(FixedOffset::east_opt(3 * 3_600));
 
-        let formatted = format_session("2026-06-28", "13:00:00Z", offset).expect("format session");
+        let formatted = assert_ok!(format_session("2026-06-28", "13:00:00Z", offset));
 
         assert_eq!(formatted, "Sun, 28 Jun 16:00");
     }
 
     #[test]
     fn format_session_handles_date_rollover() {
-        let offset = FixedOffset::west_opt(3 * 3_600).expect("valid offset");
+        let offset = assert_some!(FixedOffset::west_opt(3 * 3_600));
 
-        let formatted = format_session("2026-06-28", "01:00:00Z", offset).expect("format session");
+        let formatted = assert_ok!(format_session("2026-06-28", "01:00:00Z", offset));
 
         assert_eq!(formatted, "Sat, 27 Jun 22:00");
     }
 
     #[test]
     fn format_offset_omits_zero_minutes() {
-        let offset = FixedOffset::east_opt(3 * 3_600).expect("valid offset");
+        let offset = assert_some!(FixedOffset::east_opt(3 * 3_600));
 
         assert_eq!(format_offset(offset), "+3");
     }

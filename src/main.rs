@@ -29,7 +29,7 @@ use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_user
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
-    color_eyre::install().expect("color-eyre install");
+    color_eyre::install()?;
     setup_logger();
 
     Comments::load_from_file("comments.txt")
@@ -47,7 +47,7 @@ async fn main() -> color_eyre::Result<()> {
 
     info!(name = %bot_name, "bot starting");
 
-    let handlers = create_handlers(&global_config().platforms);
+    let handlers = create_handlers(&global_config().platforms)?;
     let enabled_platforms = handlers
         .iter()
         .map(|handler| handler.platform().to_string())

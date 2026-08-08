@@ -35,11 +35,14 @@ impl Default for F1Config {
 
 fn parse_utc_offset(raw: &str) -> Option<FixedOffset> {
     let trimmed = raw.trim();
-    let (is_negative, offset) = match trimmed.as_bytes().first().copied() {
-        Some(b'+') => (false, &trimmed[1..]),
-        Some(b'-') => (true, &trimmed[1..]),
-        _ => (false, trimmed),
-    };
+    let (is_negative, offset) = trimmed.strip_prefix('+').map_or_else(
+        || {
+            trimmed
+                .strip_prefix('-')
+                .map_or((false, trimmed), |offset| (true, offset))
+        },
+        |offset| (false, offset),
+    );
 
     let mut parts = offset.split(':');
     let hours = parts.next().filter(|value| !value.is_empty())?;
@@ -57,5 +60,10 @@ fn parse_utc_offset(raw: &str) -> Option<FixedOffset> {
     let seconds = hours
         .checked_mul(3_600)?
         .checked_add(minutes.checked_mul(60)?)?;
-    FixedOffset::east_opt(if is_negative { -seconds } else { seconds })
+    let seconds = if is_negative {
+        seconds.checked_neg()?
+    } else {
+        seconds
+    };
+    FixedOffset::east_opt(seconds)
 }

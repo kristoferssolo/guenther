@@ -13,16 +13,21 @@ pub fn draw_circle(image: &mut RgbaImage, bounds: Rect, color: [u8; 4]) {
     let radius = i64::from(CIRCLE_DIAMETER / 2);
     let center_x = i64::from(bounds.x.saturating_add(bounds.width / 2));
     let center_y = i64::from(bounds.y.saturating_add(bounds.height / 2));
-    let start_x = (center_x - radius).max(0);
-    let start_y = (center_y - radius).max(0);
-    let end_x = (center_x + radius).min(i64::from(image.width().saturating_sub(1)));
-    let end_y = (center_y + radius).min(i64::from(image.height().saturating_sub(1)));
+    let start_x = center_x.saturating_sub(radius).max(0);
+    let start_y = center_y.saturating_sub(radius).max(0);
+    let end_x = center_x
+        .saturating_add(radius)
+        .min(i64::from(image.width().saturating_sub(1)));
+    let end_y = center_y
+        .saturating_add(radius)
+        .min(i64::from(image.height().saturating_sub(1)));
 
     for y in start_y..=end_y {
         for x in start_x..=end_x {
-            let dx = x - center_x;
-            let dy = y - center_y;
-            if dx * dx + dy * dy <= radius * radius
+            let dx = x.saturating_sub(center_x);
+            let dy = y.saturating_sub(center_y);
+            if dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy))
+                <= radius.saturating_mul(radius)
                 && let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y))
             {
                 image.put_pixel(x, y, Rgba(color));
@@ -33,8 +38,12 @@ pub fn draw_circle(image: &mut RgbaImage, bounds: Rect, color: [u8; 4]) {
 
 pub fn draw_grid(image: &mut RgbaImage) {
     for offset in 0..=5_u32 {
-        let x = GRID.x + offset * super::layout::CELL_SIZE;
-        let y = GRID.y + offset * super::layout::CELL_SIZE;
+        let x = GRID
+            .x
+            .saturating_add(offset.saturating_mul(super::layout::CELL_SIZE));
+        let y = GRID
+            .y
+            .saturating_add(offset.saturating_mul(super::layout::CELL_SIZE));
         draw_filled_rect(
             image,
             Rect::new(
@@ -62,11 +71,16 @@ pub fn draw_text_block(image: &mut RgbaImage, bounds: Rect, block: &TextBlock, c
     debug_assert!(block.width() <= bounds.width);
     debug_assert!(block.height() <= bounds.height);
     let total_height = block.height();
-    let mut y = bounds.y + bounds.height.saturating_sub(total_height) / 2;
+    let mut y = bounds
+        .y
+        .saturating_add(bounds.height.saturating_sub(total_height) / 2);
     for line in &block.lines {
-        let width =
-            u32::try_from(line.chars().count()).unwrap_or(u32::MAX) * block.font.character_width();
-        let mut x = bounds.x + bounds.width.saturating_sub(width) / 2;
+        let width = u32::try_from(line.chars().count())
+            .unwrap_or(u32::MAX)
+            .saturating_mul(block.font.character_width());
+        let mut x = bounds
+            .x
+            .saturating_add(bounds.width.saturating_sub(width) / 2);
         for character in line.chars() {
             draw_character(image, bounds, x, y, character, block.font, color);
             x = x.saturating_add(block.font.character_width());
@@ -133,10 +147,13 @@ fn draw_character(
 
 fn blend_pixel(background: &mut Rgba<u8>, foreground: [u8; 4], coverage: u8) {
     let [red, green, blue, alpha] = foreground;
-    let coverage = u16::from(coverage) * u16::from(alpha) / 255;
-    let inverse = 255 - coverage;
+    let coverage = u16::from(coverage).saturating_mul(u16::from(alpha)) / 255;
+    let inverse = 255_u16.saturating_sub(coverage);
     for (background, foreground) in background.0.iter_mut().take(3).zip([red, green, blue]) {
-        let blended = (u16::from(*background) * inverse + u16::from(foreground) * coverage) / 255;
+        let blended = u16::from(*background)
+            .saturating_mul(inverse)
+            .saturating_add(u16::from(foreground).saturating_mul(coverage))
+            / 255;
         *background = u8::try_from(blended).unwrap_or(u8::MAX);
     }
 }

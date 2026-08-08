@@ -65,12 +65,11 @@ fn telegram_method_url(bot: &Bot, method_name: &str) -> String {
     url.set_path("");
     url.set_query(None);
     url.set_fragment(None);
-    {
-        let mut segments = url
-            .path_segments_mut()
-            .expect("telegram api url must support path segments");
+    if let Ok(mut segments) = url.path_segments_mut() {
         segments.push(&format!("bot{}", bot.token()));
         segments.push(method_name);
+    } else {
+        url.set_path(&format!("/bot{}/{method_name}", bot.token()));
     }
     url.to_string()
 }

@@ -84,7 +84,7 @@ mod tests {
         command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
         model::{EntryId, FREE_POSITION},
     };
-    use claims::{assert_err, assert_ok_eq};
+    use claims::{assert_err, assert_matches, assert_ok, assert_ok_eq, assert_some};
 
     #[test]
     fn parses_entry_add_with_optional_game() {
@@ -107,15 +107,18 @@ mod tests {
     #[test]
     fn parses_marked_import_grid() {
         let input = "import 2026-season @driver\n[x] 81 | 60 | 38 | 41 | 39\n66 | 55 | 67 | 77 | 43\n35 | 3 | * | 17 | 1\n24 | 61 | 13 | 28 | 19\n63 | 30 | 37 | 29 | 33";
-        let command = BingoCommand::parse(input).expect("parse import");
+        let command = assert_ok!(BingoCommand::parse(input));
+        assert_matches!(&command, BingoCommand::Card(CardAdmin::Import { .. }));
         let BingoCommand::Card(CardAdmin::Import { cells, .. }) = command else {
-            panic!("expected import")
+            return;
         };
-        assert!(cells[0].marked);
-        assert_eq!(cells[0].entry_id, Some(EntryId::from(81)));
-        assert!(cells[FREE_POSITION].marked);
-        assert!(cells[FREE_POSITION].is_free);
-        assert_eq!(cells[FREE_POSITION].entry_id, None);
+        let first = assert_some!(cells.first());
+        let free = assert_some!(cells.get(FREE_POSITION));
+        assert!(first.marked);
+        assert_eq!(first.entry_id, Some(EntryId::from(81)));
+        assert!(free.marked);
+        assert!(free.is_free);
+        assert_eq!(free.entry_id, None);
     }
 
     #[test]
@@ -159,7 +162,7 @@ mod tests {
             BingoCommand::Card(CardAdmin::Set {
                 slug: "season".to_owned(),
                 target: None,
-                position: "C2".parse().expect("test position is valid"),
+                position: assert_ok!("C2".parse()),
                 entry_id: EntryId::from(42),
             })
         );
@@ -168,7 +171,7 @@ mod tests {
             BingoCommand::Card(CardAdmin::Set {
                 slug: "season".to_owned(),
                 target: Some("@driver".to_owned()),
-                position: "C2".parse().expect("test position is valid"),
+                position: assert_ok!("C2".parse()),
                 entry_id: EntryId::from(42),
             })
         );
@@ -178,8 +181,8 @@ mod tests {
 
     #[test]
     fn adding_entries_does_not_require_an_administrator() {
-        let add = BingoCommand::parse("add safety car").expect("parse entry addition");
-        let edit = BingoCommand::parse("edit 1 red flag").expect("parse entry edit");
+        let add = assert_ok!(BingoCommand::parse("add safety car"));
+        let edit = assert_ok!(BingoCommand::parse("edit 1 red flag"));
 
         assert!(!add.requires_admin());
         assert!(edit.requires_admin());
@@ -199,8 +202,7 @@ mod tests {
 
     #[test]
     fn parses_admin_entry_file_imports() {
-        let command =
-            BingoCommand::parse("entries import season-2026").expect("parse entry file import");
+        let command = assert_ok!(BingoCommand::parse("entries import season-2026"));
 
         assert_eq!(
             command,

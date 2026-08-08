@@ -43,22 +43,31 @@ pub fn has_bingo(cells: &[CardCell]) -> bool {
         return false;
     }
 
-    let marked = |position: usize| cells[position].marked;
-    (0..GRID_SIDE).any(|row| (0..GRID_SIDE).all(|column| marked(row * GRID_SIDE + column)))
-        || (0..GRID_SIDE).any(|column| (0..GRID_SIDE).all(|row| marked(row * GRID_SIDE + column)))
-        || (0..GRID_SIDE).all(|index| marked(index * (GRID_SIDE + 1)))
-        || (0..GRID_SIDE).all(|index| marked((index + 1) * (GRID_SIDE - 1)))
+    let marked = |position: usize| cells.get(position).is_some_and(|cell| cell.marked);
+    (0..GRID_SIDE).any(|row| {
+        (0..GRID_SIDE).all(|column| marked(row.saturating_mul(GRID_SIDE).saturating_add(column)))
+    }) || (0..GRID_SIDE).any(|column| {
+        (0..GRID_SIDE).all(|row| marked(row.saturating_mul(GRID_SIDE).saturating_add(column)))
+    }) || (0..GRID_SIDE).all(|index| marked(index.saturating_mul(GRID_SIDE.saturating_add(1))))
+        || (0..GRID_SIDE).all(|index| {
+            marked(
+                index
+                    .saturating_add(1)
+                    .saturating_mul(GRID_SIDE.saturating_sub(1)),
+            )
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::bingo::model::{FREE_POSITION, Position};
+    use claims::assert_ok;
 
     fn cells(marked_positions: &[usize]) -> Vec<CardCell> {
         (0..CELL_COUNT)
             .map(|index| {
-                let position = Position::try_from(index).expect("test position is valid");
+                let position = assert_ok!(Position::try_from(index));
                 CardCell {
                     position,
                     text: position.to_string(),

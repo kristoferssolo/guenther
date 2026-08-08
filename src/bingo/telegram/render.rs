@@ -150,7 +150,9 @@ pub async fn send_text(bot: &Bot, chat_id: ChatId, text: &str) -> Result<()> {
 async fn send_lines(bot: &Bot, chat_id: ChatId, lines: Vec<String>) -> Result<()> {
     let mut chunk = String::new();
     for line in lines {
-        if !chunk.is_empty() && chunk.len() + line.len() + 1 > TELEGRAM_MESSAGE_BUDGET {
+        if !chunk.is_empty()
+            && chunk.len().saturating_add(line.len()).saturating_add(1) > TELEGRAM_MESSAGE_BUDGET
+        {
             send_text(bot, chat_id, &chunk).await?;
             chunk.clear();
         }

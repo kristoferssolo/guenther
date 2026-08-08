@@ -140,7 +140,7 @@ mod tests {
         model::{CardId, Position},
         telegram::callback::{CardCallback, format_callback, parse_callback, win_message},
     };
-    use claims::{assert_none, assert_some_eq};
+    use claims::{assert_none, assert_ok, assert_some_eq};
     use teloxide::types::MessageId;
 
     #[test]
@@ -150,7 +150,7 @@ mod tests {
             CardCallback {
                 card_id: CardId::from(42),
                 image_message_id: None,
-                position: Position::try_from(7_usize).expect("valid test position"),
+                position: assert_ok!(Position::try_from(7_usize)),
             }
         );
         assert_some_eq!(
@@ -158,7 +158,7 @@ mod tests {
             CardCallback {
                 card_id: CardId::from(42),
                 image_message_id: Some(MessageId(314)),
-                position: Position::try_from(7_usize).expect("valid test position"),
+                position: assert_ok!(Position::try_from(7_usize)),
             }
         );
         assert_none!(parse_callback("other:42:7"));
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn callback_data_preserves_image_message_ids_and_fits_telegram() {
-        let position = Position::try_from(24_usize).expect("valid test position");
+        let position = assert_ok!(Position::try_from(24_usize));
         let legacy = format_callback(CardId::from(i64::MAX), None, position);
         let current = format_callback(CardId::from(i64::MIN), Some(MessageId(i32::MIN)), position);
         assert_eq!(legacy, format!("b:{}:24", i64::MAX));

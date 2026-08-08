@@ -58,15 +58,11 @@ impl Config {
     }
 }
 
-/// Get global config (initialized by `Config::init(self)`).
-///
-/// # Panics
-///
-/// Panics if config has not been initialized.
+/// Get global config, lazily using defaults when not explicitly initialized.
 #[inline]
 #[must_use]
 pub fn global_config() -> &'static Config {
-    GLOBAL_CONFIG.get().expect("config not initialized")
+    GLOBAL_CONFIG.get_or_init(Config::default)
 }
 
 fn get_string_from_env(env_key: &str) -> Option<String> {

@@ -91,8 +91,7 @@ impl BingoStore {
         delete_or_reject_existing(&mut transaction, game.id, owner.user_id, replace).await?;
         let card_id = insert_card(&mut transaction, game.id, owner).await?;
         for (position, cell) in imported.iter().enumerate() {
-            let position = Position::try_from(position)
-                .expect("import length was validated before inserting cells");
+            let position = Position::try_from(position)?;
             if position == Position::FREE {
                 insert_cell(
                     &mut transaction,

@@ -12,6 +12,7 @@ const FALLBACK_COMMENTS: &[&str] = &[
     "Nice shot – looks good on the trailer, not so good on the gearbox.",
     "Here you go. Judge for yourself.",
 ];
+const DEFAULT_COMMENT: &str = "Here you go. Judge for yourself.";
 const FAILURE_COMMENTS: &[&str] = &[
     "Failed to fetch the media, you foking donkey.",
     "The link is there, the media is not. What a foking mess.",
@@ -65,7 +66,7 @@ impl Comments {
         let mut rng = rng();
         self.lines
             .choose(&mut rng)
-            .map_or(FALLBACK_COMMENTS[0], AsRef::as_ref)
+            .map_or(DEFAULT_COMMENT, AsRef::as_ref)
     }
 
     /// Build a caption by picking a random comment and truncating if necessary.
@@ -111,15 +112,11 @@ impl Default for Comments {
     }
 }
 
-/// Get global comments (initialized by `Comments::init(self)`).
-///
-/// # Panics
-///
-/// Panics if comments have not been initialized.
+/// Get global comments, lazily using built-in fallbacks when not explicitly initialized.
 #[inline]
 #[must_use]
 pub fn global_comments() -> &'static Comments {
-    GLOBAL_COMMENTS.get().expect("comments not initialized")
+    GLOBAL_COMMENTS.get_or_init(Comments::default)
 }
 
 /// Pick a random built-in response for a failed media download.
@@ -175,7 +172,7 @@ mod tests {
     #[test]
     fn pick_fallback() {
         let empty_comment = Comments { lines: Vec::new() };
-        assert_eq!(empty_comment.pick(), FALLBACK_COMMENTS[0]);
+        assert_eq!(empty_comment.pick(), DEFAULT_COMMENT);
     }
 
     #[test]

@@ -168,7 +168,7 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
         if columns.len() != GRID_SIDE {
             return Err(BingoError::InvalidCommand(format!(
                 "import row {} must contain exactly {GRID_SIDE} `|`-separated cells",
-                row_index + 1
+                row_index.saturating_add(1)
             )));
         }
         for raw in columns {

@@ -52,7 +52,9 @@ impl AdminCache {
         self.entries.lock().await.insert(
             chat_id,
             CachedAdministrators {
-                expires_at: Instant::now() + self.ttl,
+                expires_at: Instant::now()
+                    .checked_add(self.ttl)
+                    .unwrap_or_else(Instant::now),
                 user_ids,
             },
         );

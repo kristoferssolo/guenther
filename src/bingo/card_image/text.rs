@@ -134,8 +134,14 @@ pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
 
     let font = fonts.last().copied().unwrap_or(DEFAULT_FONT);
     let columns = column_capacity(font, bounds);
-    let max_lines = usize::try_from(bounds.height.saturating_add(LINE_GAP) / font.line_height())
-        .unwrap_or(usize::MAX);
+    let max_lines = usize::try_from(
+        bounds
+            .height
+            .saturating_add(LINE_GAP)
+            .checked_div(font.line_height())
+            .unwrap_or_default(),
+    )
+    .unwrap_or(usize::MAX);
     if columns == 0 || max_lines == 0 {
         return TextBlock {
             lines: Vec::new(),
@@ -166,7 +172,13 @@ fn column_capacity(font: Font, bounds: Rect) -> usize {
     if character_width == 0 {
         return 0;
     }
-    usize::try_from(bounds.width / character_width).unwrap_or(usize::MAX)
+    usize::try_from(
+        bounds
+            .width
+            .checked_div(character_width)
+            .unwrap_or_default(),
+    )
+    .unwrap_or(usize::MAX)
 }
 
 #[must_use]
@@ -182,8 +194,11 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
         }
         let mut current = String::new();
         for word in paragraph.split_whitespace() {
-            let required = word.chars().count() + usize::from(!current.is_empty());
-            if current.chars().count() + required <= columns {
+            let required = word
+                .chars()
+                .count()
+                .saturating_add(usize::from(!current.is_empty()));
+            if current.chars().count().saturating_add(required) <= columns {
                 if !current.is_empty() {
                     current.push(' ');
                 }
@@ -199,8 +214,9 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
                     .char_indices()
                     .nth(columns)
                     .map_or(remaining.len(), |(index, _)| index);
-                lines.push(remaining[..split].to_owned());
-                remaining = &remaining[split..];
+                let (line, rest) = remaining.split_at(split);
+                lines.push(line.to_owned());
+                remaining = rest;
             }
             current.push_str(remaining);
         }

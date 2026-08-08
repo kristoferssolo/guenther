@@ -111,14 +111,14 @@ fn ordered_cells(cells: &[CardCell]) -> Result<[&CardCell; CELL_COUNT]> {
 mod tests {
     use super::*;
     use crate::bingo::model::{CardId, Game, GameId, GameState, KnownUser, Position};
-    use claims::{assert_err, assert_ok};
+    use claims::{assert_err, assert_ok, assert_some};
     use image::GenericImageView;
     use teloxide::types::{ChatId, UserId};
 
     fn card(description: &str) -> Card {
         let mut cells = (0..CELL_COUNT)
             .map(|index| CardCell {
-                position: Position::try_from(index).expect("valid test position"),
+                position: assert_ok!(Position::try_from(index)),
                 text: if index == 0 {
                     "A 128-character entry that remains complete in the companion text while the image renderer carefully wraps or truncates it as needed."
                         .to_owned()
@@ -155,25 +155,27 @@ mod tests {
     #[test]
     fn validates_and_orders_cells_by_stored_position() {
         let card = card("");
-        let ordered = ordered_cells(&card.cells).expect("valid card layout");
-        assert_eq!(ordered[0].position.to_string(), "A1");
-        assert_eq!(ordered[24].position.to_string(), "E5");
+        let ordered = assert_ok!(ordered_cells(&card.cells));
+        assert_eq!(assert_some!(ordered.first()).position.to_string(), "A1");
+        assert_eq!(assert_some!(ordered.last()).position.to_string(), "E5");
 
         let mut missing = card.clone();
         missing.cells.pop();
         assert_err!(ordered_cells(&missing.cells));
 
         let mut duplicate = card;
-        duplicate.cells[0].position = duplicate.cells[1].position;
+        let duplicate_position = assert_some!(duplicate.cells.get(1)).position;
+        assert_some!(duplicate.cells.first_mut()).position = duplicate_position;
         assert_err!(ordered_cells(&duplicate.cells));
     }
 
     #[test]
     fn encodes_a_png_with_fixed_dimensions() {
-        let bytes =
-            render_card_png(&card("Welcome to the 2026 season.")).expect("render test bingo card");
-        let decoded = image::load_from_memory_with_format(&bytes, ImageFormat::Png)
-            .expect("decode rendered PNG");
+        let bytes = assert_ok!(render_card_png(&card("Welcome to the 2026 season.")));
+        let decoded = assert_ok!(image::load_from_memory_with_format(
+            &bytes,
+            ImageFormat::Png
+        ));
         assert_eq!(decoded.dimensions(), (IMAGE_WIDTH, IMAGE_HEIGHT));
     }
 
@@ -195,8 +197,8 @@ mod tests {
         let preview = card(
             "Welcome to the 2026 season. Mark each event as it happens and complete any row, column, or diagonal.",
         );
-        let bytes = render_card_png(&preview).expect("render preview card");
-        std::fs::create_dir_all("target").expect("create target directory");
-        std::fs::write("target/bingo-card-preview.png", bytes).expect("write preview image");
+        let bytes = assert_ok!(render_card_png(&preview));
+        assert_ok!(std::fs::create_dir_all("target"));
+        assert_ok!(std::fs::write("target/bingo-card-preview.png", bytes));
     }
 }

@@ -38,11 +38,12 @@ impl Rect {
 
     #[must_use]
     pub const fn inset(self, amount: u32) -> Self {
+        let inset = amount.saturating_mul(2);
         Self {
-            x: self.x + amount,
-            y: self.y + amount,
-            width: self.width - amount * 2,
-            height: self.height - amount * 2,
+            x: self.x.saturating_add(amount),
+            y: self.y.saturating_add(amount),
+            width: self.width.saturating_sub(inset),
+            height: self.height.saturating_sub(inset),
         }
     }
 }
@@ -56,13 +57,13 @@ pub enum CellFill {
 
 #[must_use]
 pub fn cell_rect(position: Position) -> Rect {
-    let index = u32::try_from(position.index()).expect("bingo position fits in u32");
-    let grid_side = u32::try_from(GRID_SIDE).expect("bingo grid side fits in u32");
-    let row = index / grid_side;
-    let column = index % grid_side;
+    let index = u32::try_from(position.index()).unwrap_or_default();
+    let grid_side = u32::try_from(GRID_SIDE).unwrap_or(1);
+    let row = index.checked_div(grid_side).unwrap_or_default();
+    let column = index.checked_rem(grid_side).unwrap_or_default();
     Rect::new(
-        GRID.x + column * CELL_SIZE,
-        GRID.y + row * CELL_SIZE,
+        GRID.x.saturating_add(column.saturating_mul(CELL_SIZE)),
+        GRID.y.saturating_add(row.saturating_mul(CELL_SIZE)),
         CELL_SIZE,
         CELL_SIZE,
     )
@@ -83,10 +84,11 @@ pub const fn cell_fill(cell: &CardCell) -> CellFill {
 mod tests {
     use super::*;
     use crate::bingo::model::CardCell;
+    use claims::assert_ok;
 
     fn cell(position: &str, marked: bool, is_free: bool) -> CardCell {
         CardCell {
-            position: position.parse().expect("valid test position"),
+            position: assert_ok!(position.parse()),
             text: position.to_owned(),
             marked,
             is_free,
@@ -96,23 +98,23 @@ mod tests {
     #[test]
     fn maps_a1_through_e5_in_row_major_order() {
         assert_eq!(
-            cell_rect("A1".parse().expect("valid position")),
+            cell_rect(assert_ok!("A1".parse())),
             Rect::new(70, 460, 252, 252)
         );
         assert_eq!(
-            cell_rect("A5".parse().expect("valid position")),
+            cell_rect(assert_ok!("A5".parse())),
             Rect::new(1_078, 460, 252, 252)
         );
         assert_eq!(
-            cell_rect("C3".parse().expect("valid position")),
+            cell_rect(assert_ok!("C3".parse())),
             Rect::new(574, 964, 252, 252)
         );
         assert_eq!(
-            cell_rect("E1".parse().expect("valid position")),
+            cell_rect(assert_ok!("E1".parse())),
             Rect::new(70, 1_468, 252, 252)
         );
         assert_eq!(
-            cell_rect("E5".parse().expect("valid position")),
+            cell_rect(assert_ok!("E5".parse())),
             Rect::new(1_078, 1_468, 252, 252)
         );
     }
