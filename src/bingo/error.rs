@@ -6,26 +6,37 @@ pub type Result<T> = std::result::Result<T, BingoError>;
 pub enum BingoError {
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
+
     #[error("database migration error: {0}")]
     Migration(#[from] sqlx::migrate::MigrateError),
+
     #[error("filesystem error: {0}")]
     Io(#[from] std::io::Error),
+
     #[error("Telegram request failed: {0}")]
     Telegram(#[from] teloxide::RequestError),
+
     #[error("{0}")]
     InvalidCommand(String),
+
     #[error("{0}")]
     NotFound(String),
+
     #[error("{0}")]
     Conflict(String),
+
     #[error("only chat administrators can do that")]
     PermissionDenied,
+
     #[error("only the card owner can mark this card")]
     NotCardOwner,
+
     #[error("this game is not active")]
     GameNotActive,
+
     #[error("the center cell is marked automatically")]
     FreeCell,
+
     #[error("Telegram user ID {0} does not fit in the database")]
     UserIdOutOfRange(u64),
 }
