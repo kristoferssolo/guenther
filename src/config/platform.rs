@@ -21,7 +21,7 @@ pub enum Platform {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
-#[error("unknown platform `{0}`")]
+#[error("Unknown platform `{0}`")]
 pub struct ParsePlatformError(String);
 
 impl PlatformConfig {
@@ -30,7 +30,7 @@ impl PlatformConfig {
             Ok(raw) => raw,
             Err(env::VarError::NotPresent) => return Self::default(),
             Err(env::VarError::NotUnicode(_)) => {
-                warn!("ENABLED_PLATFORMS is not valid unicode; enabling all platforms");
+                warn!("ENABLED_PLATFORMS is not valid Unicode; enabling all platforms");
                 return Self::default();
             }
         };
@@ -47,7 +47,7 @@ impl PlatformConfig {
             let platform = match name.parse() {
                 Ok(platform) => platform,
                 Err(error) => {
-                    warn!(%error, "unknown platform in ENABLED_PLATFORMS");
+                    warn!(%error, "Unknown platform in ENABLED_PLATFORMS");
                     continue;
                 }
             };

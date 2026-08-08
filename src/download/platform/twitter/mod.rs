@@ -22,7 +22,7 @@ pub async fn download_twitter(url: String) -> Result<DownloadResult> {
             result.source_text = match syndication::fetch_tweet_text(&url).await {
                 Ok(text) => text,
                 Err(err) => {
-                    warn!(url = %url, %err, "could not fetch post text from Twitter syndication");
+                    warn!(url = %url, %err, "Could not fetch post text from Twitter syndication");
                     None
                 }
             };

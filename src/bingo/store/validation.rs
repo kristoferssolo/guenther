@@ -13,7 +13,7 @@ pub fn validate_slug(slug: &str) -> Result<()> {
         Ok(())
     } else {
         Err(BingoError::InvalidCommand(
-            "game slugs must be 2-50 lowercase letters, numbers, or hyphens and cannot be purely numeric"
+            "Game slugs must be 2-50 lowercase letters, numbers, or hyphens and cannot be purely numeric"
                 .to_owned(),
         ))
     }
@@ -23,7 +23,7 @@ pub fn validate_nonempty(text: &str, label: &str, max_chars: usize) -> Result<()
     let length = text.trim().chars().count();
     if length == 0 || length > max_chars {
         Err(BingoError::InvalidCommand(format!(
-            "{label} must contain between 1 and {max_chars} characters"
+            "The {label} must contain between 1 and {max_chars} characters"
         )))
     } else {
         Ok(())
@@ -41,7 +41,7 @@ pub fn ensure_active(game: &Game) -> Result<()> {
 pub fn ensure_editable(game: &Game) -> Result<()> {
     if game.state == GameState::Closed {
         Err(BingoError::Conflict(
-            "closed games cannot be changed".to_owned(),
+            "Closed games cannot be changed".to_owned(),
         ))
     } else {
         Ok(())

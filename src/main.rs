@@ -35,7 +35,7 @@ async fn main() -> color_eyre::Result<()> {
     Comments::load_from_file("comments.txt")
         .await
         .unwrap_or_else(|e| {
-            warn!("failed to load comments.txt: {e}; using fallback comments");
+            warn!("Failed to load comments.txt: {e}; using fallback comments");
             Comments::default()
         })
         .init()?;
@@ -98,14 +98,14 @@ async fn message_handler(
     #[cfg(feature = "bingo")] admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
     if let Err(err) = capture_incoming_voice_line(&bot, &msg).await {
-        warn!(%err, "failed to capture incoming voice line metadata");
+        warn!(%err, "Failed to capture incoming voice line metadata");
     }
 
     let text = msg.text().or_else(|| msg.caption()).map(str::to_owned);
 
     #[cfg(feature = "bingo")]
     if let Err(err) = observe_message_users(&bingo_store, &msg).await {
-        warn!(%err, "failed to remember Telegram user for bingo");
+        warn!(%err, "Failed to remember Telegram user for bingo");
     }
 
     match decide_route(text.as_deref(), &bot_name) {
@@ -121,7 +121,7 @@ async fn message_handler(
             )
             .await
             {
-                error!(%e, "failed to answer command");
+                error!(%e, "Failed to answer command");
             }
         }
         RouteAction::HandleMessage => process_message(&bot, &msg, &handlers).await,
@@ -150,7 +150,7 @@ async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
     for handler in handlers {
         if let Some(url) = handler.try_extract(text) {
             if let Err(err) = handler.handle(bot, msg.chat.id, url).await {
-                error!(%err, "handler failed");
+                error!(%err, "Handler failed");
                 let _ = bot.send_message(msg.chat.id, failure_comment()).await;
                 if let Some(chat_id) = global_config().chat_id {
                     let _ = bot.send_message(ChatId(chat_id), err.to_string()).await;

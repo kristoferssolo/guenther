@@ -254,7 +254,7 @@ async fn resolve_target(
         }
         if !target.starts_with('@') {
             return Err(BingoError::InvalidCommand(
-                "usernames must start with `@`".to_owned(),
+                "Usernames must start with `@`".to_owned(),
             ));
         }
         return store.user_by_username(chat_id, target).await;
@@ -272,6 +272,6 @@ async fn resolve_target(
         return Ok(known_user(user));
     }
     Err(BingoError::InvalidCommand(
-        "mention a user or reply to one of their messages".to_owned(),
+        "Mention a user or reply to one of their messages".to_owned(),
     ))
 }

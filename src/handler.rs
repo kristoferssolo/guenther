@@ -127,7 +127,7 @@ async fn send_media_from_path(
                 Ok(message) => info!(message_id = message.id.to_string(), "{} sent", kind),
                 Err(e) => {
                     error!("Failed to send {}: {e}", kind.to_str());
-                    return Err(Error::other(format!("telegram request failed: {e}")));
+                    return Err(Error::other(format!("Telegram request failed: {e}")));
                 }
             }
         }};
@@ -139,7 +139,7 @@ async fn send_media_from_path(
         MediaKind::Unknown => {
             bot.send_message(chat_id, "No supported media found")
                 .await
-                .map_err(|e| Error::other(format!("telegram request failed: {e}")))?;
+                .map_err(|e| Error::other(format!("Telegram request failed: {e}")))?;
             return Err(Error::UnknownMediaKind);
         }
     }

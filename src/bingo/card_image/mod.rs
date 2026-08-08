@@ -72,7 +72,7 @@ pub fn render_card_png(card: &Card) -> Result<Vec<u8>> {
 fn ordered_cells(cells: &[CardCell]) -> Result<[&CardCell; CELL_COUNT]> {
     if cells.len() != CELL_COUNT {
         return Err(BingoError::InvalidCardLayout(format!(
-            "expected {CELL_COUNT} cells, found {}",
+            "Expected {CELL_COUNT} cells, found {}",
             cells.len()
         )));
     }
@@ -81,24 +81,24 @@ fn ordered_cells(cells: &[CardCell]) -> Result<[&CardCell; CELL_COUNT]> {
         let index = cell.position.index();
         let Some(slot) = ordered.get_mut(index) else {
             return Err(BingoError::InvalidCardLayout(format!(
-                "cell {} has an invalid position",
+                "Cell {} has an invalid position",
                 cell.position
             )));
         };
         if slot.replace(cell).is_some() {
             return Err(BingoError::InvalidCardLayout(format!(
-                "cell {} appears more than once",
+                "Cell {} appears more than once",
                 cell.position
             )));
         }
     }
     let Some(first) = cells.first() else {
-        return Err(BingoError::InvalidCardLayout("missing cells".to_owned()));
+        return Err(BingoError::InvalidCardLayout("Missing cells".to_owned()));
     };
     let mut complete = [first; CELL_COUNT];
     for (index, cell) in ordered.into_iter().enumerate() {
         let Some(cell) = cell else {
-            return Err(BingoError::InvalidCardLayout("missing cell".to_owned()));
+            return Err(BingoError::InvalidCardLayout("Missing cell".to_owned()));
         };
         if let Some(slot) = complete.get_mut(index) {
             *slot = cell;

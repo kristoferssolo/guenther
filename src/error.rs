@@ -2,53 +2,53 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("io error: {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] tokio::io::Error),
 
-    #[error("cobalt request failed: {0}")]
+    #[error("Cobalt request failed: {0}")]
     CobaltRequest(#[source] reqwest::Error),
 
-    #[error("cobalt rejected the download: {0}")]
+    #[error("Cobalt rejected the download: {0}")]
     CobaltRejected(String),
 
-    #[error("cobalt returned unsupported local processing instructions")]
+    #[error("Cobalt returned unsupported local processing instructions")]
     CobaltLocalProcessing,
 
-    #[error("no media found")]
+    #[error("No media found")]
     NoMediaFound,
 
-    #[error("unknown media kind")]
+    #[error("Unknown media kind")]
     UnknownMediaKind,
 
-    #[error("validation failed: {0}")]
+    #[error("Validation failed: {0}")]
     ValidationFailed(String),
 
-    #[error("join error: {0}")]
+    #[error("Task join failed: {0}")]
     Join(#[from] tokio::task::JoinError),
 
-    #[error("environment variable `{0}` not found")]
+    #[error("Environment variable `{0}` was not found")]
     EnvNotFound(String),
 
-    #[error("failed to fetch F1 schedule: {0}")]
+    #[error("Failed to fetch the F1 schedule: {0}")]
     FetchF1Schedule(#[source] reqwest::Error),
 
-    #[error("failed to decode F1 schedule: {0}")]
+    #[error("Failed to decode the F1 schedule: {0}")]
     DecodeF1Schedule(#[source] reqwest::Error),
 
-    #[error("no upcoming F1 race found")]
+    #[error("No upcoming F1 race was found")]
     MissingF1Race,
 
-    #[error("no matching F1 sessions found")]
+    #[error("No matching F1 sessions were found")]
     MissingF1Sessions,
 
-    #[error("failed to parse F1 session time `{raw}`")]
+    #[error("Failed to parse F1 session time `{raw}`")]
     ParseF1SessionTime {
         raw: String,
         #[source]
         source: chrono::ParseError,
     },
 
-    #[error("other: {0}")]
+    #[error("{0}")]
     Other(String),
 }
 

@@ -60,7 +60,7 @@ WHERE chat_id = ? AND user_id = ?"#,
         })
         .transpose()?
         .ok_or_else(|| {
-            BingoError::NotFound(format!("user `{user_id}` has not been seen in this chat"))
+            BingoError::NotFound(format!("User `{user_id}` has not been seen in this chat"))
         })
     }
 
@@ -85,7 +85,7 @@ WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
         .transpose()?
         .ok_or_else(|| {
             BingoError::NotFound(format!(
-                "@{username} has not been seen in this chat; reply to one of their messages instead"
+                "User `@{username}` has not been seen in this chat; reply to one of their messages instead"
             ))
         })
     }

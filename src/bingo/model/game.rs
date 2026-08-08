@@ -33,7 +33,7 @@ impl FromStr for GameState {
             "active" => Ok(Self::Active),
             "closed" => Ok(Self::Closed),
             unknown => Err(BingoError::Conflict(format!(
-                "database contains unknown game state `{unknown}`"
+                "Database contains unknown game state `{unknown}`"
             ))),
         }
     }

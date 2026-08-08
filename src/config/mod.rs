@@ -34,7 +34,7 @@ impl Config {
             ),
             Err(env::VarError::NotPresent) => None,
             Err(env::VarError::NotUnicode(_)) => {
-                warn!("CHAT_ID is not valid unicode");
+                warn!("CHAT_ID is not valid Unicode");
                 None
             }
         };
@@ -54,7 +54,7 @@ impl Config {
     pub fn init(self) -> Result<()> {
         GLOBAL_CONFIG
             .set(self)
-            .map_err(|_| Error::other("config already initialized"))
+            .map_err(|_| Error::other("Configuration is already initialized"))
     }
 }
 
@@ -73,7 +73,7 @@ fn get_string_from_env(env_key: &str) -> Option<String> {
         },
         Err(env::VarError::NotPresent) => None,
         Err(env::VarError::NotUnicode(_)) => {
-            warn!(env_key, "env var is not valid unicode");
+            warn!(env_key, "Environment variable is not valid Unicode");
             None
         }
     }

@@ -4,13 +4,13 @@ pub type Result<T> = std::result::Result<T, BingoError>;
 
 #[derive(Debug, Error)]
 pub enum BingoError {
-    #[error("database error: {0}")]
+    #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
-    #[error("database migration error: {0}")]
+    #[error("Database migration failed: {0}")]
     Migration(#[from] sqlx::migrate::MigrateError),
 
-    #[error("filesystem error: {0}")]
+    #[error("Filesystem error: {0}")]
     Io(#[from] std::io::Error),
 
     #[error("Telegram request failed: {0}")]
@@ -19,10 +19,10 @@ pub enum BingoError {
     #[error("Telegram file download failed: {0}")]
     Download(#[from] teloxide::DownloadError),
 
-    #[error("card image encoding failed: {0}")]
+    #[error("Card image encoding failed: {0}")]
     Image(#[from] image::ImageError),
 
-    #[error("invalid bingo card layout: {0}")]
+    #[error("Invalid bingo card layout: {0}")]
     InvalidCardLayout(String),
 
     #[error("{0}")]
@@ -34,25 +34,25 @@ pub enum BingoError {
     #[error("{0}")]
     Conflict(String),
 
-    #[error("only chat administrators can do that")]
+    #[error("Only chat administrators can perform this action")]
     PermissionDenied,
 
-    #[error("only the card owner can mark this card")]
+    #[error("Only the card owner or a chat administrator can mark this card")]
     NotCardOwner,
 
-    #[error("this game is not active")]
+    #[error("This game is not active, so its cards cannot be marked")]
     GameNotActive,
 
-    #[error("the center cell is marked automatically")]
+    #[error("The center cell is marked automatically and cannot be changed")]
     FreeCell,
 
     #[error("Telegram user ID {0} does not fit in the database")]
     UserIdOutOfRange(u64),
 
-    #[error("database contains invalid Telegram user ID {0}")]
+    #[error("Database contains invalid Telegram user ID {0}")]
     InvalidStoredUserId(i64),
 
-    #[error("database contains invalid bingo entry number {0}")]
+    #[error("Database contains invalid bingo entry number {0}")]
     InvalidStoredEntryNumber(i64),
 }
 

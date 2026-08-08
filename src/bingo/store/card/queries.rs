@@ -76,7 +76,7 @@ FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
     )
     .fetch_optional(pool)
     .await?
-    .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
+    .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
     let known_user = sqlx::query!(
         r#"SELECT user_id, username, display_name FROM bingo_users
 WHERE chat_id = ? AND user_id = ?"#,
@@ -134,7 +134,8 @@ pub async fn delete_or_reject_existing(
     if let Some(card_id) = existing.map(CardId::from) {
         if !replace {
             return Err(BingoError::Conflict(
-                "that user already has a card; use regenerate or reimport to replace it".to_owned(),
+                "That user already has a card; use `/bingo regenerate` or `/bingo reimport` to replace it"
+                    .to_owned(),
             ));
         }
         sqlx::query!(r#"DELETE FROM bingo_cards WHERE id = ?"#, card_id.get())
@@ -180,7 +181,7 @@ WHERE number = ? AND game_id = ? AND active = 1"#,
     })
     .ok_or_else(|| {
         BingoError::NotFound(format!(
-            "active entry `{entry_number}` was not found in game `{slug}`"
+            "Active entry `{entry_number}` was not found in game `{slug}`"
         ))
     })
 }
@@ -286,7 +287,7 @@ WHERE c.id = ?"#,
     )
     .fetch_optional(&mut **transaction)
     .await?
-    .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
+    .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
     Ok(ToggleContext {
         user_id: row.user_id,
         bingo_announced: row.bingo_announced,
@@ -356,14 +357,14 @@ pub async fn card_id_in(
     .fetch_optional(&mut **transaction)
     .await?
     .map(CardId::from)
-    .ok_or_else(|| BingoError::NotFound("that user does not have a card for this game".to_owned()))
+    .ok_or_else(|| BingoError::NotFound("That user does not have a card for this game".to_owned()))
 }
 
 fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
     rows.into_iter()
         .map(|row| {
             let position = Position::try_from(row.position).map_err(|_| {
-                BingoError::Conflict("database contains an invalid cell position".to_owned())
+                BingoError::Conflict("Database contains an invalid cell position".to_owned())
             })?;
             Ok(CardCell {
                 position,

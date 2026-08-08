@@ -71,7 +71,7 @@ WHERE game_id = ? AND active = 1 ORDER BY number"#,
     ) -> Result<usize> {
         if entries.is_empty() {
             return Err(BingoError::InvalidCommand(
-                "the entry file does not contain any entries".to_owned(),
+                "The entry file does not contain any entries".to_owned(),
             ));
         }
         let game = self.game(chat_id, Some(slug)).await?;
@@ -109,10 +109,10 @@ RETURNING id, number, game_id, text"#,
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| map_unique(error, || "that entry already exists".to_owned()))?
+        .map_err(|error| map_unique(error, || "That entry already exists".to_owned()))?
         .ok_or_else(|| {
             BingoError::NotFound(format!(
-                "entry `{entry_number}` was not found in game `{}`",
+                "Entry `{entry_number}` was not found in game `{}`",
                 game.slug
             ))
         })?;
@@ -137,7 +137,7 @@ WHERE game_id = ? AND number = ? AND active = 1"#,
         .await?;
         require_changed(result.rows_affected(), || {
             format!(
-                "entry `{entry_number}` was not found in game `{}`",
+                "Entry `{entry_number}` was not found in game `{}`",
                 game.slug
             )
         })

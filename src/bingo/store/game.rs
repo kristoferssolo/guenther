@@ -62,7 +62,7 @@ is_default AS `is_default: bool`"#,
         )
         .fetch_one(&mut *transaction)
         .await
-        .map_err(|error| map_unique(error, || format!("game `{slug}` already exists")))?;
+        .map_err(|error| map_unique(error, || format!("Game `{slug}` already exists")))?;
         let game = row.try_into()?;
         transaction.commit().await?;
         Ok(game)
@@ -129,7 +129,7 @@ is_default AS `is_default: bool`"#,
         )
         .fetch_optional(&self.pool)
         .await?
-        .ok_or_else(|| BingoError::NotFound(format!("game `{slug}` was not found")))?;
+        .ok_or_else(|| BingoError::NotFound(format!("Game `{slug}` was not found")))?;
         row.try_into()
     }
 
@@ -185,7 +185,7 @@ is_default AS `is_default: bool`"#,
         let description = description.trim();
         if description.chars().count() > MAX_GAME_DESCRIPTION_CHARS {
             return Err(BingoError::InvalidCommand(format!(
-                "game description must contain at most {MAX_GAME_DESCRIPTION_CHARS} characters"
+                "The game description must contain at most {MAX_GAME_DESCRIPTION_CHARS} characters"
             )));
         }
         let game = self.game(chat_id, Some(slug)).await?;
@@ -245,10 +245,11 @@ AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
         slug.map_or_else(
             || {
                 BingoError::NotFound(
-                    "this chat has no default bingo game; create one or set a default".to_owned(),
+                    "This chat has no default bingo game. Specify a game, create one, or set one as the default"
+                        .to_owned(),
                 )
             },
-            |slug| BingoError::NotFound(format!("game `{slug}` was not found")),
+            |slug| BingoError::NotFound(format!("Game `{slug}` was not found")),
         )
     })
 }

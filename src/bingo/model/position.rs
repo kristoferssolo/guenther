@@ -29,7 +29,7 @@ impl TryFrom<i64> for Position {
 
     fn try_from(index: i64) -> Result<Self> {
         usize::try_from(index)
-            .map_err(|_| BingoError::InvalidCommand(format!("invalid cell position `{index}`")))?
+            .map_err(|_| BingoError::InvalidCommand(format!("Invalid cell position `{index}`")))?
             .try_into()
     }
 }
@@ -42,7 +42,7 @@ impl TryFrom<usize> for Position {
             .ok()
             .filter(|index| *index < CELL_COUNT_U8)
             .map(Self)
-            .ok_or_else(|| BingoError::InvalidCommand(format!("invalid cell position `{index}`")))
+            .ok_or_else(|| BingoError::InvalidCommand(format!("Invalid cell position `{index}`")))
     }
 }
 
@@ -61,12 +61,12 @@ impl FromStr for Position {
         let coordinates = (bytes.next(), bytes.next(), bytes.next());
         let (Some(row), Some(column), None) = coordinates else {
             return Err(BingoError::InvalidCommand(format!(
-                "invalid cell `{raw}`; expected A1 through E5"
+                "Invalid cell `{raw}`; expected A1 through E5"
             )));
         };
         if !(b'A'..=b'E').contains(&row) || !(b'1'..=b'5').contains(&column) {
             return Err(BingoError::InvalidCommand(format!(
-                "invalid cell `{raw}`; expected A1 through E5"
+                "Invalid cell `{raw}`; expected A1 through E5"
             )));
         }
 

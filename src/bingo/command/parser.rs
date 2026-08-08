@@ -34,7 +34,7 @@ pub fn parse(input: &str) -> Result<BingoCommand> {
         value if value.eq_ignore_ascii_case("card") => parse_card(rest),
         value if value.eq_ignore_ascii_case("reset") => parse_reset(rest),
         unknown => Err(BingoError::InvalidCommand(format!(
-            "unknown bingo command `{unknown}`; use /bingo help"
+            "Unknown bingo command `{unknown}`; use /bingo help"
         ))),
     }
 }
@@ -101,7 +101,7 @@ fn parse_game(input: &str) -> Result<BingoCommand> {
             }))
         }
         _ => Err(BingoError::InvalidCommand(
-            "usage: /bingo game <create|delete|activate|close|default|center|description> ..."
+            "Usage: /bingo game <create|delete|activate|close|default|center|description> ..."
                 .to_owned(),
         )),
     }
@@ -180,7 +180,7 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
     let grid = lines.collect::<Vec<_>>();
     if grid.len() != GRID_SIDE {
         return Err(BingoError::InvalidCommand(format!(
-            "an import must contain exactly {GRID_SIDE} grid rows"
+            "A card import must contain exactly {GRID_SIDE} grid rows"
         )));
     }
 
@@ -189,7 +189,7 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
         let columns = row.split('|').collect::<Vec<_>>();
         if columns.len() != GRID_SIDE {
             return Err(BingoError::InvalidCommand(format!(
-                "import row {} must contain exactly {GRID_SIDE} `|`-separated cells",
+                "Import row {} must contain exactly {GRID_SIDE} `|`-separated cells",
                 row_index.saturating_add(1)
             )));
         }
@@ -230,7 +230,7 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
     let (action, rest) = split_once_whitespace(input);
     if !action.eq_ignore_ascii_case("set") {
         return Err(BingoError::InvalidCommand(
-            "usage: /bingo card set <slug> [@user] <A1-E5> <entry_number>".to_owned(),
+            "Usage: /bingo card set <slug> [@user] <A1-E5> <entry_number>".to_owned(),
         ));
     }
 
@@ -262,7 +262,7 @@ fn validate_text(text: &str, label: &str) -> Result<()> {
     let length = text.chars().count();
     if length == 0 || length > MAX_ENTRY_CHARS {
         return Err(BingoError::InvalidCommand(format!(
-            "{label} text must contain between 1 and {MAX_ENTRY_CHARS} characters"
+            "The {label} text must contain between 1 and {MAX_ENTRY_CHARS} characters"
         )));
     }
     Ok(())

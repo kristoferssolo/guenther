@@ -16,7 +16,7 @@ impl F1Config {
             }),
             Err(env::VarError::NotPresent) => Utc.fix(),
             Err(env::VarError::NotUnicode(_)) => {
-                warn!("F1_UTC_OFFSET is not valid unicode");
+                warn!("F1_UTC_OFFSET is not valid Unicode");
                 Utc.fix()
             }
         };

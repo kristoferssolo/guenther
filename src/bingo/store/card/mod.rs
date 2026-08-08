@@ -32,7 +32,7 @@ impl BingoStore {
         ensure_active(&game)?;
         if entries.len() < REQUIRED_ENTRIES {
             return Err(BingoError::Conflict(format!(
-                "game `{}` needs {REQUIRED_ENTRIES} active entries but only has {}",
+                "Game `{}` needs {REQUIRED_ENTRIES} active entries but only has {}",
                 game.slug,
                 entries.len()
             )));
@@ -82,7 +82,7 @@ impl BingoStore {
     ) -> Result<Card> {
         if imported.len() != CELL_COUNT {
             return Err(BingoError::InvalidCommand(format!(
-                "an imported card must contain {CELL_COUNT} cells"
+                "An imported card must contain {CELL_COUNT} cells"
             )));
         }
         let game = self.game(chat_id, Some(slug)).await?;
@@ -103,7 +103,7 @@ impl BingoStore {
             }
             let entry_number = cell.entry_number.ok_or_else(|| {
                 BingoError::InvalidCommand(
-                    "non-free imported cells must contain entry numbers".to_owned(),
+                    "Non-free imported cells must contain entry numbers".to_owned(),
                 )
             })?;
             let entry = fetch_active_entry(&mut transaction, game.id, entry_number, slug).await?;
@@ -130,7 +130,7 @@ impl BingoStore {
             .await?
             .ok_or_else(|| {
                 BingoError::NotFound(format!(
-                    "no card is assigned to that user for `{}`",
+                    "No card is assigned to that user for game `{}`",
                     game.slug
                 ))
             })?;
@@ -192,7 +192,7 @@ impl BingoStore {
             return Err(BingoError::GameNotActive);
         }
         let rows_affected = toggle_cell_mark(&mut transaction, card_id, position).await?;
-        require_changed(rows_affected, || "that card cell was not found".to_owned())?;
+        require_changed(rows_affected, || "That card cell was not found".to_owned())?;
         let cells = fetch_cells(&mut *transaction, card_id).await?;
         let newly_completed = !context.bingo_announced && has_bingo(&cells);
         if newly_completed {

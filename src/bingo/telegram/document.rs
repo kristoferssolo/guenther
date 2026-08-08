@@ -11,13 +11,13 @@ const MAX_ENTRY_FILE_LINES: usize = 1_000;
 pub async fn read_entry_file(bot: &Bot, message: &Message) -> Result<Vec<String>> {
     let document = message.document().ok_or_else(|| {
         BingoError::InvalidCommand(
-            "attach a UTF-8 text file and set its caption to `/bingo entries import <game>`"
+            "Attach a UTF-8 text file and set its caption to `/bingo entries import <game>`"
                 .to_owned(),
         )
     })?;
     if document.file.size > MAX_ENTRY_FILE_BYTES {
         return Err(BingoError::InvalidCommand(format!(
-            "entry files must be no larger than {MAX_ENTRY_FILE_BYTES} bytes"
+            "Entry files must be no larger than {MAX_ENTRY_FILE_BYTES} bytes"
         )));
     }
 
@@ -27,7 +27,7 @@ pub async fn read_entry_file(bot: &Bot, message: &Message) -> Result<Vec<String>
     let mut bytes = Vec::with_capacity(capacity);
     bot.download_file(&file.path, &mut bytes).await?;
     let text = String::from_utf8(bytes).map_err(|_| {
-        BingoError::InvalidCommand("entry files must use UTF-8 text encoding".to_owned())
+        BingoError::InvalidCommand("Entry files must use UTF-8 text encoding".to_owned())
     })?;
     parse_entry_lines(&text)
 }
@@ -42,12 +42,12 @@ fn parse_entry_lines(text: &str) -> Result<Vec<String>> {
         .collect::<Vec<_>>();
     if entries.is_empty() {
         return Err(BingoError::InvalidCommand(
-            "the entry file does not contain any entries".to_owned(),
+            "The entry file does not contain any entries".to_owned(),
         ));
     }
     if entries.len() > MAX_ENTRY_FILE_LINES {
         return Err(BingoError::InvalidCommand(format!(
-            "entry files may contain at most {MAX_ENTRY_FILE_LINES} non-empty lines"
+            "Entry files may contain at most {MAX_ENTRY_FILE_LINES} non-empty lines"
         )));
     }
     Ok(entries)

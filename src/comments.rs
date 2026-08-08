@@ -54,7 +54,7 @@ impl Comments {
             .collect::<Vec<_>>();
 
         if lines.is_empty() {
-            return Err(Error::other("comments file contains no usable lines"));
+            return Err(Error::other("Comments file contains no usable lines"));
         }
 
         Ok(Self { lines })
@@ -100,7 +100,7 @@ impl Comments {
     pub fn init(self) -> Result<()> {
         GLOBAL_COMMENTS
             .set(self)
-            .map_err(|_| Error::other("comments already initialized"))
+            .map_err(|_| Error::other("Comments are already initialized"))
     }
 }
 

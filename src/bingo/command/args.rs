@@ -60,7 +60,7 @@ where
     T: FromStr,
 {
     raw.parse()
-        .map_err(|_| BingoError::InvalidCommand(format!("invalid {label} `{raw}`")))
+        .map_err(|_| BingoError::InvalidCommand(format!("Invalid {label} `{raw}`")))
 }
 
 pub fn is_target_token(word: &str) -> bool {
@@ -68,7 +68,7 @@ pub fn is_target_token(word: &str) -> bool {
 }
 
 pub fn usage(expected: &str) -> BingoError {
-    BingoError::InvalidCommand(format!("usage: /bingo {expected}"))
+    BingoError::InvalidCommand(format!("Usage: /bingo {expected}"))
 }
 
 pub fn split_once_whitespace(input: &str) -> (&str, &str) {

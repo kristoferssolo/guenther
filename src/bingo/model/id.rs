@@ -73,13 +73,13 @@ impl FromStr for EntryNumber {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let number = value.parse::<i64>().map_err(|_| {
-            BingoError::InvalidCommand("entry numbers must be positive integers".to_owned())
+            BingoError::InvalidCommand("Entry numbers must be positive integers".to_owned())
         })?;
         if number.is_positive() {
             Ok(Self(number))
         } else {
             Err(BingoError::InvalidCommand(
-                "entry numbers must be positive integers".to_owned(),
+                "Entry numbers must be positive integers".to_owned(),
             ))
         }
     }
