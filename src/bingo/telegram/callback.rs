@@ -9,6 +9,7 @@ use crate::bingo::{
     },
 };
 use teloxide::{
+    ApiError, RequestError,
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
     prelude::{Bot, Requester},
     types::{CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, MessageId},
@@ -81,24 +82,19 @@ async fn finish_toggle(
 ) -> Result<()> {
     bot.answer_callback_query(query.id.clone()).await?;
     if let Some(message) = query.regular_message() {
-        let image_result = edit_card_image(bot, message.chat.id, image_message_id, &toggle).await;
-        let text_result = bot
-            .edit_message_text(message.chat.id, message.id, render_card(&toggle.card))
-            .reply_markup(card_keyboard(&toggle.card, image_message_id))
-            .await;
-        let announcement_result = if toggle.newly_completed {
+        edit_card_image(bot, message.chat.id, image_message_id, &toggle).await?;
+        accept_unchanged(
+            bot.edit_message_text(message.chat.id, message.id, render_card(&toggle.card))
+                .reply_markup(card_keyboard(&toggle.card, image_message_id))
+                .await,
+        )?;
+        if toggle.newly_completed {
             bot.send_message(
                 message.chat.id,
                 win_message(&toggle.card.owner.to_string(), &toggle.card.game.name),
             )
-            .await
-            .map(|_| ())
-        } else {
-            Ok(())
-        };
-        image_result?;
-        text_result?;
-        announcement_result?;
+            .await?;
+        }
     }
     Ok(())
 }
@@ -119,13 +115,22 @@ async fn edit_card_image(
         return Ok(());
     };
     let photo = InputFile::memory(render_card_png(&toggle.card)?).file_name("bingo-card.png");
-    bot.edit_message_media(
-        chat_id,
-        image_message_id,
-        InputMedia::Photo(InputMediaPhoto::new(photo)),
-    )
-    .await?;
+    accept_unchanged(
+        bot.edit_message_media(
+            chat_id,
+            image_message_id,
+            InputMedia::Photo(InputMediaPhoto::new(photo)),
+        )
+        .await,
+    )?;
     Ok(())
+}
+
+fn accept_unchanged<T>(result: std::result::Result<T, RequestError>) -> Result<()> {
+    match result {
+        Ok(_) | Err(RequestError::Api(ApiError::MessageNotModified)) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 pub(super) fn format_callback(
@@ -161,12 +166,8 @@ fn parse_callback(data: &str) -> Option<CardCallback> {
 
 #[cfg(test)]
 mod tests {
-    use crate::bingo::{
-        model::{CardId, Position},
-        telegram::callback::{CardCallback, format_callback, parse_callback, win_message},
-    };
-    use claims::{assert_none, assert_ok, assert_some_eq};
-    use teloxide::types::MessageId;
+    use super::*;
+    use claims::{assert_err, assert_none, assert_ok, assert_some_eq};
 
     #[test]
     fn callback_data_round_trips() {
@@ -201,6 +202,17 @@ mod tests {
         assert_eq!(current, format!("b:{}:{}:24", i64::MIN, i32::MIN));
         assert!(legacy.len() <= 64);
         assert!(current.len() <= 64);
+    }
+
+    #[test]
+    fn accepts_idempotent_telegram_message_edits() {
+        assert_ok!(accept_unchanged::<()>(Ok(())));
+        assert_ok!(accept_unchanged::<()>(Err(RequestError::Api(
+            ApiError::MessageNotModified
+        ))));
+        assert_err!(accept_unchanged::<()>(Err(RequestError::Api(
+            ApiError::BotBlocked
+        ))));
     }
 
     #[test]
