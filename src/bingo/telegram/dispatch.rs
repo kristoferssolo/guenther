@@ -11,7 +11,7 @@ use crate::bingo::{
 };
 use teloxide::{
     prelude::{Bot, ChatId},
-    types::Message,
+    types::{Message, UserId},
 };
 
 pub(super) async fn execute_bingo(
@@ -26,7 +26,7 @@ pub(super) async fn execute_bingo(
     if command.requires_admin() && !is_chat_admin(bot, message, admin_cache).await? {
         return Err(BingoError::PermissionDenied);
     }
-    let chat_id = message.chat.id.0;
+    let chat_id = message.chat.id;
 
     match command {
         BingoCommand::Help => send_text(bot, message.chat.id, HELP).await,
@@ -51,14 +51,14 @@ async fn execute_game_admin(
     store: &BingoStore,
     command: GameAdmin,
 ) -> Result<()> {
-    let chat_id = message.chat.id.0;
+    let chat_id = message.chat.id;
     match command {
         GameAdmin::Create { slug, name } => {
             let actor = message
                 .from
                 .as_ref()
                 .ok_or(BingoError::PermissionDenied)
-                .and_then(known_user)?;
+                .map(known_user)?;
             let game = store
                 .create_game(chat_id, &slug, &name, actor.user_id)
                 .await?;
@@ -110,7 +110,7 @@ async fn execute_entry_admin(
 ) -> Result<()> {
     match command {
         EntryAdmin::Add { slug, text } => {
-            let entry = store.add_entry(chat_id.0, slug.as_deref(), &text).await?;
+            let entry = store.add_entry(chat_id, slug.as_deref(), &text).await?;
             send_text(
                 bot,
                 chat_id,
@@ -119,7 +119,7 @@ async fn execute_entry_admin(
             .await
         }
         EntryAdmin::Edit { entry_id, text } => {
-            let entry = store.edit_entry(chat_id.0, entry_id, &text).await?;
+            let entry = store.edit_entry(chat_id, entry_id, &text).await?;
             send_text(
                 bot,
                 chat_id,
@@ -128,7 +128,7 @@ async fn execute_entry_admin(
             .await
         }
         EntryAdmin::Delete { entry_id } => {
-            store.delete_entry(chat_id.0, entry_id).await?;
+            store.delete_entry(chat_id, entry_id).await?;
             send_text(
                 bot,
                 chat_id,
@@ -145,7 +145,7 @@ async fn execute_card_admin(
     store: &BingoStore,
     command: CardAdmin,
 ) -> Result<()> {
-    let chat_id = message.chat.id.0;
+    let chat_id = message.chat.id;
     match command {
         CardAdmin::Generate {
             slug,
@@ -198,10 +198,10 @@ async fn resolve_target(
     target: Option<&str>,
     default_to_actor: bool,
 ) -> Result<KnownUser> {
-    let chat_id = message.chat.id.0;
+    let chat_id = message.chat.id;
     if let Some(target) = target {
-        if let Ok(user_id) = target.parse::<i64>() {
-            return store.user_by_id(chat_id, user_id).await;
+        if let Ok(user_id) = target.parse::<u64>() {
+            return store.user_by_id(chat_id, UserId(user_id)).await;
         }
         if !target.starts_with('@') {
             return Err(BingoError::InvalidCommand(
@@ -214,13 +214,13 @@ async fn resolve_target(
         .reply_to_message()
         .and_then(|reply| reply.from.as_ref())
     {
-        let user = known_user(user)?;
+        let user = known_user(user);
         store.observe_user(chat_id, &user).await?;
         return Ok(user);
     }
     if default_to_actor {
         let user = message.from.as_ref().ok_or(BingoError::PermissionDenied)?;
-        return known_user(user);
+        return Ok(known_user(user));
     }
     Err(BingoError::InvalidCommand(
         "mention a user or reply to one of their messages".to_owned(),

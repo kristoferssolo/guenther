@@ -7,6 +7,7 @@ use self::queries::{
 use super::{
     BingoStore,
     entry::upsert_entry,
+    id::db_user_id,
     validation::{ensure_active, ensure_editable, require_changed, validate_nonempty},
 };
 use crate::bingo::{
@@ -17,11 +18,12 @@ use crate::bingo::{
     },
 };
 use rand::seq::SliceRandom;
+use teloxide::types::{ChatId, UserId};
 
 impl BingoStore {
     pub async fn generate_card(
         &self,
-        chat_id: i64,
+        chat_id: ChatId,
         slug: Option<&str>,
         owner: &KnownUser,
         replace: bool,
@@ -70,7 +72,7 @@ impl BingoStore {
 
     pub async fn import_card(
         &self,
-        chat_id: i64,
+        chat_id: ChatId,
         slug: &str,
         owner: &KnownUser,
         imported: &[ImportedCell],
@@ -122,8 +124,9 @@ impl BingoStore {
         fetch_card(&self.pool, card_id).await
     }
 
-    pub async fn card(&self, chat_id: i64, slug: Option<&str>, user_id: i64) -> Result<Card> {
+    pub async fn card(&self, chat_id: ChatId, slug: Option<&str>, user_id: UserId) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
+        let user_id = db_user_id(user_id)?;
         let card_id = sqlx::query_scalar!(
             r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
             game.id,
@@ -145,9 +148,9 @@ impl BingoStore {
 
     pub async fn set_card_cell(
         &self,
-        chat_id: i64,
+        chat_id: ChatId,
         slug: &str,
-        user_id: i64,
+        user_id: UserId,
         position: Position,
         text: &str,
     ) -> Result<Card> {
@@ -175,7 +178,12 @@ WHERE card_id = ? AND position = ?"#,
         fetch_card(&self.pool, card_id).await
     }
 
-    pub async fn reset_card(&self, chat_id: i64, slug: Option<&str>, user_id: i64) -> Result<Card> {
+    pub async fn reset_card(
+        &self,
+        chat_id: ChatId,
+        slug: Option<&str>,
+        user_id: UserId,
+    ) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
@@ -198,7 +206,7 @@ WHERE card_id = ? AND position = ?"#,
     pub async fn toggle_cell(
         &self,
         card_id: i64,
-        user_id: i64,
+        user_id: UserId,
         position: Position,
     ) -> Result<ToggleResult> {
         if position == Position::FREE {
@@ -217,7 +225,7 @@ WHERE c.id = ?"#,
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
-        if row.user_id != user_id {
+        if row.user_id != db_user_id(user_id)? {
             return Err(BingoError::NotCardOwner);
         }
         if row.state.parse::<GameState>()? != GameState::Active {

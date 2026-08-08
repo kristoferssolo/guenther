@@ -1,3 +1,5 @@
+use teloxide::types::{ChatId, UserId};
+
 use crate::bingo::error::{BingoError, Result};
 use std::{fmt, str::FromStr};
 
@@ -79,11 +81,11 @@ impl FromStr for Position {
 }
 
 impl fmt::Display for Position {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let grid_side = u8::try_from(GRID_SIDE).expect("bingo grid side fits in a u8");
         let row = char::from(b'A' + self.0 / grid_side);
         let column = self.0 % grid_side + 1;
-        write!(formatter, "{row}{column}")
+        write!(f, "{row}{column}")
     }
 }
 
@@ -121,23 +123,23 @@ impl FromStr for GameState {
 }
 
 impl fmt::Display for GameState {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownUser {
-    pub user_id: i64,
+    pub user_id: UserId,
     pub username: Option<String>,
     pub display_name: String,
 }
 
 impl fmt::Display for KnownUser {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.username {
-            Some(name) => write!(formatter, "@{name}"),
-            None => formatter.write_str(&self.display_name),
+            Some(name) => write!(f, "@{name}"),
+            None => f.write_str(&self.display_name),
         }
     }
 }
@@ -145,7 +147,7 @@ impl fmt::Display for KnownUser {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Game {
     pub id: i64,
-    pub chat_id: i64,
+    pub chat_id: ChatId,
     pub slug: String,
     pub name: String,
     pub center_text: String,

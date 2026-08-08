@@ -37,7 +37,7 @@ You can omit @user when replying to that user's message. Use /bingo import or /b
 const TELEGRAM_MESSAGE_BUDGET: usize = 3_800;
 
 pub(super) async fn send_games(bot: &Bot, chat_id: ChatId, store: &BingoStore) -> Result<()> {
-    let games = store.list_games(chat_id.0).await?;
+    let games = store.list_games(chat_id).await?;
     let text = if games.is_empty() {
         "No bingo games have been created in this chat.".to_owned()
     } else {
@@ -57,7 +57,7 @@ pub(super) async fn send_entries(
     store: &BingoStore,
     slug: Option<String>,
 ) -> Result<()> {
-    let (game, entries) = store.list_entries(chat_id.0, slug.as_deref()).await?;
+    let (game, entries) = store.list_entries(chat_id, slug.as_deref()).await?;
     let mut lines = vec![format!("Entries for {} ({}):", game.name, entries.len())];
     lines.extend(
         entries

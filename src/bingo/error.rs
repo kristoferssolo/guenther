@@ -39,6 +39,9 @@ pub enum BingoError {
 
     #[error("Telegram user ID {0} does not fit in the database")]
     UserIdOutOfRange(u64),
+
+    #[error("database contains invalid Telegram user ID {0}")]
+    InvalidStoredUserId(i64),
 }
 
 impl BingoError {

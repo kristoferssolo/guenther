@@ -7,6 +7,7 @@ use crate::bingo::{
     model::{Entry, Game, MAX_ENTRY_CHARS, normalize_entry},
 };
 use sqlx::SqliteExecutor;
+use teloxide::types::ChatId;
 
 #[derive(Debug)]
 struct EntryRow {
@@ -16,7 +17,12 @@ struct EntryRow {
 }
 
 impl BingoStore {
-    pub async fn add_entry(&self, chat_id: i64, slug: Option<&str>, text: &str) -> Result<Entry> {
+    pub async fn add_entry(
+        &self,
+        chat_id: ChatId,
+        slug: Option<&str>,
+        text: &str,
+    ) -> Result<Entry> {
         let game = self.game(chat_id, slug).await?;
         ensure_editable(&game)?;
         let id = upsert_entry(&self.pool, game.id, text).await?;
@@ -29,7 +35,7 @@ impl BingoStore {
 
     pub async fn list_entries(
         &self,
-        chat_id: i64,
+        chat_id: ChatId,
         slug: Option<&str>,
     ) -> Result<(Game, Vec<Entry>)> {
         let game = self.game(chat_id, slug).await?;
@@ -44,9 +50,10 @@ WHERE game_id = ? AND active = 1 ORDER BY id"#,
         Ok((game, rows.into_iter().map(Entry::from).collect()))
     }
 
-    pub async fn edit_entry(&self, chat_id: i64, entry_id: i64, text: &str) -> Result<Entry> {
+    pub async fn edit_entry(&self, chat_id: ChatId, entry_id: i64, text: &str) -> Result<Entry> {
         validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
         let normalized = normalize_entry(text);
+        let chat_id = chat_id.0;
         let row = sqlx::query_as!(
             EntryRow,
             r#"UPDATE bingo_entries SET text = ?, normalized_text = ?
@@ -65,7 +72,8 @@ RETURNING id, game_id, text"#,
         Ok(row.into())
     }
 
-    pub async fn delete_entry(&self, chat_id: i64, entry_id: i64) -> Result<()> {
+    pub async fn delete_entry(&self, chat_id: ChatId, entry_id: i64) -> Result<()> {
+        let chat_id = chat_id.0;
         let result = sqlx::query!(
             r#"UPDATE bingo_entries SET active = 0
 WHERE id = ? AND game_id IN

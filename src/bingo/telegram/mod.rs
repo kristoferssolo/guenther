@@ -3,11 +3,7 @@ mod callback;
 mod dispatch;
 mod render;
 
-use crate::bingo::{
-    error::{BingoError, Result},
-    model::KnownUser,
-    store::BingoStore,
-};
+use crate::bingo::{error::Result, model::KnownUser, store::BingoStore};
 use teloxide::{
     prelude::*,
     types::{Message, User},
@@ -17,12 +13,12 @@ pub use admin::AdminCache;
 pub use callback::answer_callback;
 
 pub async fn observe_message_users(store: &BingoStore, message: &Message) -> Result<()> {
-    let chat_id = message.chat.id.0;
+    let chat_id = message.chat.id;
     for user in message.mentioned_users() {
         if user.is_bot {
             continue;
         }
-        let known = known_user(user)?;
+        let known = known_user(user);
         store.observe_user(chat_id, &known).await?;
     }
     Ok(())
@@ -47,18 +43,14 @@ pub async fn answer_bingo(
     }
 }
 
-pub(super) fn known_user(user: &User) -> Result<KnownUser> {
+pub(super) fn known_user(user: &User) -> KnownUser {
     let display_name = user.last_name.as_ref().map_or_else(
         || user.first_name.clone(),
         |last_name| format!("{} {last_name}", user.first_name),
     );
-    Ok(KnownUser {
-        user_id: telegram_user_id(user)?,
+    KnownUser {
+        user_id: user.id,
         username: user.username.clone(),
         display_name,
-    })
-}
-
-pub(super) fn telegram_user_id(user: &User) -> Result<i64> {
-    i64::try_from(user.id.0).map_err(|_| BingoError::UserIdOutOfRange(user.id.0))
+    }
 }

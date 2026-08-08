@@ -1,8 +1,10 @@
 use crate::bingo::{
     error::{BingoError, Result},
     model::{Card, CardCell, Game, KnownUser, Position},
+    store::id::{db_user_id, user_id_from_db},
 };
 use sqlx::{Sqlite, SqliteExecutor, SqlitePool, Transaction};
+use teloxide::types::{ChatId, UserId};
 
 #[derive(Debug)]
 struct CardRow {
@@ -57,14 +59,15 @@ WHERE chat_id = ? AND user_id = ?"#,
     )
     .fetch_optional(pool)
     .await?;
+    let user_id = user_id_from_db(row.user_id)?;
     let user = match known_user {
         Some(known) => KnownUser {
-            user_id: known.user_id,
+            user_id,
             username: known.username,
             display_name: known.display_name,
         },
         None => KnownUser {
-            user_id: row.user_id,
+            user_id,
             username: None,
             display_name: row.owner_name,
         },
@@ -74,7 +77,7 @@ WHERE chat_id = ? AND user_id = ?"#,
         id: row.card_id,
         game: Game {
             id: row.game_id,
-            chat_id: row.chat_id,
+            chat_id: ChatId(row.chat_id),
             slug: row.slug,
             name: row.game_name,
             center_text: row.center_text,
@@ -90,9 +93,10 @@ WHERE chat_id = ? AND user_id = ?"#,
 pub(super) async fn delete_or_reject_existing(
     transaction: &mut Transaction<'_, Sqlite>,
     game_id: i64,
-    user_id: i64,
+    user_id: UserId,
     replace: bool,
 ) -> Result<()> {
+    let user_id = db_user_id(user_id)?;
     let existing = sqlx::query_scalar!(
         r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
         game_id,
@@ -119,10 +123,11 @@ pub(super) async fn insert_card(
     owner: &KnownUser,
 ) -> Result<i64> {
     let owner_name = owner.to_string();
+    let user_id = db_user_id(owner.user_id)?;
     let result = sqlx::query!(
         r#"INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)"#,
         game_id,
-        owner.user_id,
+        user_id,
         owner_name,
     )
     .execute(&mut **transaction)
@@ -180,8 +185,9 @@ WHERE card_id = ? ORDER BY position"#,
 pub(super) async fn card_id_in(
     transaction: &mut Transaction<'_, Sqlite>,
     game_id: i64,
-    user_id: i64,
+    user_id: UserId,
 ) -> Result<i64> {
+    let user_id = db_user_id(user_id)?;
     sqlx::query_scalar!(
         r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
         game_id,

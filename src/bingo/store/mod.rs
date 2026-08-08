@@ -2,6 +2,7 @@ mod card;
 mod connection;
 mod entry;
 mod game;
+mod id;
 mod user;
 mod validation;
 

@@ -2,10 +2,7 @@ use crate::bingo::{
     error::Result,
     model::{Position, ToggleResult},
     store::BingoStore,
-    telegram::{
-        render::{card_keyboard, render_card},
-        telegram_user_id,
-    },
+    telegram::render::{card_keyboard, render_card},
 };
 use teloxide::{
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
@@ -20,8 +17,7 @@ pub async fn answer_callback(bot: &Bot, query: &CallbackQuery, store: &BingoStor
     let Some((card_id, position)) = parse_callback(data) else {
         return Ok(());
     };
-    let user_id = telegram_user_id(&query.from)?;
-    let result = store.toggle_cell(card_id, user_id, position).await;
+    let result = store.toggle_cell(card_id, query.from.id, position).await;
     match result {
         Ok(toggle) => finish_toggle(bot, query, toggle).await,
         Err(error) if error.is_user_facing() => {

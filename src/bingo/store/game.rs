@@ -1,5 +1,6 @@
 use super::{
     BingoStore,
+    id::db_user_id,
     validation::{ensure_editable, map_unique, validate_nonempty, validate_slug},
 };
 use crate::bingo::{
@@ -7,6 +8,7 @@ use crate::bingo::{
     model::{Game, GameState},
 };
 use sqlx::SqliteExecutor;
+use teloxide::types::{ChatId, UserId};
 
 #[derive(Debug)]
 struct GameRow {
@@ -22,13 +24,15 @@ struct GameRow {
 impl BingoStore {
     pub async fn create_game(
         &self,
-        chat_id: i64,
+        chat_id: ChatId,
         slug: &str,
         name: &str,
-        created_by: i64,
+        created_by: UserId,
     ) -> Result<Game> {
         validate_slug(slug)?;
         validate_nonempty(name, "game name", 100)?;
+        let chat_id = chat_id.0;
+        let created_by = db_user_id(created_by)?;
         let mut transaction = self.pool.begin().await?;
         let has_default = sqlx::query_scalar!(
             r#"SELECT EXISTS(
@@ -63,7 +67,8 @@ RETURNING
         Ok(game)
     }
 
-    pub async fn list_games(&self, chat_id: i64) -> Result<Vec<Game>> {
+    pub async fn list_games(&self, chat_id: ChatId) -> Result<Vec<Game>> {
+        let chat_id = chat_id.0;
         let rows = sqlx::query_as!(
             GameRow,
             r#"SELECT
@@ -77,11 +82,17 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
         rows.into_iter().map(Game::try_from).collect()
     }
 
-    pub async fn game(&self, chat_id: i64, slug: Option<&str>) -> Result<Game> {
+    pub async fn game(&self, chat_id: ChatId, slug: Option<&str>) -> Result<Game> {
         fetch_game(&self.pool, chat_id, slug).await
     }
 
-    pub async fn set_game_state(&self, chat_id: i64, slug: &str, state: GameState) -> Result<Game> {
+    pub async fn set_game_state(
+        &self,
+        chat_id: ChatId,
+        slug: &str,
+        state: GameState,
+    ) -> Result<Game> {
+        let chat_id = chat_id.0;
         let row = sqlx::query_as!(
             GameRow,
             r#"UPDATE bingo_games SET state = ?
@@ -99,9 +110,10 @@ RETURNING
         row.try_into()
     }
 
-    pub async fn set_default_game(&self, chat_id: i64, slug: &str) -> Result<Game> {
+    pub async fn set_default_game(&self, chat_id: ChatId, slug: &str) -> Result<Game> {
         let mut transaction = self.pool.begin().await?;
         let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
+        let chat_id = chat_id.0;
         sqlx::query!(
             r#"UPDATE bingo_games SET is_default = 0 WHERE chat_id = ?"#,
             chat_id,
@@ -123,7 +135,7 @@ RETURNING
         Ok(game)
     }
 
-    pub async fn set_center_text(&self, chat_id: i64, slug: &str, text: &str) -> Result<Game> {
+    pub async fn set_center_text(&self, chat_id: ChatId, slug: &str, text: &str) -> Result<Game> {
         validate_nonempty(text, "center text", 60)?;
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
@@ -148,7 +160,7 @@ impl TryFrom<GameRow> for Game {
     fn try_from(row: GameRow) -> Result<Self> {
         Ok(Self {
             id: row.id,
-            chat_id: row.chat_id,
+            chat_id: ChatId(row.chat_id),
             slug: row.slug,
             name: row.name,
             center_text: row.center_text,
@@ -160,9 +172,10 @@ impl TryFrom<GameRow> for Game {
 
 async fn fetch_game<'e>(
     executor: impl SqliteExecutor<'e>,
-    chat_id: i64,
+    chat_id: ChatId,
     slug: Option<&str>,
 ) -> Result<Game> {
+    let chat_id = chat_id.0;
     let row = sqlx::query_as!(
         GameRow,
         r#"SELECT
