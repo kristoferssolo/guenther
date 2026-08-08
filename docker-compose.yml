@@ -23,3 +23,5 @@ services:
     environment:
       API_URL: http://cobalt:9000/
       CORS_WILDCARD: "0"
+      HTTP_PROXY: ${COBALT_PROXY_URL:-}
+      HTTPS_PROXY: ${COBALT_PROXY_URL:-}

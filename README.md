@@ -41,6 +41,7 @@ Optional:
 - `CHAT_ID`: admin/debug chat that receives internal error messages
 - `COBALT_API_URL`: Cobalt processing endpoint; defaults to `http://127.0.0.1:9000/`
 - `COBALT_API_KEY`: API key for a protected external Cobalt instance; omit for the private Compose service
+- `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
 - `ENABLED_PLATFORMS`: comma-separated platforms to enable; defaults to all platforms
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
@@ -106,6 +107,20 @@ ENABLED_PLATFORMS=instagram,youtube docker compose up --build
 The Compose setup starts a private Cobalt sidecar that is reachable only from
 Guenther's Docker network. It does not expose Cobalt on a host port or provide
 social account cookies.
+
+If YouTube rejects the VPS IP with `error.api.youtube.login`, configure an
+HTTP(S) proxy with a different network exit in `.env` and recreate Cobalt:
+
+```env
+COBALT_PROXY_URL=http://username:password@proxy.example:8080
+```
+
+```bash
+docker compose up -d --force-recreate cobalt bot
+```
+
+The proxy is used only for Cobalt's outbound requests. It does not receive the
+Telegram bot token, and no YouTube account or cookies are required.
 
 The bot reads `.env` and mounts:
 
