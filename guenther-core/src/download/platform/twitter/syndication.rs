@@ -17,9 +17,7 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
     let image_urls = extract_photo_urls(&payload);
 
     if image_urls.is_empty() {
-        return Err(Error::ytdlp_failed(
-            "ERROR: [twitter] no downloadable images found in this tweet",
-        ));
+        return Err(Error::other("no downloadable images found in this post"));
     }
 
     let client = http_client()?;
@@ -50,6 +48,13 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
         files,
         source_text: parse_post_text_from_value(&payload),
     })
+}
+
+pub async fn fetch_tweet_text(url: &str) -> Result<Option<String>> {
+    let tweet_id =
+        extract_tweet_id(url).ok_or_else(|| Error::other("failed to extract tweet id"))?;
+    let payload = fetch_tweet_result(&tweet_id).await?;
+    Ok(parse_post_text_from_value(&payload))
 }
 
 fn http_client() -> Result<Client> {

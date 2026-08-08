@@ -23,6 +23,7 @@ struct CobaltRequest<'a> {
     video_quality: &'static str,
     youtube_video_codec: &'static str,
     youtube_video_container: &'static str,
+    convert_gif: bool,
     filename_style: &'static str,
     always_proxy: bool,
     local_processing: &'static str,
@@ -108,6 +109,7 @@ async fn request_download(
         video_quality: "1080",
         youtube_video_codec: "h264",
         youtube_video_container: "mp4",
+        convert_gif: false,
         filename_style: "basic",
         always_proxy: true,
         local_processing: "disabled",
@@ -191,6 +193,7 @@ mod tests {
             video_quality: "1080",
             youtube_video_codec: "h264",
             youtube_video_container: "mp4",
+            convert_gif: false,
             filename_style: "basic",
             always_proxy: true,
             local_processing: "disabled",
@@ -198,6 +201,7 @@ mod tests {
 
         let value = assert_ok!(to_value(request));
         assert_eq!(value["youtubeVideoCodec"], Value::String("h264".into()));
+        assert_eq!(value["convertGif"], Value::Bool(false));
         assert_eq!(value["alwaysProxy"], Value::Bool(true));
         assert_eq!(value["localProcessing"], Value::String("disabled".into()));
     }

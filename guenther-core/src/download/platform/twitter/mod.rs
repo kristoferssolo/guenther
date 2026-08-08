@@ -2,43 +2,41 @@ mod metadata;
 mod syndication;
 
 use crate::{
-    config::global_config,
-    download::{DownloadResult, platform::run_yt_dlp},
-    error::{Error, Result},
+    download::{DownloadResult, platform::cobalt::download_with_cobalt},
+    error::Result,
 };
 use tracing::warn;
 
 /// Download a Twitter URL.
 ///
-/// Uses `yt-dlp` for the normal path and falls back to the public syndication
-/// endpoint for image-only tweets that `yt-dlp` rejects as having no video.
+/// Uses Cobalt for media, fetches post text from the public syndication
+/// endpoint, and falls back to that endpoint for image-only posts.
 ///
 /// # Errors
 ///
 /// Returns any download, parsing, or network error encountered while fetching
-/// media via `yt-dlp` or the syndication fallback.
+/// media via Cobalt or the syndication fallback.
 pub async fn download_twitter(url: String) -> Result<DownloadResult> {
-    let config = global_config();
-
-    match run_yt_dlp(
-        &["-t", "mp4", "--write-info-json"],
-        config.twitter.cookies_path.as_deref(),
-        &url,
-    )
-    .await
-    {
+    match download_with_cobalt(&url).await {
         Ok(mut result) => {
-            result.source_text = metadata::extract_post_text(result.tempdir.path()).await;
+            result.source_text = match syndication::fetch_tweet_text(&url).await {
+                Ok(text) => text,
+                Err(err) => {
+                    warn!(url = %url, %err, "could not fetch post text from Twitter syndication");
+                    None
+                }
+            };
             Ok(result)
         }
-        Err(err) if is_image_tweet_fallback_case(&err) => {
-            warn!(url = %url, %err, "yt-dlp could not fetch twitter media; falling back to image downloader");
-            syndication::download_tweet_images(&url).await
-        }
-        Err(err) => Err(err),
+        Err(cobalt_error) => match syndication::download_tweet_images(&url).await {
+            Ok(result) => {
+                warn!(url = %url, %cobalt_error, "Cobalt could not fetch Twitter media; used image fallback");
+                Ok(result)
+            }
+            Err(fallback_error) => {
+                warn!(url = %url, %fallback_error, "Twitter image fallback was not applicable");
+                Err(cobalt_error)
+            }
+        },
     }
-}
-
-fn is_image_tweet_fallback_case(err: &Error) -> bool {
-    matches!(err, Error::YTDLPFailed(message) if message.contains("No video could be found in this tweet"))
 }
