@@ -19,6 +19,7 @@ Everyone:
 /bingo get [game] [@user]
 /bingo add <entry>
 /bingo add <game> | <entry>
+/bingo generate [game]
 
 Chat administrators:
 /bingo game create <slug> <name>
@@ -35,7 +36,8 @@ Chat administrators:
 /bingo reset [game] @user
 /bingo card set <game> [@user] <A1-E5> <entry_number>
 
-You can omit @user when replying to that user 's message.
+Administrators can mark and reset any card.
+You can omit @user when replying to that user's message.
 Use /bingo import or /bingo reimport with a five-row, pipe-separated entry-number grid.";
 
 // Telegram allows 4096 characters; a smaller byte budget leaves conservative headroom.

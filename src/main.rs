@@ -136,8 +136,9 @@ async fn bingo_callback_handler(
     bot: Bot,
     query: teloxide::types::CallbackQuery,
     bingo_store: BingoStore,
+    admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
-    answer_callback(&bot, &query, &bingo_store).await?;
+    answer_callback(&bot, &query, &bingo_store, &admin_cache).await?;
     Ok(())
 }
 

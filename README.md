@@ -176,12 +176,13 @@ Anyone in the chat can list games and entries, add entries, or retrieve a card:
 /bingo entries [game]
 /bingo add <entry>
 /bingo add <game> | <entry>
+/bingo generate [game]
 /bingo get
 /bingo get [game] @username
 ```
 
 Only Telegram chat administrators can manage games, bulk-import entries, edit
-or delete entries, and manage cards:
+or delete entries, and manage other users' cards:
 
 ```text
 /bingo game create <slug> <name>
@@ -208,6 +209,9 @@ generating randomized cards. Generation samples without replacement and stores
 the resulting order. Editing or deleting an entry affects future cards only;
 existing cards retain their original text. `regenerate` explicitly replaces an
 existing card.
+
+Anyone can generate their own card. Chat administrators can generate,
+regenerate, mark, and reset cards for other users.
 
 ### Importing an entry list
 

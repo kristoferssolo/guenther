@@ -83,7 +83,15 @@ impl BingoCommand {
 
     #[must_use]
     pub const fn requires_admin(&self) -> bool {
-        matches!(self, Self::Game(_) | Self::Entry(_) | Self::Card(_))
+        match self {
+            Self::Help
+            | Self::Games
+            | Self::Entries { .. }
+            | Self::Get { .. }
+            | Self::Add { .. }
+            | Self::Card(CardAdmin::Generate { replace: false, .. }) => false,
+            Self::Game(_) | Self::Entry(_) | Self::Card(_) => true,
+        }
     }
 }
 
@@ -191,9 +199,15 @@ mod tests {
     #[test]
     fn adding_entries_does_not_require_an_administrator() {
         let add = assert_ok!(BingoCommand::parse("add safety car"));
+        let generate = assert_ok!(BingoCommand::parse("generate season"));
+        let regenerate = assert_ok!(BingoCommand::parse("regenerate season"));
+        let reset = assert_ok!(BingoCommand::parse("reset season @driver"));
         let edit = assert_ok!(BingoCommand::parse("edit season 1 red flag"));
 
         assert!(!add.requires_admin());
+        assert!(!generate.requires_admin());
+        assert!(regenerate.requires_admin());
+        assert!(reset.requires_admin());
         assert!(edit.requires_admin());
     }
 

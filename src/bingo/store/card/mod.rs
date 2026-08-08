@@ -178,13 +178,14 @@ impl BingoStore {
         card_id: CardId,
         user_id: UserId,
         position: Position,
+        can_edit_any_card: bool,
     ) -> Result<ToggleResult> {
         if position == Position::FREE {
             return Err(BingoError::FreeCell);
         }
         let mut transaction = self.pool.begin().await?;
         let context = fetch_toggle_context(&mut transaction, card_id).await?;
-        if context.user_id != db_user_id(user_id)? {
+        if context.user_id != db_user_id(user_id)? && !can_edit_any_card {
             return Err(BingoError::NotCardOwner);
         }
         if context.state.parse::<GameState>()? != GameState::Active {

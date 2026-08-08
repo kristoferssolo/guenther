@@ -159,7 +159,11 @@ async fn rejects_card_reset_after_game_is_closed() {
     let store = store().await;
     let owner = user(10, "driver");
     let card = setup_card(&store, &owner).await;
-    assert_ok!(store.toggle_cell(card.id, owner.user_id, position(0)).await);
+    assert_ok!(
+        store
+            .toggle_cell(card.id, owner.user_id, position(0), false)
+            .await
+    );
     assert_ok!(
         store
             .set_game_state(CHAT_ID, "season", GameState::Closed)
@@ -167,31 +171,62 @@ async fn rejects_card_reset_after_game_is_closed() {
     );
 
     assert_err!(store.reset_card(CHAT_ID, None, owner.user_id).await);
+    assert_err!(
+        store
+            .toggle_cell(card.id, UserId(99), position(1), true)
+            .await
+    );
     let fetched = assert_ok!(store.card(CHAT_ID, None, owner.user_id).await);
     assert!(assert_some!(fetched.cells.first()).marked);
 }
 
 #[tokio::test]
-async fn only_owner_can_mark_and_first_line_is_announced_once() {
+async fn owners_and_administrators_can_mark_and_first_line_is_announced_once() {
     let store = store().await;
     let owner = user(10, "driver");
     let card = setup_card(&store, &owner).await;
 
-    assert_err!(store.toggle_cell(card.id, UserId(99), position(0)).await);
+    assert_err!(
+        store
+            .toggle_cell(card.id, UserId(99), position(0), false)
+            .await
+    );
+    assert_ok!(
+        store
+            .toggle_cell(card.id, UserId(99), position(0), true)
+            .await
+    );
+    assert_ok!(
+        store
+            .toggle_cell(card.id, UserId(99), position(0), true)
+            .await
+    );
     for index in 0..4 {
         let toggle = assert_ok!(
             store
-                .toggle_cell(card.id, owner.user_id, position(index))
+                .toggle_cell(card.id, owner.user_id, position(index), false)
                 .await
         );
         assert!(!toggle.newly_completed);
     }
-    let toggle = assert_ok!(store.toggle_cell(card.id, owner.user_id, position(4)).await);
+    let toggle = assert_ok!(
+        store
+            .toggle_cell(card.id, owner.user_id, position(4), false)
+            .await
+    );
     assert!(toggle.newly_completed);
     assert!(toggle.card.has_bingo());
 
-    assert_ok!(store.toggle_cell(card.id, owner.user_id, position(4)).await);
-    let repeated = assert_ok!(store.toggle_cell(card.id, owner.user_id, position(4)).await);
+    assert_ok!(
+        store
+            .toggle_cell(card.id, owner.user_id, position(4), false)
+            .await
+    );
+    let repeated = assert_ok!(
+        store
+            .toggle_cell(card.id, owner.user_id, position(4), false)
+            .await
+    );
     assert!(!repeated.newly_completed);
 }
 

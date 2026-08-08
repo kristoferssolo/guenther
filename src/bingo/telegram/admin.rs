@@ -73,19 +73,36 @@ pub async fn is_chat_admin(bot: &Bot, message: &Message, cache: &AdminCache) -> 
     let Some(user) = message.from.as_ref() else {
         return Ok(false);
     };
-    if message.chat.is_private() {
+    is_user_chat_admin(
+        bot,
+        message.chat.id,
+        user.id,
+        message.chat.is_private(),
+        cache,
+    )
+    .await
+}
+
+pub async fn is_user_chat_admin(
+    bot: &Bot,
+    chat_id: ChatId,
+    user_id: UserId,
+    is_private_chat: bool,
+    cache: &AdminCache,
+) -> Result<bool> {
+    if is_private_chat {
         return Ok(true);
     }
-    if let Some(is_admin) = cache.status(message.chat.id, user.id).await {
+    if let Some(is_admin) = cache.status(chat_id, user_id).await {
         return Ok(is_admin);
     }
-    let administrators = bot.get_chat_administrators(message.chat.id).await?;
+    let administrators = bot.get_chat_administrators(chat_id).await?;
     let user_ids = administrators
         .into_iter()
         .map(|member| member.user.id)
         .collect::<HashSet<_>>();
-    let is_admin = user_ids.contains(&user.id);
-    cache.insert(message.chat.id, user_ids).await;
+    let is_admin = user_ids.contains(&user_id);
+    cache.insert(chat_id, user_ids).await;
     Ok(is_admin)
 }
 

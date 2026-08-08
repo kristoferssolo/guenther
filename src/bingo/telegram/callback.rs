@@ -3,7 +3,10 @@ use crate::bingo::{
     error::Result,
     model::{CardId, Position, ToggleResult},
     store::BingoStore,
-    telegram::render::{card_keyboard, render_card},
+    telegram::{
+        admin::{AdminCache, is_user_chat_admin},
+        render::{card_keyboard, render_card},
+    },
 };
 use teloxide::{
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
@@ -18,15 +21,37 @@ struct CardCallback {
     position: Position,
 }
 
-pub async fn answer_callback(bot: &Bot, query: &CallbackQuery, store: &BingoStore) -> Result<()> {
+pub async fn answer_callback(
+    bot: &Bot,
+    query: &CallbackQuery,
+    store: &BingoStore,
+    admin_cache: &AdminCache,
+) -> Result<()> {
     let Some(data) = query.data.as_deref() else {
         return Ok(());
     };
     let Some(callback) = parse_callback(data) else {
         return Ok(());
     };
+    let can_edit_any_card = if let Some(message) = query.regular_message() {
+        is_user_chat_admin(
+            bot,
+            message.chat.id,
+            query.from.id,
+            message.chat.is_private(),
+            admin_cache,
+        )
+        .await?
+    } else {
+        false
+    };
     let result = store
-        .toggle_cell(callback.card_id, query.from.id, callback.position)
+        .toggle_cell(
+            callback.card_id,
+            query.from.id,
+            callback.position,
+            can_edit_any_card,
+        )
         .await;
     match result {
         Ok(toggle) => finish_toggle(bot, query, toggle, callback.image_message_id).await,

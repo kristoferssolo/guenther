@@ -49,7 +49,9 @@ pub async fn execute_bingo(
         }
         BingoCommand::Game(command) => execute_game_admin(bot, message, store, command).await,
         BingoCommand::Entry(command) => execute_entry_admin(bot, message, store, command).await,
-        BingoCommand::Card(command) => execute_card_admin(bot, message, store, command).await,
+        BingoCommand::Card(command) => {
+            execute_card_admin(bot, message, store, admin_cache, command).await
+        }
     }
 }
 
@@ -172,6 +174,7 @@ async fn execute_card_admin(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
+    admin_cache: &AdminCache,
     command: CardAdmin,
 ) -> Result<()> {
     let chat_id = message.chat.id;
@@ -181,7 +184,15 @@ async fn execute_card_admin(
             target,
             replace,
         } => {
-            let owner = resolve_target(store, message, target.as_deref(), false).await?;
+            let owner = resolve_target(store, message, target.as_deref(), true).await?;
+            let actor_id = message
+                .from
+                .as_ref()
+                .ok_or(BingoError::PermissionDenied)?
+                .id;
+            if owner.user_id != actor_id && !is_chat_admin(bot, message, admin_cache).await? {
+                return Err(BingoError::PermissionDenied);
+            }
             let card = store
                 .generate_card(chat_id, slug.as_deref(), &owner, replace)
                 .await?;
