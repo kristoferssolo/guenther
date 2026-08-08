@@ -1,6 +1,6 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{CELL_COUNT, FREE_POSITION, GameState, ImportedCell, MAX_ENTRY_CHARS},
+    model::{CELL_COUNT, FREE_POSITION, GameState, ImportedCell, MAX_ENTRY_CHARS, Position},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub enum CardAdmin {
     Set {
         slug: String,
         target: Option<String>,
-        coordinate: String,
+        position: Position,
         text: String,
     },
     Reset {
@@ -245,18 +245,18 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
             Some(next.to_owned()),
             parts
                 .next()
-                .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?
-                .to_owned(),
+                .ok_or_else(|| usage("card set <slug> [@user] <cell> <text>"))?,
         )
     } else {
-        (None, next.to_owned())
+        (None, next)
     };
+    let position = coordinate.parse()?;
     let text = parts.collect::<Vec<_>>().join(" ");
     validate_text(&text, "cell")?;
     Ok(BingoCommand::Card(CardAdmin::Set {
         slug: slug.to_owned(),
         target,
-        coordinate,
+        position,
         text,
     }))
 }
@@ -403,5 +403,19 @@ mod tests {
     fn rejects_trailing_target_words() {
         assert_err!(BingoCommand::parse("get season @driver extra"));
         assert_err!(BingoCommand::parse("generate season driver"));
+    }
+
+    #[test]
+    fn validates_card_position_while_parsing() {
+        assert_err!(BingoCommand::parse("card set season Z9 incident"));
+        assert_ok_eq!(
+            BingoCommand::parse("card set season C2 incident"),
+            BingoCommand::Card(CardAdmin::Set {
+                slug: "season".to_owned(),
+                target: None,
+                position: "C2".parse().expect("test position is valid"),
+                text: "incident".to_owned(),
+            })
+        );
     }
 }

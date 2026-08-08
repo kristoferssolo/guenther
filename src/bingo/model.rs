@@ -8,6 +8,86 @@ pub const REQUIRED_ENTRIES: usize = CELL_COUNT - 1;
 pub const MAX_ENTRY_CHARS: usize = 60;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Position(u8);
+
+impl Position {
+    pub const FREE: Self = Self(12);
+
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    pub fn iter() -> impl ExactSizeIterator<Item = Self> {
+        let cell_count = u8::try_from(CELL_COUNT).expect("bingo cell count fits in a u8");
+        (0..cell_count).map(Self)
+    }
+}
+
+impl TryFrom<i64> for Position {
+    type Error = BingoError;
+
+    fn try_from(index: i64) -> Result<Self> {
+        usize::try_from(index)
+            .map_err(|_| BingoError::InvalidCommand(format!("invalid cell position `{index}`")))?
+            .try_into()
+    }
+}
+
+impl TryFrom<usize> for Position {
+    type Error = BingoError;
+
+    fn try_from(index: usize) -> Result<Self> {
+        if index < CELL_COUNT {
+            Ok(Self(
+                u8::try_from(index).expect("validated bingo position fits in a u8"),
+            ))
+        } else {
+            Err(BingoError::InvalidCommand(format!(
+                "invalid cell position `{index}`"
+            )))
+        }
+    }
+}
+
+impl From<Position> for i64 {
+    fn from(position: Position) -> Self {
+        Self::from(position.0)
+    }
+}
+
+impl FromStr for Position {
+    type Err = BingoError;
+
+    fn from_str(raw: &str) -> Result<Self> {
+        let normalized = raw.trim().to_ascii_uppercase();
+        let bytes = normalized.as_bytes();
+        if bytes.len() != 2
+            || !(b'A'..=b'E').contains(&bytes[0])
+            || !(b'1'..=b'5').contains(&bytes[1])
+        {
+            return Err(BingoError::InvalidCommand(format!(
+                "invalid cell `{raw}`; expected A1 through E5"
+            )));
+        }
+
+        let row = bytes[0] - b'A';
+        let column = bytes[1] - b'1';
+        let grid_side = u8::try_from(GRID_SIDE).expect("bingo grid side fits in a u8");
+        Ok(Self(row * grid_side + column))
+    }
+}
+
+impl fmt::Display for Position {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let grid_side = u8::try_from(GRID_SIDE).expect("bingo grid side fits in a u8");
+        let row = char::from(b'A' + self.0 / grid_side);
+        let column = self.0 % grid_side + 1;
+        write!(formatter, "{row}{column}")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
     Draft,
     Active,
@@ -82,17 +162,10 @@ pub struct Entry {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardCell {
-    pub position: usize,
+    pub position: Position,
     pub text: String,
     pub marked: bool,
     pub is_free: bool,
-}
-
-impl CardCell {
-    #[must_use]
-    pub fn coordinate(&self) -> String {
-        coordinate(self.position)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,26 +206,6 @@ pub fn normalize_entry(text: &str) -> String {
 }
 
 #[must_use]
-pub fn coordinate(position: usize) -> String {
-    let row = char::from(b'A' + u8::try_from(position / GRID_SIDE).unwrap_or_default());
-    let column = position % GRID_SIDE + 1;
-    format!("{row}{column}")
-}
-
-pub fn parse_coordinate(raw: &str) -> Result<usize> {
-    let normalized = raw.trim().to_ascii_uppercase();
-    let bytes = normalized.as_bytes();
-    if bytes.len() != 2 || !(b'A'..=b'E').contains(&bytes[0]) || !(b'1'..=b'5').contains(&bytes[1])
-    {
-        return Err(BingoError::InvalidCommand(format!(
-            "invalid cell `{raw}`; expected A1 through E5"
-        )));
-    }
-
-    Ok(usize::from(bytes[0] - b'A') * GRID_SIDE + usize::from(bytes[1] - b'1'))
-}
-
-#[must_use]
 pub fn has_bingo(cells: &[CardCell]) -> bool {
     if cells.len() != CELL_COUNT {
         return false;
@@ -172,20 +225,23 @@ mod tests {
 
     fn cells(marked_positions: &[usize]) -> Vec<CardCell> {
         (0..CELL_COUNT)
-            .map(|position| CardCell {
-                position,
-                text: coordinate(position),
-                marked: marked_positions.contains(&position),
-                is_free: position == FREE_POSITION,
+            .map(|index| {
+                let position = Position::try_from(index).expect("test position is valid");
+                CardCell {
+                    position,
+                    text: position.to_string(),
+                    marked: marked_positions.contains(&index),
+                    is_free: index == FREE_POSITION,
+                }
             })
             .collect()
     }
 
     #[test]
     fn coordinates_round_trip() {
-        assert_ok_eq!(parse_coordinate("a1"), 0);
-        assert_ok_eq!(parse_coordinate("E5"), 24);
-        assert_err!(parse_coordinate("F1"));
+        assert_ok_eq!("a1".parse::<Position>(), Position(0));
+        assert_ok_eq!("E5".parse::<Position>(), Position(24));
+        assert_err!("F1".parse::<Position>());
     }
 
     #[test]

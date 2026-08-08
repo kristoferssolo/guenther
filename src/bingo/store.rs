@@ -1,8 +1,8 @@
 use crate::bingo::{
     error::{BingoError, Result},
     model::{
-        CELL_COUNT, Card, CardCell, Entry, FREE_POSITION, Game, GameState, ImportedCell, KnownUser,
-        MAX_ENTRY_CHARS, REQUIRED_ENTRIES, ToggleResult, has_bingo, normalize_entry,
+        CELL_COUNT, Card, CardCell, Entry, Game, GameState, ImportedCell, KnownUser,
+        MAX_ENTRY_CHARS, Position, REQUIRED_ENTRIES, ToggleResult, has_bingo, normalize_entry,
     },
 };
 use rand::seq::SliceRandom;
@@ -61,7 +61,7 @@ struct CellRow {
 }
 
 struct NewCell<'a> {
-    position: usize,
+    position: Position,
     entry_id: Option<i64>,
     text: &'a str,
     marked: bool,
@@ -373,8 +373,8 @@ WHERE id = ? AND game_id IN
         delete_or_reject_existing(&mut transaction, game.id, owner.user_id, replace).await?;
         let card_id = insert_card(&mut transaction, game.id, owner).await?;
         let mut entries = entries.iter();
-        for position in 0..CELL_COUNT {
-            let cell = if position == FREE_POSITION {
+        for position in Position::iter() {
+            let cell = if position == Position::FREE {
                 NewCell {
                     position,
                     entry_id: None,
@@ -419,7 +419,9 @@ WHERE id = ? AND game_id IN
         delete_or_reject_existing(&mut transaction, game.id, owner.user_id, replace).await?;
         let card_id = insert_card(&mut transaction, game.id, owner).await?;
         for (position, cell) in imported.iter().enumerate() {
-            if position == FREE_POSITION {
+            let position = Position::try_from(position)
+                .expect("import length was validated before inserting cells");
+            if position == Position::FREE {
                 insert_cell(
                     &mut transaction,
                     card_id,
@@ -475,10 +477,10 @@ WHERE id = ? AND game_id IN
         chat_id: i64,
         slug: &str,
         user_id: i64,
-        position: usize,
+        position: Position,
         text: &str,
     ) -> Result<Card> {
-        if position == FREE_POSITION {
+        if position == Position::FREE {
             return Err(BingoError::FreeCell);
         }
         validate_nonempty(text, "cell", MAX_ENTRY_CHARS)?;
@@ -487,7 +489,7 @@ WHERE id = ? AND game_id IN
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
         let entry_id = upsert_entry(&mut *transaction, game.id, text).await?;
-        let position = db_position(position)?;
+        let position = i64::from(position);
         sqlx::query!(
             r#"UPDATE bingo_card_cells SET entry_id = ?, text = ?
 WHERE card_id = ? AND position = ?"#,
@@ -526,12 +528,12 @@ WHERE card_id = ? AND position = ?"#,
         &self,
         card_id: i64,
         user_id: i64,
-        position: usize,
+        position: Position,
     ) -> Result<ToggleResult> {
-        if position == FREE_POSITION {
+        if position == Position::FREE {
             return Err(BingoError::FreeCell);
         }
-        let position = db_position(position)?;
+        let position = i64::from(position);
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"SELECT
@@ -760,7 +762,7 @@ async fn insert_cell(
         marked,
         is_free,
     } = cell;
-    let position = db_position(position)?;
+    let position = i64::from(position);
     let text = text.trim();
     sqlx::query!(
         r#"INSERT INTO bingo_card_cells
@@ -775,11 +777,6 @@ async fn insert_cell(
     .execute(&mut **transaction)
     .await?;
     Ok(())
-}
-
-fn db_position(position: usize) -> Result<i64> {
-    i64::try_from(position)
-        .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))
 }
 
 async fn upsert_entry<'e>(
@@ -837,7 +834,7 @@ async fn card_id_in(
 fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
     rows.into_iter()
         .map(|row| {
-            let position = usize::try_from(row.position).map_err(|_| {
+            let position = Position::try_from(row.position).map_err(|_| {
                 BingoError::Conflict("database contains an invalid cell position".to_owned())
             })?;
             Ok(CardCell {
@@ -924,6 +921,10 @@ mod tests {
         }
     }
 
+    fn position(index: usize) -> Position {
+        Position::try_from(index).expect("test position is valid")
+    }
+
     async fn store() -> BingoStore {
         BingoStore::connect("sqlite::memory:")
             .await
@@ -959,8 +960,8 @@ mod tests {
         let owner = user(10, "driver");
         let card = setup_card(&store, &owner).await;
         assert_eq!(card.cells.len(), CELL_COUNT);
-        assert!(card.cells[FREE_POSITION].is_free);
-        assert!(card.cells[FREE_POSITION].marked);
+        assert!(card.cells[Position::FREE.index()].is_free);
+        assert!(card.cells[Position::FREE.index()].marked);
         let fetched = store
             .card(1, None, owner.user_id)
             .await
@@ -983,24 +984,24 @@ mod tests {
         let owner = user(10, "driver");
         let card = setup_card(&store, &owner).await;
 
-        assert_err!(store.toggle_cell(card.id, 99, 0).await);
-        for position in 0..4 {
+        assert_err!(store.toggle_cell(card.id, 99, position(0)).await);
+        for index in 0..4 {
             let toggle = store
-                .toggle_cell(card.id, owner.user_id, position)
+                .toggle_cell(card.id, owner.user_id, position(index))
                 .await
                 .expect("mark cell");
             assert!(!toggle.newly_completed);
         }
         let toggle = store
-            .toggle_cell(card.id, owner.user_id, 4)
+            .toggle_cell(card.id, owner.user_id, position(4))
             .await
             .expect("complete row");
         assert!(toggle.newly_completed);
         assert!(toggle.card.has_bingo());
 
-        assert_ok!(store.toggle_cell(card.id, owner.user_id, 4).await);
+        assert_ok!(store.toggle_cell(card.id, owner.user_id, position(4)).await);
         let repeated = store
-            .toggle_cell(card.id, owner.user_id, 4)
+            .toggle_cell(card.id, owner.user_id, position(4))
             .await
             .expect("complete same row again");
         assert!(!repeated.newly_completed);

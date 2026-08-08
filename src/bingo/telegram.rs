@@ -1,7 +1,7 @@
 use crate::bingo::{
     command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
     error::{BingoError, Result},
-    model::{Card, KnownUser, ToggleResult, parse_coordinate},
+    model::{Card, KnownUser, Position, ToggleResult},
     store::BingoStore,
 };
 use teloxide::{
@@ -251,11 +251,10 @@ async fn execute_card_admin(
         CardAdmin::Set {
             slug,
             target,
-            coordinate: raw_coordinate,
+            position,
             text,
         } => {
             let owner = resolve_target(store, message, target.as_deref(), false).await?;
-            let position = parse_coordinate(&raw_coordinate)?;
             let card = store
                 .set_card_cell(chat_id, &slug, owner.user_id, position, &text)
                 .await?;
@@ -392,7 +391,7 @@ fn render_card(card: &Card) -> String {
         } else {
             "○"
         };
-        format!("{marker} {}  {}", cell.coordinate(), cell.text)
+        format!("{marker} {}  {}", cell.position, cell.text)
     }));
     if card.has_bingo() {
         lines.push(String::new());
@@ -412,13 +411,13 @@ fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
                     let label = if cell.is_free {
                         "★ C3".to_owned()
                     } else if cell.marked {
-                        format!("✓ {}", cell.coordinate())
+                        format!("✓ {}", cell.position)
                     } else {
-                        cell.coordinate()
+                        cell.position.to_string()
                     };
                     InlineKeyboardButton::callback(
                         label,
-                        format!("b:{}:{}", card.id, cell.position),
+                        format!("b:{}:{}", card.id, cell.position.index()),
                     )
                 })
                 .collect::<Vec<_>>()
@@ -427,14 +426,11 @@ fn card_keyboard(card: &Card) -> InlineKeyboardMarkup {
     InlineKeyboardMarkup::new(rows)
 }
 
-fn parse_callback(data: &str) -> Option<(i64, usize)> {
-    let mut parts = data.split(':');
-    if parts.next()? != "b" {
-        return None;
-    }
-    let card_id = parts.next()?.parse().ok()?;
-    let position = parts.next()?.parse().ok()?;
-    (parts.next().is_none()).then_some((card_id, position))
+fn parse_callback(data: &str) -> Option<(i64, Position)> {
+    let (card_id, position) = data.strip_prefix("b:")?.split_once(':')?;
+    let card_id = card_id.parse().ok()?;
+    let position = position.parse::<usize>().ok()?.try_into().ok()?;
+    Some((card_id, position))
 }
 
 fn known_user(user: &User) -> Result<KnownUser> {
@@ -482,8 +478,15 @@ mod tests {
 
     #[test]
     fn callback_data_round_trips() {
-        assert_eq!(parse_callback("b:42:7"), Some((42, 7)));
+        assert_eq!(
+            parse_callback("b:42:7"),
+            Some((
+                42,
+                Position::try_from(7_usize).expect("callback test position is valid"),
+            ))
+        );
         assert_eq!(parse_callback("other:42:7"), None);
         assert_eq!(parse_callback("b:42"), None);
+        assert_eq!(parse_callback("b:42:25"), None);
     }
 }
