@@ -12,7 +12,7 @@ use crate::{
     voice_lines::capture_incoming_voice_line,
 };
 use dotenv::dotenv;
-use guenther_core::{
+use guenther::{
     comments::{Comments, failure_comment},
     config::{Config, global_config},
     telemetry::setup_logger,

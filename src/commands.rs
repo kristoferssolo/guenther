@@ -1,4 +1,4 @@
-use guenther_core::{
+use guenther::{
     comments::global_comments,
     config::global_config,
     f1::{ScheduleView, next_race_message},

@@ -1,16 +1,14 @@
-[workspace]
-members = ["guenther-core", "telegram"]
-resolver = "3"
-
-[workspace.package]
+[package]
+name = "guenther"
 version = "0.1.0"
 authors = ["Kristofers Solo <dev@kristofers.xyz>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 
-[workspace.dependencies]
-guenther-core = { path = "guenther-core" }
+[features]
+voice-line-capture = []
 
+[dependencies]
 async-trait = "0.1"
 capitalize = "0.3.4"
 color-eyre = "0.6"
@@ -34,19 +32,25 @@ teloxide = { version = "0.17", default-features = false, features = [
 tempfile = "3"
 thiserror = "2.0"
 time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
-tokio = { version = "1", features = ["process", "fs", "io-util"] }
+tokio = { version = "1", features = [
+  "fs",
+  "io-util",
+  "macros",
+  "process",
+  "rt-multi-thread",
+] }
 toml = "1.1"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 url = "2.5"
 
-# dev
+[dev-dependencies]
 claims = "0.8"
-temp-env = "0.3"
 rstest = "0.26"
+temp-env = "0.3"
 
-[workspace.lints.clippy]
+[lints.clippy]
 nursery = "warn"
 pedantic = "warn"
 unwrap_used = "warn"

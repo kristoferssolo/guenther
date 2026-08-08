@@ -1,4 +1,4 @@
-use guenther_core::{
+use guenther::{
     comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
     config::{Platform, PlatformConfig},
     download::{DownloadResult, collect_supported_media},
@@ -95,25 +95,25 @@ pub fn create_handlers(platforms: &PlatformConfig) -> Arc<[Handler]> {
             "instagram",
             Platform::Instagram,
             r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/([A-Za-z0-9_-]+)",
-            guenther_core::download::platform::instagram::download_instagram
+            guenther::download::platform::instagram::download_instagram
         ),
         handler!(
             "youtube",
             Platform::Youtube,
             r"https?://(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
-            guenther_core::download::platform::youtube::download_youtube
+            guenther::download::platform::youtube::download_youtube
         ),
         handler!(
             "twitter",
             Platform::Twitter,
             r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
-            guenther_core::download::platform::twitter::download_twitter
+            guenther::download::platform::twitter::download_twitter
         ),
         handler!(
             "tiktok",
             Platform::Tiktok,
             r"https?://(?:www\.)?(?:vm|vt|tt|tik)\.tiktok\.com/([A-Za-z0-9_-]+)[/?#]?",
-            guenther_core::download::platform::tiktok::download_tiktok
+            guenther::download::platform::tiktok::download_tiktok
         ),
     ]
     .into_iter()

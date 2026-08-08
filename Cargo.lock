@@ -659,12 +659,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
-name = "guenther-core"
+name = "guenther"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "capitalize",
  "claims",
+ "color-eyre",
+ "dotenv",
  "futures",
  "infer",
  "rand 0.10.0",
@@ -673,11 +675,13 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
+ "teloxide",
  "temp-env",
  "tempfile",
  "thiserror 2.0.18",
  "time",
  "tokio",
+ "toml",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -2148,23 +2152,6 @@ name = "takecell"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20f34339676cdcab560c9a82300c4c2581f68b9369aedf0fae86f2ff9565ff3e"
-
-[[package]]
-name = "telegram"
-version = "0.1.0"
-dependencies = [
- "color-eyre",
- "dotenv",
- "guenther-core",
- "regex",
- "serde",
- "serde_json",
- "teloxide",
- "tempfile",
- "tokio",
- "toml",
- "tracing",
-]
 
 [[package]]
 name = "teloxide"

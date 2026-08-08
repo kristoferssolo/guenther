@@ -7,10 +7,7 @@ ENV CARGO_INCREMENTAL=0
 
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-COPY guenther-core/Cargo.toml ./guenther-core/Cargo.toml
-COPY telegram/Cargo.toml ./telegram/Cargo.toml
-RUN mkdir -p guenther-core/src && touch guenther-core/src/lib.rs\
-    && mkdir -p telegram/src && touch telegram/src/main.rs
+RUN mkdir -p src && touch src/lib.rs src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 
@@ -20,18 +17,15 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo chef cook --locked --release --package telegram ${RUST_FEATURES} --recipe-path recipe.json
+    cargo chef cook --locked --release ${RUST_FEATURES} --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
-COPY guenther-core/Cargo.toml ./guenther-core/Cargo.toml
-COPY telegram/Cargo.toml ./telegram/Cargo.toml
-COPY guenther-core/src ./guenther-core/src
-COPY telegram/src ./telegram/src
+COPY src ./src
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
-    cargo build --locked --release --package telegram ${RUST_FEATURES}\
-    && strip target/release/telegram \
-    && cp target/release/telegram /app/guenther
+    cargo build --locked --release ${RUST_FEATURES}\
+    && strip target/release/guenther \
+    && cp target/release/guenther /app/guenther
 
 
 FROM debian:trixie-slim AS runtime

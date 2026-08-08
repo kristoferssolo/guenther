@@ -1,5 +1,5 @@
 use claims::{assert_none, assert_some};
-use guenther_core::config::{Config, Platform};
+use guenther::config::{Config, Platform};
 use temp_env::with_vars;
 
 fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
