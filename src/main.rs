@@ -35,8 +35,8 @@ async fn main() -> color_eyre::Result<()> {
     Comments::load_from_file("comments.txt")
         .await
         .unwrap_or_else(|e| {
-            warn!("failed to load comments.txt: {e}; using dummy comments");
-            Comments::dummy()
+            warn!("failed to load comments.txt: {e}; using fallback comments");
+            Comments::default()
         })
         .init()?;
 

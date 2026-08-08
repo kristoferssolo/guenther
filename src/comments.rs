@@ -36,16 +36,6 @@ pub struct Comments {
 }
 
 impl Comments {
-    /// Create a small dummy/default Comments instance (useful for tests or fallback).
-    #[must_use]
-    pub fn dummy() -> Self {
-        let lines = FALLBACK_COMMENTS
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        Self { lines }
-    }
-
     /// Load comments from a plaintext file asynchronously.
     ///
     /// # Errors
@@ -113,6 +103,14 @@ impl Comments {
     }
 }
 
+impl Default for Comments {
+    fn default() -> Self {
+        Self {
+            lines: FALLBACK_COMMENTS.iter().map(ToString::to_string).collect(),
+        }
+    }
+}
+
 /// Get global comments (initialized by `Comments::init(self)`).
 ///
 /// # Panics
@@ -156,8 +154,8 @@ impl From<&Comments> for String {
 mod tests {
     use super::*;
     #[test]
-    fn dummy_comments() {
-        let comments = Comments::dummy();
+    fn default_comments_use_fallbacks() {
+        let comments = Comments::default();
         assert_eq!(comments.lines.len(), FALLBACK_COMMENTS.len());
         assert!(!comments.lines.is_empty());
     }
