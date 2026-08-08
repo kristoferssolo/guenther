@@ -1,7 +1,7 @@
 use super::*;
 use crate::bingo::model::{
-    CELL_COUNT, Card, GameState, ImportedCell, KnownUser, MAX_GAME_DESCRIPTION_CHARS, Position,
-    REQUIRED_ENTRIES,
+    CELL_COUNT, Card, EntryId, GameState, ImportedCell, KnownUser, MAX_GAME_DESCRIPTION_CHARS,
+    Position, REQUIRED_ENTRIES,
 };
 use claims::{assert_err, assert_ok, assert_ok_eq};
 use teloxide::types::{ChatId, UserId};
@@ -309,7 +309,7 @@ async fn imports_cards_from_active_game_entry_ids() {
     assert!(card.cells[Position::FREE.index()].is_free);
 
     let mut invalid = imported;
-    invalid[0].entry_id = Some(i64::MAX);
+    invalid[0].entry_id = Some(EntryId::from(i64::MAX));
     assert_err!(
         store
             .import_card(CHAT_ID, "season", &owner, &invalid, true)

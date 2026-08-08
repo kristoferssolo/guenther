@@ -110,7 +110,7 @@ fn ordered_cells(cells: &[CardCell]) -> Result<[&CardCell; CELL_COUNT]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::{Game, GameState, KnownUser, Position};
+    use crate::bingo::model::{CardId, Game, GameId, GameState, KnownUser, Position};
     use claims::{assert_err, assert_ok};
     use image::GenericImageView;
     use teloxide::types::{ChatId, UserId};
@@ -131,9 +131,9 @@ mod tests {
             .collect::<Vec<_>>();
         cells.reverse();
         Card {
-            id: 42,
+            id: CardId::from(42),
             game: Game {
-                id: 1,
+                id: GameId::from(1),
                 chat_id: ChatId(7),
                 slug: "season-2026".to_owned(),
                 name: "2026 Formula One Bingo".to_owned(),

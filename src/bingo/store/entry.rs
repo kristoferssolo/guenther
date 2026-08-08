@@ -1,6 +1,6 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{Entry, Game, MAX_ENTRY_CHARS, normalize_entry},
+    model::{Entry, EntryId, Game, GameId, MAX_ENTRY_CHARS, normalize_entry},
     store::{
         BingoStore,
         validation::{ensure_editable, map_unique, require_changed, validate_nonempty},
@@ -44,7 +44,7 @@ impl BingoStore {
             EntryRow,
             r#"SELECT id, game_id, text FROM bingo_entries
 WHERE game_id = ? AND active = 1 ORDER BY id"#,
-            game.id,
+            game.id.get(),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -74,7 +74,12 @@ WHERE game_id = ? AND active = 1 ORDER BY id"#,
         Ok(imported_ids.len())
     }
 
-    pub async fn edit_entry(&self, chat_id: ChatId, entry_id: i64, text: &str) -> Result<Entry> {
+    pub async fn edit_entry(
+        &self,
+        chat_id: ChatId,
+        entry_id: EntryId,
+        text: &str,
+    ) -> Result<Entry> {
         validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
         let normalized = normalize_entry(text);
         let chat_id = chat_id.0;
@@ -86,7 +91,7 @@ WHERE id = ? AND game_id IN
 RETURNING id, game_id, text"#,
             text.trim(),
             normalized,
-            entry_id,
+            entry_id.get(),
             chat_id,
         )
         .fetch_optional(&self.pool)
@@ -96,13 +101,13 @@ RETURNING id, game_id, text"#,
         Ok(row.into())
     }
 
-    pub async fn delete_entry(&self, chat_id: ChatId, entry_id: i64) -> Result<()> {
+    pub async fn delete_entry(&self, chat_id: ChatId, entry_id: EntryId) -> Result<()> {
         let chat_id = chat_id.0;
         let result = sqlx::query!(
             r#"UPDATE bingo_entries SET active = 0
 WHERE id = ? AND game_id IN
 (SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1"#,
-            entry_id,
+            entry_id.get(),
             chat_id,
         )
         .execute(&self.pool)
@@ -116,8 +121,8 @@ WHERE id = ? AND game_id IN
 impl From<EntryRow> for Entry {
     fn from(row: EntryRow) -> Self {
         Self {
-            id: row.id,
-            game_id: row.game_id,
+            id: row.id.into(),
+            game_id: row.game_id.into(),
             text: row.text,
         }
     }
@@ -125,9 +130,9 @@ impl From<EntryRow> for Entry {
 
 pub async fn upsert_entry<'e>(
     executor: impl SqliteExecutor<'e>,
-    game_id: i64,
+    game_id: GameId,
     text: &str,
-) -> Result<i64> {
+) -> Result<EntryId> {
     validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
     let normalized = normalize_entry(text);
     let text = text.trim();
@@ -137,10 +142,11 @@ VALUES (?, ?, ?)
 ON CONFLICT(game_id, normalized_text)
 DO UPDATE SET text = excluded.text, active = 1
 RETURNING id"#,
-        game_id,
+        game_id.get(),
         text,
         normalized,
     )
     .fetch_one(executor)
-    .await?)
+    .await?
+    .into())
 }

@@ -127,7 +127,7 @@ is_default AS `is_default: bool`"#,
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
 is_default AS `is_default: bool`"#,
-            game.id,
+            game.id.get(),
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -147,7 +147,7 @@ RETURNING
 id, chat_id, slug, name, description, center_text, state,
 is_default AS `is_default: bool`"#,
             text.trim(),
-            game.id,
+            game.id.get(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -175,7 +175,7 @@ RETURNING
 id, chat_id, slug, name, description, center_text, state,
 is_default AS `is_default: bool`"#,
             description,
-            game.id,
+            game.id.get(),
         )
         .fetch_one(&self.pool)
         .await?;
@@ -188,7 +188,7 @@ impl TryFrom<GameRow> for Game {
 
     fn try_from(row: GameRow) -> Result<Self> {
         Ok(Self {
-            id: row.id,
+            id: row.id.into(),
             chat_id: ChatId(row.chat_id),
             slug: row.slug,
             name: row.name,

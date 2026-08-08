@@ -1,7 +1,7 @@
 use crate::bingo::{
     command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
     error::{BingoError, Result},
-    model::{CELL_COUNT, FREE_POSITION, GameState, ImportedCell, MAX_ENTRY_CHARS},
+    model::{CELL_COUNT, EntryId, FREE_POSITION, GameState, ImportedCell, MAX_ENTRY_CHARS},
 };
 
 pub fn parse(input: &str) -> Result<BingoCommand> {
@@ -275,7 +275,7 @@ fn optional_word(input: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_owned())
 }
 
-fn parse_id(raw: &str, label: &str) -> Result<i64> {
+fn parse_id(raw: &str, label: &str) -> Result<EntryId> {
     raw.parse()
         .map_err(|_| BingoError::InvalidCommand(format!("invalid {label} `{raw}`")))
 }

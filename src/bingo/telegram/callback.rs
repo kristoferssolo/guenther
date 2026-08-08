@@ -1,7 +1,7 @@
 use crate::bingo::{
     card_image::render_card_png,
     error::Result,
-    model::{Position, ToggleResult},
+    model::{CardId, Position, ToggleResult},
     store::BingoStore,
     telegram::render::{card_keyboard, render_card},
 };
@@ -13,7 +13,7 @@ use teloxide::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CardCallback {
-    card_id: i64,
+    card_id: CardId,
     image_message_id: Option<MessageId>,
     position: Position,
 }
@@ -104,7 +104,7 @@ async fn edit_card_image(
 }
 
 pub(super) fn format_callback(
-    card_id: i64,
+    card_id: CardId,
     image_message_id: Option<MessageId>,
     position: Position,
 ) -> String {
@@ -137,7 +137,7 @@ fn parse_callback(data: &str) -> Option<CardCallback> {
 #[cfg(test)]
 mod tests {
     use crate::bingo::{
-        model::Position,
+        model::{CardId, Position},
         telegram::callback::{CardCallback, format_callback, parse_callback, win_message},
     };
     use claims::{assert_none, assert_some_eq};
@@ -148,7 +148,7 @@ mod tests {
         assert_some_eq!(
             parse_callback("b:42:7"),
             CardCallback {
-                card_id: 42,
+                card_id: CardId::from(42),
                 image_message_id: None,
                 position: Position::try_from(7_usize).expect("valid test position"),
             }
@@ -156,7 +156,7 @@ mod tests {
         assert_some_eq!(
             parse_callback("b:42:314:7"),
             CardCallback {
-                card_id: 42,
+                card_id: CardId::from(42),
                 image_message_id: Some(MessageId(314)),
                 position: Position::try_from(7_usize).expect("valid test position"),
             }
@@ -170,8 +170,8 @@ mod tests {
     #[test]
     fn callback_data_preserves_image_message_ids_and_fits_telegram() {
         let position = Position::try_from(24_usize).expect("valid test position");
-        let legacy = format_callback(i64::MAX, None, position);
-        let current = format_callback(i64::MIN, Some(MessageId(i32::MIN)), position);
+        let legacy = format_callback(CardId::from(i64::MAX), None, position);
+        let current = format_callback(CardId::from(i64::MIN), Some(MessageId(i32::MIN)), position);
         assert_eq!(legacy, format!("b:{}:24", i64::MAX));
         assert_eq!(current, format!("b:{}:{}:24", i64::MIN, i32::MIN));
         assert!(legacy.len() <= 64);

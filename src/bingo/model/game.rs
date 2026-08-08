@@ -1,4 +1,7 @@
-use crate::bingo::error::{BingoError, Result};
+use crate::bingo::{
+    error::{BingoError, Result},
+    model::GameId,
+};
 use std::{fmt, str::FromStr};
 use teloxide::types::ChatId;
 
@@ -44,7 +47,7 @@ impl fmt::Display for GameState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Game {
-    pub id: i64,
+    pub id: GameId,
     pub chat_id: ChatId,
     pub slug: String,
     pub name: String,

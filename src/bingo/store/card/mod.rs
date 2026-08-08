@@ -3,8 +3,8 @@ mod queries;
 use crate::bingo::{
     error::{BingoError, Result},
     model::{
-        CELL_COUNT, Card, GameState, ImportedCell, KnownUser, Position, REQUIRED_ENTRIES,
-        ToggleResult, has_bingo,
+        CELL_COUNT, Card, CardId, EntryId, GameState, ImportedCell, KnownUser, Position,
+        REQUIRED_ENTRIES, ToggleResult, has_bingo,
     },
     store::{
         BingoStore,
@@ -144,7 +144,7 @@ impl BingoStore {
         slug: &str,
         user_id: UserId,
         position: Position,
-        entry_id: i64,
+        entry_id: EntryId,
     ) -> Result<Card> {
         if position == Position::FREE {
             return Err(BingoError::FreeCell);
@@ -176,7 +176,7 @@ impl BingoStore {
 
     pub async fn toggle_cell(
         &self,
-        card_id: i64,
+        card_id: CardId,
         user_id: UserId,
         position: Position,
     ) -> Result<ToggleResult> {

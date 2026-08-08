@@ -1,7 +1,9 @@
 mod parser;
 
-use crate::bingo::error::Result;
-use crate::bingo::model::{GameState, ImportedCell, Position};
+use crate::bingo::{
+    error::Result,
+    model::{EntryId, GameState, ImportedCell, Position},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BingoCommand {
@@ -35,8 +37,8 @@ pub enum GameAdmin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryAdmin {
     Import { slug: String },
-    Edit { entry_id: i64, text: String },
-    Delete { entry_id: i64 },
+    Edit { entry_id: EntryId, text: String },
+    Delete { entry_id: EntryId },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,7 +58,7 @@ pub enum CardAdmin {
         slug: String,
         target: Option<String>,
         position: Position,
-        entry_id: i64,
+        entry_id: EntryId,
     },
     Reset {
         slug: Option<String>,
@@ -79,7 +81,7 @@ impl BingoCommand {
 mod tests {
     use crate::bingo::{
         command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
-        model::FREE_POSITION,
+        model::{EntryId, FREE_POSITION},
     };
     use claims::{assert_err, assert_ok_eq};
 
@@ -109,7 +111,7 @@ mod tests {
             panic!("expected import")
         };
         assert!(cells[0].marked);
-        assert_eq!(cells[0].entry_id, Some(81));
+        assert_eq!(cells[0].entry_id, Some(EntryId::from(81)));
         assert!(cells[FREE_POSITION].marked);
         assert!(cells[FREE_POSITION].is_free);
         assert_eq!(cells[FREE_POSITION].entry_id, None);
@@ -157,7 +159,7 @@ mod tests {
                 slug: "season".to_owned(),
                 target: None,
                 position: "C2".parse().expect("test position is valid"),
-                entry_id: 42,
+                entry_id: EntryId::from(42),
             })
         );
         assert_ok_eq!(
@@ -166,7 +168,7 @@ mod tests {
                 slug: "season".to_owned(),
                 target: Some("@driver".to_owned()),
                 position: "C2".parse().expect("test position is valid"),
-                entry_id: 42,
+                entry_id: EntryId::from(42),
             })
         );
         assert_err!(BingoCommand::parse("card set season C2 incident"));
