@@ -1,5 +1,5 @@
 use crate::bingo::error::{BingoError, Result};
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 pub const GRID_SIDE: usize = 5;
 pub const CELL_COUNT: usize = GRID_SIDE * GRID_SIDE;
@@ -25,10 +25,10 @@ impl GameState {
     }
 }
 
-impl TryFrom<&str> for GameState {
-    type Error = BingoError;
+impl FromStr for GameState {
+    type Err = BingoError;
 
-    fn try_from(value: &str) -> Result<Self> {
+    fn from_str(value: &str) -> Result<Self> {
         match value {
             "draft" => Ok(Self::Draft),
             "active" => Ok(Self::Active),

@@ -547,7 +547,7 @@ WHERE c.id = ?"#,
         if row.user_id != user_id {
             return Err(BingoError::NotCardOwner);
         }
-        if GameState::try_from(row.state.as_str())? != GameState::Active {
+        if row.state.parse::<GameState>()? != GameState::Active {
             return Err(BingoError::GameNotActive);
         }
         let result = sqlx::query!(
@@ -622,7 +622,7 @@ WHERE chat_id = ? AND user_id = ?"#,
                 slug: row.slug,
                 name: row.game_name,
                 center_text: row.center_text,
-                state: GameState::try_from(row.state.as_str())?,
+                state: row.state.parse()?,
                 is_default: row.is_default,
             },
             owner: user,
@@ -642,7 +642,7 @@ impl TryFrom<GameRow> for Game {
             slug: row.slug,
             name: row.name,
             center_text: row.center_text,
-            state: GameState::try_from(row.state.as_str())?,
+            state: row.state.parse()?,
             is_default: row.is_default,
         })
     }
