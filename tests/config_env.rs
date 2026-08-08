@@ -1,4 +1,4 @@
-use claims::{assert_none, assert_some};
+use claims::{assert_err, assert_none, assert_ok_eq, assert_some};
 use guenther::config::{Config, Platform};
 use temp_env::with_vars;
 
@@ -101,6 +101,14 @@ fn from_env_enables_selected_platforms() {
             assert!(!platforms.is_enabled(Platform::Youtube));
         });
     });
+}
+
+#[test]
+fn platforms_parse_and_display_with_standard_traits() {
+    assert_ok_eq!(" Instagram ".parse::<Platform>(), Platform::Instagram);
+    assert_ok_eq!("x".parse::<Platform>(), Platform::Twitter);
+    assert_err!("mastodon".parse::<Platform>());
+    assert_eq!(Platform::Youtube.to_string(), "youtube");
 }
 
 #[test]

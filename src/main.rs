@@ -48,7 +48,10 @@ async fn main() -> color_eyre::Result<()> {
     info!(name = %bot_name, "bot starting");
 
     let handlers = create_handlers(&global_config().platforms);
-    let enabled_platforms = handlers.iter().map(Handler::name).collect::<Vec<_>>();
+    let enabled_platforms = handlers
+        .iter()
+        .map(|handler| handler.platform().to_string())
+        .collect::<Vec<_>>();
     info!(?enabled_platforms, "platform handlers configured");
 
     #[cfg(feature = "bingo")]

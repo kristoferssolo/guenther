@@ -1,6 +1,13 @@
 use crate::error::{Error, Result};
 use chrono::{FixedOffset, Offset, Utc};
-use std::{collections::HashSet, env, fmt::Debug, sync::OnceLock};
+use std::{
+    collections::HashSet,
+    env,
+    fmt::{self, Display},
+    str::FromStr,
+    sync::OnceLock,
+};
+use thiserror::Error as ThisError;
 use tracing::warn;
 
 static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
@@ -31,6 +38,10 @@ pub enum Platform {
     Twitter,
     Youtube,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, ThisError)]
+#[error("unknown platform `{0}`")]
+pub struct ParsePlatformError(String);
 
 #[derive(Debug, Clone, Copy)]
 pub struct F1Config {
@@ -114,14 +125,13 @@ impl PlatformConfig {
             .map(str::trim)
             .filter(|name| !name.is_empty())
         {
-            let platform = match name.to_ascii_lowercase().as_str() {
-                "all" => return Self::default(),
-                "instagram" => Platform::Instagram,
-                "tiktok" => Platform::Tiktok,
-                "twitter" | "x" => Platform::Twitter,
-                "youtube" => Platform::Youtube,
-                unknown => {
-                    warn!(platform = unknown, "unknown platform in ENABLED_PLATFORMS");
+            if name.eq_ignore_ascii_case("all") {
+                return Self::default();
+            }
+            let platform = match name.parse() {
+                Ok(platform) => platform,
+                Err(error) => {
+                    warn!(%error, "unknown platform in ENABLED_PLATFORMS");
                     continue;
                 }
             };
@@ -145,15 +155,30 @@ impl PlatformConfig {
 
 impl Platform {
     pub const ALL: [Self; 4] = [Self::Instagram, Self::Tiktok, Self::Twitter, Self::Youtube];
+}
 
-    #[must_use]
-    pub const fn name(self) -> &'static str {
-        match self {
+impl FromStr for Platform {
+    type Err = ParsePlatformError;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "instagram" => Ok(Self::Instagram),
+            "tiktok" => Ok(Self::Tiktok),
+            "twitter" | "x" => Ok(Self::Twitter),
+            "youtube" => Ok(Self::Youtube),
+            _ => Err(ParsePlatformError(value.to_owned())),
+        }
+    }
+}
+
+impl Display for Platform {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
             Self::Instagram => "instagram",
             Self::Tiktok => "tiktok",
             Self::Twitter => "twitter",
             Self::Youtube => "youtube",
-        }
+        })
     }
 }
 

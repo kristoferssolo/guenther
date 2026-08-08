@@ -43,12 +43,6 @@ impl Handler {
         self.platform
     }
 
-    #[inline]
-    #[must_use]
-    pub const fn name(&self) -> &'static str {
-        self.platform.name()
-    }
-
     #[must_use]
     pub fn try_extract<'a>(&self, text: &'a str) -> Option<&'a str> {
         self.regex
@@ -57,7 +51,7 @@ impl Handler {
     }
 
     pub async fn handle(&self, bot: &Bot, chat_id: ChatId, url: &str) -> Result<()> {
-        info!(handler = %self.name(), url = %url, "handling url");
+        info!(handler = %self.platform, url = %url, "handling url");
         let dr = (self.func)(url.to_owned()).await?;
         let source_text = dr.source_text.clone();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
