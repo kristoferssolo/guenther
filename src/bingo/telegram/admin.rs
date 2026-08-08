@@ -89,8 +89,10 @@ pub async fn is_chat_admin(bot: &Bot, message: &Message, cache: &AdminCache) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::bingo::telegram::admin::AdminCache;
     use claims::{assert_none, assert_some_eq};
+    use std::{collections::HashSet, time::Duration};
+    use teloxide::types::{ChatId, UserId};
 
     #[tokio::test]
     async fn administrator_cache_respects_expiration() {

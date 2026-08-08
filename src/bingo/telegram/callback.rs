@@ -67,7 +67,7 @@ fn parse_callback(data: &str) -> Option<(i64, Position)> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::bingo::{model::Position, telegram::callback::parse_callback};
     use claims::{assert_none, assert_some_eq};
 
     #[test]

@@ -222,7 +222,7 @@ pub fn has_bingo(cells: &[CardCell]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::bingo::model::{CELL_COUNT, CardCell, FREE_POSITION, Position, has_bingo};
     use claims::{assert_err, assert_ok_eq};
 
     fn cells(marked_positions: &[usize]) -> Vec<CardCell> {
