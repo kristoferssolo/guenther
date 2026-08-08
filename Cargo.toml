@@ -9,7 +9,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-guenther-core = { path = "guenther-core", default-features = false }
+guenther-core = { path = "guenther-core" }
 
 async-trait = "0.1"
 capitalize = "0.3.4"

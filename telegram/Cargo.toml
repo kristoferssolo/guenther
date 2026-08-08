@@ -6,11 +6,6 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["instagram", "tiktok", "twitter", "youtube"]
-instagram = ["guenther-core/instagram"]
-tiktok = ["guenther-core/tiktok"]
-twitter = ["guenther-core/twitter"]
-youtube = ["guenther-core/youtube"]
 voice-line-capture = []
 
 [dependencies]

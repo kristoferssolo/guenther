@@ -1,5 +1,6 @@
 use guenther_core::{
     comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
+    config::{Platform, PlatformConfig},
     download::{DownloadResult, collect_supported_media},
     error::{Error, Result},
     utils::MediaKind,
@@ -20,15 +21,6 @@ pub struct Handler {
     platform: Platform,
     regex: Regex,
     func: DownloadFn,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Platform {
-    Instagram,
-    Youtube,
-    Twitter,
-    Tiktok,
 }
 
 impl Handler {
@@ -70,9 +62,8 @@ impl Handler {
         let source_text = dr.source_text.clone();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
         let base_caption = global_comments().build_caption();
-        let include_source_text = self
-            .platform()
-            .should_include_source_text(&media_items, source_text.as_deref());
+        let include_source_text =
+            should_include_source_text(self.platform(), &media_items, source_text.as_deref());
 
         for (index, (path, kind)) in media_items.into_iter().enumerate() {
             let caption = if include_source_text && index == 0 {
@@ -88,18 +79,17 @@ impl Handler {
 }
 
 macro_rules! handler {
-    ($feature:expr, $platform:expr, $regex:expr, $download_fn:path) => {
-        #[cfg(feature = $feature)]
+    ($name:expr, $platform:expr, $regex:expr, $download_fn:path) => {
         Handler::new($platform, $regex, |url: String| Box::pin($download_fn(url))).expect(concat!(
             "failed to create ",
-            $feature,
+            $name,
             " handler"
         ))
     };
 }
 
 #[must_use]
-pub fn create_handlers() -> Arc<[Handler]> {
+pub fn create_handlers(platforms: &PlatformConfig) -> Arc<[Handler]> {
     [
         handler!(
             "instagram",
@@ -126,6 +116,9 @@ pub fn create_handlers() -> Arc<[Handler]> {
             guenther_core::download::platform::tiktok::download_tiktok
         ),
     ]
+    .into_iter()
+    .filter(|handler| platforms.is_enabled(handler.platform()))
+    .collect::<Vec<_>>()
     .into()
 }
 
@@ -166,27 +159,16 @@ async fn send_media_from_path(
     Ok(())
 }
 
-impl Platform {
-    const fn name(self) -> &'static str {
-        match self {
-            Self::Instagram => "instagram",
-            Self::Youtube => "youtube",
-            Self::Twitter => "twitter",
-            Self::Tiktok => "tiktok",
-        }
-    }
-
-    fn should_include_source_text(
-        self,
-        media_items: &[(PathBuf, MediaKind)],
-        source_text: Option<&str>,
-    ) -> bool {
-        matches!(self, Self::Twitter)
-            && source_text.is_some()
-            && media_items
-                .iter()
-                .all(|(_, kind)| matches!(kind, MediaKind::Image))
-    }
+fn should_include_source_text(
+    platform: Platform,
+    media_items: &[(PathBuf, MediaKind)],
+    source_text: Option<&str>,
+) -> bool {
+    matches!(platform, Platform::Twitter)
+        && source_text.is_some()
+        && media_items
+            .iter()
+            .all(|(_, kind)| matches!(kind, MediaKind::Image))
 }
 
 fn compose_caption(quote: &str, source_text: Option<&str>) -> String {

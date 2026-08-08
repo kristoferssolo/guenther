@@ -9,7 +9,10 @@ use reqwest::{
     header::{ACCEPT, AUTHORIZATION},
 };
 use serde::{Deserialize, Serialize};
-use std::{path::Path, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::debug;
@@ -140,7 +143,7 @@ async fn download_media(
     media_url: &str,
     suggested_filename: &str,
     index: usize,
-) -> Result<std::path::PathBuf> {
+) -> Result<PathBuf> {
     let filename = safe_filename(suggested_filename, index);
     let path = tempdir.path().join(filename);
     let response = client

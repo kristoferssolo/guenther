@@ -1,5 +1,5 @@
 use claims::{assert_none, assert_some};
-use guenther_core::config::Config;
+use guenther_core::config::{Config, Platform};
 use temp_env::with_vars;
 
 fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
@@ -8,6 +8,7 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("CHAT_ID", None::<&str>),
             ("COBALT_API_URL", None),
             ("COBALT_API_KEY", None),
+            ("ENABLED_PLATFORMS", None),
             ("F1_UTC_OFFSET", None),
         ],
         f,
@@ -75,6 +76,41 @@ fn from_env_ignores_empty_cobalt_api_key() {
         with_vars([("COBALT_API_KEY", Some("  "))], || {
             let cfg = Config::from_env();
             assert_none!(cfg.cobalt.api_key);
+        });
+    });
+}
+
+#[test]
+fn from_env_enables_all_platforms_by_default() {
+    with_clean_config_env(|| {
+        let platforms = Config::from_env().platforms;
+        for platform in Platform::ALL {
+            assert!(platforms.is_enabled(platform));
+        }
+    });
+}
+
+#[test]
+fn from_env_enables_selected_platforms() {
+    with_clean_config_env(|| {
+        with_vars([("ENABLED_PLATFORMS", Some(" Instagram, X "))], || {
+            let platforms = Config::from_env().platforms;
+            assert!(platforms.is_enabled(Platform::Instagram));
+            assert!(platforms.is_enabled(Platform::Twitter));
+            assert!(!platforms.is_enabled(Platform::Tiktok));
+            assert!(!platforms.is_enabled(Platform::Youtube));
+        });
+    });
+}
+
+#[test]
+fn from_env_disables_all_platforms_when_empty() {
+    with_clean_config_env(|| {
+        with_vars([("ENABLED_PLATFORMS", Some(""))], || {
+            let platforms = Config::from_env().platforms;
+            for platform in Platform::ALL {
+                assert!(!platforms.is_enabled(platform));
+            }
         });
     });
 }

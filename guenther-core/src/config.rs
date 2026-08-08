@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use std::{env, fmt::Debug, sync::OnceLock};
+use std::{collections::HashSet, env, fmt::Debug, sync::OnceLock};
 use time::UtcOffset;
 use tracing::warn;
 
@@ -10,6 +10,7 @@ static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 pub struct Config {
     pub chat_id: Option<i64>,
     pub cobalt: CobaltConfig,
+    pub platforms: PlatformConfig,
     pub f1: F1Config,
 }
 
@@ -17,6 +18,19 @@ pub struct Config {
 pub struct CobaltConfig {
     pub api_url: String,
     pub api_key: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlatformConfig {
+    enabled: HashSet<Platform>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Platform {
+    Instagram,
+    Tiktok,
+    Twitter,
+    Youtube,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -45,6 +59,7 @@ impl Config {
         Self {
             chat_id,
             cobalt: CobaltConfig::from_env(),
+            platforms: PlatformConfig::from_env(),
             f1: F1Config::from_env(),
         }
     }
@@ -79,6 +94,66 @@ impl CobaltConfig {
             api_url: get_string_from_env("COBALT_API_URL")
                 .unwrap_or_else(|| Self::DEFAULT_API_URL.to_owned()),
             api_key: get_string_from_env("COBALT_API_KEY"),
+        }
+    }
+}
+
+impl PlatformConfig {
+    fn from_env() -> Self {
+        let raw = match env::var("ENABLED_PLATFORMS") {
+            Ok(raw) => raw,
+            Err(env::VarError::NotPresent) => return Self::default(),
+            Err(env::VarError::NotUnicode(_)) => {
+                warn!("ENABLED_PLATFORMS is not valid unicode; enabling all platforms");
+                return Self::default();
+            }
+        };
+        let mut config = Self::none();
+
+        for name in raw
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+        {
+            let platform = match name.to_ascii_lowercase().as_str() {
+                "all" => return Self::default(),
+                "instagram" => Platform::Instagram,
+                "tiktok" => Platform::Tiktok,
+                "twitter" | "x" => Platform::Twitter,
+                "youtube" => Platform::Youtube,
+                unknown => {
+                    warn!(platform = unknown, "unknown platform in ENABLED_PLATFORMS");
+                    continue;
+                }
+            };
+            config.enabled.insert(platform);
+        }
+
+        config
+    }
+
+    #[must_use]
+    pub fn is_enabled(&self, platform: Platform) -> bool {
+        self.enabled.contains(&platform)
+    }
+
+    fn none() -> Self {
+        Self {
+            enabled: HashSet::new(),
+        }
+    }
+}
+
+impl Platform {
+    pub const ALL: [Self; 4] = [Self::Instagram, Self::Tiktok, Self::Twitter, Self::Youtube];
+
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Instagram => "instagram",
+            Self::Tiktok => "tiktok",
+            Self::Twitter => "twitter",
+            Self::Youtube => "youtube",
         }
     }
 }
@@ -151,6 +226,14 @@ impl Default for CobaltConfig {
         Self {
             api_url: Self::DEFAULT_API_URL.to_owned(),
             api_key: None,
+        }
+    }
+}
+
+impl Default for PlatformConfig {
+    fn default() -> Self {
+        Self {
+            enabled: Platform::ALL.into_iter().collect(),
         }
     }
 }

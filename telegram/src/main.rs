@@ -42,7 +42,9 @@ async fn main() -> color_eyre::Result<()> {
 
     info!(name = %bot_name, "bot starting");
 
-    let handlers = create_handlers();
+    let handlers = create_handlers(&global_config().platforms);
+    let enabled_platforms = handlers.iter().map(Handler::name).collect::<Vec<_>>();
+    info!(?enabled_platforms, "platform handlers configured");
     let schema = dptree::entry()
         .branch(Update::filter_message().endpoint(message_handler))
         .branch(Update::filter_inline_query().endpoint(answer_inline_query));
