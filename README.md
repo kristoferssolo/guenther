@@ -166,7 +166,8 @@ Bingo games are isolated per Telegram chat. A chat can have several active
 games at once – for example, a full-season game alongside a race-weekend game—but
 one game is the default for commands that omit a game slug. Each card has 24
 entries and a pre-marked F1-themed center cell. `LIGHTS OUT!` is the default
-center text and chat administrators can customize it per game.
+center text and chat administrators can customize it per game. Games can also
+have an introductory description, which is shown on every card.
 
 Anyone in the chat can list games and entries, add entries, or retrieve a card:
 
@@ -188,6 +189,7 @@ or delete entries, and manage cards:
 /bingo game close <slug>
 /bingo game default <slug>
 /bingo game center <slug> <text>
+/bingo game description <slug> [text]
 
 /bingo entries import <game>
 /bingo edit <entry_id> <text>
@@ -198,6 +200,8 @@ or delete entries, and manage cards:
 /bingo reset [game] @username
 /bingo card set <game> [@username] <A1-E5> <text>
 ```
+
+Omitting the text from `game description` clears the current description.
 
 Games start in `draft`. Add at least 24 entries and activate the game before
 generating randomized cards. Generation samples without replacement and stores
@@ -226,11 +230,28 @@ messages and omit the username from `generate`, `import`, `reset`, or
 
 ### Interactive marking
 
-The message includes a 5×5 inline button grid whose coordinates match the card
-entries. Only the assigned owner can mark or unmark cells. Completing any row,
+The bot sends each card as a portrait PNG followed by a complete text version
+and a 5×5 inline button grid. The image uses a white background and black grid,
+with pale red circles behind marked entries and a pale gold circle behind the
+automatic center cell. Long image text is reduced to a readable minimum size
+and then ellipsized when necessary; the companion text always retains the full
+stored entry for accessibility and copying. Rendering uses an embedded FOSS
+Noto Sans Mono bitmap font and does not require system fonts in Docker.
+
+The button coordinates match the card entries. Only the assigned owner can
+mark or unmark cells. A button press updates both the existing photo and its
+companion text and keyboard. Older text-only buttons remain usable but cannot
+update a photo because they do not contain its message ID. Completing any row,
 column, or diagonal is a bingo; the center cell participates in those lines.
 The bot announces the first completed line once. Closing a game disables
 further marking while leaving its cards available through `/bingo get`.
+
+Generate a deterministic local preview at
+`target/bingo-card-preview.png` with:
+
+```bash
+just bingo-card-preview
+```
 
 ### Importing existing cards
 
