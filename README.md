@@ -153,7 +153,3 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 - X/Twitter post text and the image-only fallback use its public syndication endpoint.
 - Do not point `COBALT_API_URL` at `api.cobalt.tools`; hosted Cobalt instances are not intended for third-party projects without permission.
 - Guenther is intended for self-hosting.
-
-## License
-
-Licensed under [MIT license](LICENSE).
