@@ -130,8 +130,6 @@ async fn request_download(
         .send()
         .await
         .map_err(Error::CobaltRequest)?
-        .error_for_status()
-        .map_err(Error::CobaltRequest)?
         .json()
         .await
         .map_err(Error::CobaltRequest)
@@ -220,6 +218,18 @@ mod tests {
         };
         assert_eq!(picker.len(), 1);
         assert_eq!(picker[0].media_type, "photo");
+    }
+
+    #[test]
+    fn deserializes_error_response() {
+        let response = assert_ok!(from_str::<CobaltResponse>(
+            r#"{"status":"error","error":{"code":"error.api.youtube.login"}}"#,
+        ));
+
+        let CobaltResponse::Rejected { error } = response else {
+            panic!("expected rejected response");
+        };
+        assert_eq!(error.code, "error.api.youtube.login");
     }
 
     #[test]
