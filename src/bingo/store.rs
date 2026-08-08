@@ -487,7 +487,8 @@ impl BingoStore {
         let position = i64::try_from(position)
             .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
         sqlx::query(
-            "UPDATE bingo_card_cells SET entry_id = ?, text = ? WHERE card_id = ? AND position = ?",
+            "UPDATE bingo_card_cells SET entry_id = ?,
+text = ? WHERE card_id = ? AND position = ?",
         )
         .bind(entry_id)
         .bind(text.trim())
@@ -545,7 +546,8 @@ impl BingoStore {
             return Err(BingoError::GameNotActive);
         }
         let result = sqlx::query(
-            "UPDATE bingo_card_cells SET marked = NOT marked \
+            "UPDATE bingo_card_cells SET marked = NOT marked
+\
              WHERE card_id = ? AND position = ? AND is_free = 0",
         )
         .bind(card_id)
@@ -557,7 +559,8 @@ impl BingoStore {
             "that card cell was not found".to_owned(),
         )?;
         let cell_rows = sqlx::query_as::<_, CellRow>(
-            "SELECT position, text, marked, is_free FROM bingo_card_cells \
+            "SELECT position, text, marked, is_free FROM bingo_card_cells
+\
              WHERE card_id = ? ORDER BY position",
         )
         .bind(card_id)
@@ -591,18 +594,30 @@ impl BingoStore {
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
         let user = sqlx::query_as::<_, (i64, Option<String>, String)>(
-            "SELECT user_id, username, display_name FROM bingo_users WHERE chat_id = ? AND user_id = ?",
+            "SELECT user_id, username, display_name
+FROM bingo_users
+WHERE chat_id
+= ? AND user_id = ?",
         )
         .bind(row.chat_id)
         .bind(row.user_id)
         .fetch_optional(&self.pool)
         .await?
         .map_or_else(
-            || KnownUser { user_id: row.user_id, username: None, display_name: row.owner_name.clone() },
-            |(user_id, username, display_name)| KnownUser { user_id, username, display_name },
+            || KnownUser {
+                user_id: row.user_id,
+                username: None,
+                display_name: row.owner_name.clone(),
+            },
+            |(user_id, username, display_name)| KnownUser {
+                user_id,
+                username,
+                display_name,
+            },
         );
         let cells = sqlx::query_as::<_, CellRow>(
-            "SELECT position, text, marked, is_free FROM bingo_card_cells \
+            "SELECT position, text, marked, is_free FROM bingo_card_cells
+\
              WHERE card_id = ? ORDER BY position",
         )
         .bind(card_id)
@@ -671,7 +686,10 @@ async fn create_database_parent(database_url: &str) -> Result<()> {
 
 async fn game_by_id_in(transaction: &mut Transaction<'_, Sqlite>, game_id: i64) -> Result<Game> {
     let row = sqlx::query_as::<_, GameRow>(
-        "SELECT id, chat_id, slug, name, center_text, state, is_default FROM bingo_games WHERE id = ?",
+        "SELECT id, chat_id, slug, name, center_text, state, is_default
+FROM bingo_games
+WHERE id
+= ?",
     )
     .bind(game_id)
     .fetch_one(&mut **transaction)
@@ -685,7 +703,8 @@ async fn game_by_slug_in(
     slug: &str,
 ) -> Result<Game> {
     let row = sqlx::query_as::<_, GameRow>(
-        "SELECT id, chat_id, slug, name, center_text, state, is_default \
+        "SELECT id, chat_id, slug, name, center_text, state, is_default
+\
          FROM bingo_games WHERE chat_id = ? AND slug = ? COLLATE NOCASE",
     )
     .bind(chat_id)
@@ -750,7 +769,13 @@ async fn insert_cell(
     let position = i64::try_from(position)
         .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
     sqlx::query(
-        "INSERT INTO bingo_card_cells (card_id, position, entry_id, text, marked, is_free) \
+        "INSERT INTO bingo_card_cells (card_id,
+position,
+entry_id,
+text,
+marked,
+is_free)
+\
          VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(card_id)
@@ -771,7 +796,8 @@ async fn upsert_entry_in(
 ) -> Result<i64> {
     validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
     Ok(sqlx::query_scalar(
-        "INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?) \
+        "INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)
+\
          ON CONFLICT(game_id, normalized_text) DO UPDATE SET text = excluded.text, active = 1 \
          RETURNING id",
     )
