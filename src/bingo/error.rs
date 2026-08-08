@@ -37,11 +37,8 @@ pub enum BingoError {
     #[error("the center cell is marked automatically")]
     FreeCell,
 
-    #[error("Telegram user ID {0} does not fit in the database")]
-    UserIdOutOfRange(u64),
-
-    #[error("database contains invalid Telegram user ID {0}")]
-    InvalidStoredUserId(i64),
+    #[error("database contains an invalid Telegram user ID")]
+    InvalidStoredUserId,
 }
 
 impl BingoError {
@@ -56,7 +53,6 @@ impl BingoError {
                 | Self::NotCardOwner
                 | Self::GameNotActive
                 | Self::FreeCell
-                | Self::UserIdOutOfRange(_)
         )
     }
 }

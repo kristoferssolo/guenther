@@ -32,7 +32,7 @@ impl BingoStore {
         validate_slug(slug)?;
         validate_nonempty(name, "game name", 100)?;
         let chat_id = chat_id.0;
-        let created_by = db_user_id(created_by)?;
+        let created_by = db_user_id(created_by);
         let mut transaction = self.pool.begin().await?;
         let has_default = sqlx::query_scalar!(
             r#"SELECT EXISTS(
@@ -57,7 +57,7 @@ RETURNING
             normalized_slug,
             name,
             is_default,
-            created_by,
+            created_by.as_slice(),
         )
         .fetch_one(&mut *transaction)
         .await

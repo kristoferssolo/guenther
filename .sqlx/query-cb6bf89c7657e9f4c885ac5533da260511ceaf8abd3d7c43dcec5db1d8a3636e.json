@@ -1,22 +1,11 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT user_id, username, display_name FROM bingo_users\nWHERE chat_id = ? AND username = ? COLLATE NOCASE",
+  "query": "SELECT username, display_name FROM bingo_users\nWHERE chat_id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "user_id",
-        "ordinal": 0,
-        "type_info": "Integer",
-        "origin": {
-          "Table": {
-            "table": "bingo_users",
-            "name": "user_id"
-          }
-        }
-      },
-      {
         "name": "username",
-        "ordinal": 1,
+        "ordinal": 0,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -27,7 +16,7 @@
       },
       {
         "name": "display_name",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -41,10 +30,9 @@
       "Right": 2
     },
     "nullable": [
-      false,
       true,
       false
     ]
   },
-  "hash": "720044e3b759e54cb01a7132dbcf82e11692e85aa7e86bf0f51c16745597aa1f"
+  "hash": "cb6bf89c7657e9f4c885ac5533da260511ceaf8abd3d7c43dcec5db1d8a3636e"
 }

@@ -11,7 +11,7 @@ use teloxide::types::{ChatId, UserId};
 impl BingoStore {
     pub async fn observe_user(&self, chat_id: ChatId, user: &KnownUser) -> Result<()> {
         let chat_id = chat_id.0;
-        let user_id = db_user_id(user.user_id)?;
+        let user_id = db_user_id(user.user_id);
         let mut transaction = self.pool.begin().await?;
         if let Some(username) = &user.username {
             sqlx::query!(
@@ -19,7 +19,7 @@ impl BingoStore {
 WHERE chat_id = ? AND username = ? COLLATE NOCASE AND user_id != ?"#,
                 chat_id,
                 username,
-                user_id,
+                user_id.as_slice(),
             )
             .execute(&mut *transaction)
             .await?;
@@ -30,7 +30,7 @@ VALUES (?, ?, ?, ?)
 ON CONFLICT(chat_id, user_id) DO UPDATE SET username = excluded.username, 
 display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP"#,
             chat_id,
-            user_id,
+            user_id.as_slice(),
             user.username,
             user.display_name,
         )
@@ -42,18 +42,18 @@ display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP"#,
 
     pub async fn user_by_id(&self, chat_id: ChatId, user_id: UserId) -> Result<KnownUser> {
         let chat_id = chat_id.0;
-        let db_user_id = db_user_id(user_id)?;
+        let db_user_id = db_user_id(user_id);
         sqlx::query!(
-            r#"SELECT user_id, username, display_name FROM bingo_users
+            r#"SELECT user_id AS `user_id: Vec<u8>`, username, display_name FROM bingo_users
 WHERE chat_id = ? AND user_id = ?"#,
             chat_id,
-            db_user_id,
+            db_user_id.as_slice(),
         )
         .fetch_optional(&self.pool)
         .await?
         .map(|row| -> Result<KnownUser> {
             Ok(KnownUser {
-                user_id: user_id_from_db(row.user_id)?,
+                user_id: user_id_from_db(&row.user_id)?,
                 username: row.username,
                 display_name: row.display_name,
             })
@@ -68,7 +68,7 @@ WHERE chat_id = ? AND user_id = ?"#,
         let username = username.trim_start_matches('@');
         let chat_id = chat_id.0;
         sqlx::query!(
-            r#"SELECT user_id, username, display_name FROM bingo_users
+            r#"SELECT user_id AS `user_id: Vec<u8>`, username, display_name FROM bingo_users
 WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
             chat_id,
             username,
@@ -77,7 +77,7 @@ WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
         .await?
         .map(|row| -> Result<KnownUser> {
             Ok(KnownUser {
-                user_id: user_id_from_db(row.user_id)?,
+                user_id: user_id_from_db(&row.user_id)?,
                 username: row.username,
                 display_name: row.display_name,
             })

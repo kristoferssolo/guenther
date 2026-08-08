@@ -7,7 +7,7 @@ use self::queries::{
 use super::{
     BingoStore,
     entry::upsert_entry,
-    id::db_user_id,
+    id::{db_user_id, user_id_from_db},
     validation::{ensure_active, ensure_editable, require_changed, validate_nonempty},
 };
 use crate::bingo::{
@@ -126,11 +126,11 @@ impl BingoStore {
 
     pub async fn card(&self, chat_id: ChatId, slug: Option<&str>, user_id: UserId) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
-        let user_id = db_user_id(user_id)?;
+        let user_id = db_user_id(user_id);
         let card_id = sqlx::query_scalar!(
             r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
             game.id,
-            user_id,
+            user_id.as_slice(),
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -216,7 +216,7 @@ WHERE card_id = ? AND position = ?"#,
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"SELECT
-    c.user_id, c.bingo_announced AS `bingo_announced: bool`,
+    c.user_id AS `user_id: Vec<u8>`, c.bingo_announced AS `bingo_announced: bool`,
     g.state FROM bingo_cards c
     JOIN bingo_games g ON g.id = c.game_id
 WHERE c.id = ?"#,
@@ -225,7 +225,7 @@ WHERE c.id = ?"#,
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
-        if row.user_id != db_user_id(user_id)? {
+        if user_id_from_db(&row.user_id)? != user_id {
             return Err(BingoError::NotCardOwner);
         }
         if row.state.parse::<GameState>()? != GameState::Active {

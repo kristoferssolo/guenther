@@ -9,7 +9,7 @@ use teloxide::types::{ChatId, UserId};
 #[derive(Debug)]
 struct CardRow {
     card_id: i64,
-    user_id: i64,
+    user_id: Vec<u8>,
     owner_name: String,
     bingo_announced: bool,
     game_id: i64,
@@ -41,7 +41,7 @@ pub(super) async fn fetch_card(pool: &SqlitePool, card_id: i64) -> Result<Card> 
     let row = sqlx::query_as!(
         CardRow,
         r#"SELECT
-    c.id AS card_id, c.user_id, c.owner_name,
+    c.id AS card_id, c.user_id AS `user_id: Vec<u8>`, c.owner_name,
     c.bingo_announced AS `bingo_announced: bool`,
     g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text,
     g.state, g.is_default AS `is_default: bool`
@@ -52,14 +52,14 @@ FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
     .await?
     .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
     let known_user = sqlx::query!(
-        r#"SELECT user_id, username, display_name FROM bingo_users
+        r#"SELECT username, display_name FROM bingo_users
 WHERE chat_id = ? AND user_id = ?"#,
         row.chat_id,
         row.user_id,
     )
     .fetch_optional(pool)
     .await?;
-    let user_id = user_id_from_db(row.user_id)?;
+    let user_id = user_id_from_db(&row.user_id)?;
     let user = match known_user {
         Some(known) => KnownUser {
             user_id,
@@ -96,11 +96,11 @@ pub(super) async fn delete_or_reject_existing(
     user_id: UserId,
     replace: bool,
 ) -> Result<()> {
-    let user_id = db_user_id(user_id)?;
+    let user_id = db_user_id(user_id);
     let existing = sqlx::query_scalar!(
         r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
         game_id,
-        user_id,
+        user_id.as_slice(),
     )
     .fetch_optional(&mut **transaction)
     .await?;
@@ -123,11 +123,11 @@ pub(super) async fn insert_card(
     owner: &KnownUser,
 ) -> Result<i64> {
     let owner_name = owner.to_string();
-    let user_id = db_user_id(owner.user_id)?;
+    let user_id = db_user_id(owner.user_id);
     let result = sqlx::query!(
         r#"INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)"#,
         game_id,
-        user_id,
+        user_id.as_slice(),
         owner_name,
     )
     .execute(&mut **transaction)
@@ -187,11 +187,11 @@ pub(super) async fn card_id_in(
     game_id: i64,
     user_id: UserId,
 ) -> Result<i64> {
-    let user_id = db_user_id(user_id)?;
+    let user_id = db_user_id(user_id);
     sqlx::query_scalar!(
         r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
         game_id,
-        user_id,
+        user_id.as_slice(),
     )
     .fetch_optional(&mut **transaction)
     .await?

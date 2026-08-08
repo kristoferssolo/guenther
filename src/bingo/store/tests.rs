@@ -74,6 +74,26 @@ async fn generates_persistent_card_with_free_center() {
 }
 
 #[tokio::test]
+async fn persists_user_ids_across_the_full_u64_range() {
+    let store = store().await;
+    let owner = user(u64::MAX, "max_driver");
+    let card = setup_card(&store, &owner).await;
+
+    let known = store
+        .user_by_id(CHAT_ID, owner.user_id)
+        .await
+        .expect("fetch user with maximum ID");
+    let fetched = store
+        .card(CHAT_ID, None, owner.user_id)
+        .await
+        .expect("fetch card for user with maximum ID");
+
+    assert_eq!(known, owner);
+    assert_eq!(fetched.owner, owner);
+    assert_eq!(fetched.id, card.id);
+}
+
+#[tokio::test]
 async fn rejects_duplicate_generation_without_replace() {
     let store = store().await;
     let owner = user(10, "driver");
