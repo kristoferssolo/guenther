@@ -6,7 +6,6 @@ ENV CARGO_INCREMENTAL=0
 
 
 FROM chef AS planner
-COPY .cargo ./.cargo
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && touch src/lib.rs src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
@@ -14,14 +13,23 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder-rs
 ARG RUST_FEATURES=""
-COPY .cargo ./.cargo
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update -y \
+    && apt-get install -y --no-install-recommends sqlite3
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
     cargo chef cook --locked --release ${RUST_FEATURES} --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
+COPY migrations ./migrations
 COPY src ./src
+ENV DATABASE_URL=sqlite:///tmp/guenther-build.sqlite3
+RUN for migration in migrations/*.sql; do \
+        case "$migration" in *.down.sql) continue ;; esac; \
+        sqlite3 /tmp/guenther-build.sqlite3 < "$migration"; \
+    done
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \

@@ -7,10 +7,10 @@ use crate::bingo::{
         validation::{ensure_editable, map_unique, validate_nonempty, validate_slug},
     },
 };
-use sqlx::{FromRow, SqliteExecutor, query, query_as, query_scalar};
+use sqlx::SqliteExecutor;
 use teloxide::types::{ChatId, UserId};
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct GameRow {
     id: i64,
     chat_id: i64,
@@ -35,30 +35,31 @@ impl BingoStore {
         let chat_id = chat_id.0;
         let created_by = db_user_id(created_by)?;
         let mut transaction = self.pool.begin().await?;
-        let has_default = query_scalar::<_, bool>(
-            r"SELECT EXISTS(
+        let has_default = sqlx::query_scalar!(
+            r#"SELECT EXISTS(
     SELECT 1 FROM bingo_games
     WHERE chat_id = ? AND is_default = 1
-) AS has_default",
+) AS `has_default!: bool`"#,
+            chat_id,
         )
-        .bind(chat_id)
         .fetch_one(&mut *transaction)
         .await?;
         let normalized_slug = slug.to_ascii_lowercase();
         let name = name.trim();
         let is_default = !has_default;
-        let row = query_as::<_, GameRow>(
-            r"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
 VALUES (?, ?, ?, ?, ?)
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
-is_default",
+is_default AS `is_default: bool`"#,
+            chat_id,
+            normalized_slug,
+            name,
+            is_default,
+            created_by,
         )
-        .bind(chat_id)
-        .bind(normalized_slug)
-        .bind(name)
-        .bind(is_default)
-        .bind(created_by)
         .fetch_one(&mut *transaction)
         .await
         .map_err(|error| map_unique(error, || format!("game `{slug}` already exists")))?;
@@ -69,13 +70,14 @@ is_default",
 
     pub async fn list_games(&self, chat_id: ChatId) -> Result<Vec<Game>> {
         let chat_id = chat_id.0;
-        let rows = query_as::<_, GameRow>(
-            r"SELECT
+        let rows = sqlx::query_as!(
+            GameRow,
+            r#"SELECT
     id, chat_id, slug, name, description, center_text, state,
-    is_default
-FROM bingo_games WHERE chat_id = ? ORDER BY id DESC",
+    is_default AS `is_default: bool`
+FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
+            chat_id,
         )
-        .bind(chat_id)
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(Game::try_from).collect()
@@ -92,16 +94,17 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC",
         state: GameState,
     ) -> Result<Game> {
         let chat_id = chat_id.0;
-        let row = query_as::<_, GameRow>(
-            r"UPDATE bingo_games SET state = ?
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET state = ?
 WHERE chat_id = ? AND slug = ? COLLATE NOCASE
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
-is_default",
+is_default AS `is_default: bool`"#,
+            state.as_ref(),
+            chat_id,
+            slug,
         )
-        .bind(state.as_ref())
-        .bind(chat_id)
-        .bind(slug)
         .fetch_optional(&self.pool)
         .await?
         .ok_or_else(|| BingoError::NotFound(format!("game `{slug}` was not found")))?;
@@ -112,17 +115,20 @@ is_default",
         let mut transaction = self.pool.begin().await?;
         let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
         let chat_id = chat_id.0;
-        query("UPDATE bingo_games SET is_default = 0 WHERE chat_id = ?")
-            .bind(chat_id)
-            .execute(&mut *transaction)
-            .await?;
-        let row = query_as::<_, GameRow>(
-            r"UPDATE bingo_games SET is_default = 1 WHERE id = ?
+        sqlx::query!(
+            r#"UPDATE bingo_games SET is_default = 0 WHERE chat_id = ?"#,
+            chat_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
-is_default",
+is_default AS `is_default: bool`"#,
+            game.id,
         )
-        .bind(game.id)
         .fetch_one(&mut *transaction)
         .await?;
         let game = row.try_into()?;
@@ -134,14 +140,15 @@ is_default",
         validate_nonempty(text, "center text", 60)?;
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
-        let row = query_as::<_, GameRow>(
-            r"UPDATE bingo_games SET center_text = ? WHERE id = ?
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET center_text = ? WHERE id = ?
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
-is_default",
+is_default AS `is_default: bool`"#,
+            text.trim(),
+            game.id,
         )
-        .bind(text.trim())
-        .bind(game.id)
         .fetch_one(&self.pool)
         .await?;
         row.try_into()
@@ -161,14 +168,15 @@ is_default",
         }
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
-        let row = query_as::<_, GameRow>(
-            r"UPDATE bingo_games SET description = ? WHERE id = ?
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET description = ? WHERE id = ?
 RETURNING
 id, chat_id, slug, name, description, center_text, state,
-is_default",
+is_default AS `is_default: bool`"#,
+            description,
+            game.id,
         )
-        .bind(description)
-        .bind(game.id)
         .fetch_one(&self.pool)
         .await?;
         row.try_into()
@@ -198,16 +206,17 @@ async fn fetch_game<'e>(
     slug: Option<&str>,
 ) -> Result<Game> {
     let chat_id = chat_id.0;
-    let row = query_as::<_, GameRow>(
-        r"SELECT
+    let row = sqlx::query_as!(
+        GameRow,
+        r#"SELECT
     id, chat_id, slug, name, description, center_text, state,
-    is_default
+    is_default AS `is_default: bool`
 FROM bingo_games
 WHERE chat_id = ?1
-AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))",
+AND (slug = ?2 COLLATE NOCASE OR (?2 IS NULL AND is_default = 1))"#,
+        chat_id,
+        slug,
     )
-    .bind(chat_id)
-    .bind(slug)
     .fetch_optional(executor)
     .await?;
     row.map(Game::try_from).transpose()?.ok_or_else(|| {

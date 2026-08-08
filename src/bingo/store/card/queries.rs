@@ -3,12 +3,10 @@ use crate::bingo::{
     model::{Card, CardCell, Game, KnownUser, Position},
     store::id::{db_user_id, user_id_from_db},
 };
-use sqlx::{
-    FromRow, Sqlite, SqliteExecutor, SqlitePool, Transaction, query, query_as, query_scalar,
-};
+use sqlx::{Sqlite, SqliteExecutor, SqlitePool, Transaction};
 use teloxide::types::{ChatId, UserId};
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct CardRow {
     card_id: i64,
     user_id: i64,
@@ -24,18 +22,12 @@ struct CardRow {
     is_default: bool,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct CellRow {
     position: i64,
     text: String,
     marked: bool,
     is_free: bool,
-}
-
-#[derive(Debug, FromRow)]
-struct UserRow {
-    username: Option<String>,
-    display_name: String,
 }
 
 pub struct NewCell<'a> {
@@ -47,24 +39,25 @@ pub struct NewCell<'a> {
 }
 
 pub async fn fetch_card(pool: &SqlitePool, card_id: i64) -> Result<Card> {
-    let row = query_as::<_, CardRow>(
-        r"SELECT
+    let row = sqlx::query_as!(
+        CardRow,
+        r#"SELECT
     c.id AS card_id, c.user_id, c.owner_name,
-    c.bingo_announced,
+    c.bingo_announced AS `bingo_announced: bool`,
     g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.description, g.center_text,
-    g.state, g.is_default
-FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
+    g.state, g.is_default AS `is_default: bool`
+FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
+        card_id,
     )
-    .bind(card_id)
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
-    let known_user = query_as::<_, UserRow>(
-        r"SELECT username, display_name FROM bingo_users
-WHERE chat_id = ? AND user_id = ?",
+    let known_user = sqlx::query!(
+        r#"SELECT user_id, username, display_name FROM bingo_users
+WHERE chat_id = ? AND user_id = ?"#,
+        row.chat_id,
+        row.user_id,
     )
-    .bind(row.chat_id)
-    .bind(row.user_id)
     .fetch_optional(pool)
     .await?;
     let user_id = user_id_from_db(row.user_id)?;
@@ -106,20 +99,20 @@ pub async fn delete_or_reject_existing(
     replace: bool,
 ) -> Result<()> {
     let user_id = db_user_id(user_id)?;
-    let existing =
-        query_scalar::<_, i64>("SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?")
-            .bind(game_id)
-            .bind(user_id)
-            .fetch_optional(&mut **transaction)
-            .await?;
+    let existing = sqlx::query_scalar!(
+        r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
+        game_id,
+        user_id,
+    )
+    .fetch_optional(&mut **transaction)
+    .await?;
     if let Some(card_id) = existing {
         if !replace {
             return Err(BingoError::Conflict(
                 "that user already has a card; use regenerate or reimport to replace it".to_owned(),
             ));
         }
-        query("DELETE FROM bingo_cards WHERE id = ?")
-            .bind(card_id)
+        sqlx::query!(r#"DELETE FROM bingo_cards WHERE id = ?"#, card_id)
             .execute(&mut **transaction)
             .await?;
     }
@@ -133,12 +126,14 @@ pub async fn insert_card(
 ) -> Result<i64> {
     let owner_name = owner.to_string();
     let user_id = db_user_id(owner.user_id)?;
-    let result = query("INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)")
-        .bind(game_id)
-        .bind(user_id)
-        .bind(owner_name)
-        .execute(&mut **transaction)
-        .await?;
+    let result = sqlx::query!(
+        r#"INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)"#,
+        game_id,
+        user_id,
+        owner_name,
+    )
+    .execute(&mut **transaction)
+    .await?;
     Ok(result.last_insert_rowid())
 }
 
@@ -156,16 +151,16 @@ pub async fn insert_cell(
     } = cell;
     let position = i64::from(position);
     let text = text.trim();
-    query(
-        r"INSERT INTO bingo_card_cells
-(card_id, position, entry_id, text, marked, is_free) VALUES (?, ?, ?, ?, ?, ?)",
+    sqlx::query!(
+        r#"INSERT INTO bingo_card_cells
+(card_id, position, entry_id, text, marked, is_free) VALUES (?, ?, ?, ?, ?, ?)"#,
+        card_id,
+        position,
+        entry_id,
+        text,
+        marked,
+        is_free,
     )
-    .bind(card_id)
-    .bind(position)
-    .bind(entry_id)
-    .bind(text)
-    .bind(marked)
-    .bind(is_free)
     .execute(&mut **transaction)
     .await?;
     Ok(())
@@ -175,13 +170,15 @@ pub async fn fetch_cells<'e>(
     executor: impl SqliteExecutor<'e>,
     card_id: i64,
 ) -> Result<Vec<CardCell>> {
-    let rows = query_as::<_, CellRow>(
-        r"SELECT
-    position, text, marked, is_free
+    let rows = sqlx::query_as!(
+        CellRow,
+        r#"SELECT
+    position, text, marked AS `marked: bool`,
+    is_free AS `is_free: bool`
 FROM bingo_card_cells
-WHERE card_id = ? ORDER BY position",
+WHERE card_id = ? ORDER BY position"#,
+        card_id,
     )
-    .bind(card_id)
     .fetch_all(executor)
     .await?;
     convert_cells(rows)
@@ -193,14 +190,14 @@ pub async fn card_id_in(
     user_id: UserId,
 ) -> Result<i64> {
     let user_id = db_user_id(user_id)?;
-    query_scalar::<_, i64>("SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?")
-        .bind(game_id)
-        .bind(user_id)
-        .fetch_optional(&mut **transaction)
-        .await?
-        .ok_or_else(|| {
-            BingoError::NotFound("that user does not have a card for this game".to_owned())
-        })
+    sqlx::query_scalar!(
+        r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
+        game_id,
+        user_id,
+    )
+    .fetch_optional(&mut **transaction)
+    .await?
+    .ok_or_else(|| BingoError::NotFound("that user does not have a card for this game".to_owned()))
 }
 
 fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
