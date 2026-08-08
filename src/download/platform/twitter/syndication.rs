@@ -6,6 +6,7 @@ use reqwest::Client;
 use serde_json::Value;
 use tempfile::tempdir;
 use tokio::fs;
+use tracing::debug;
 use url::Url;
 
 const USER_AGENT: &str = concat!("guenther/", env!("CARGO_PKG_VERSION"));
@@ -27,11 +28,13 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
     let mut files = Vec::with_capacity(image_urls.len());
 
     for (index, image_url) in image_urls.iter().enumerate() {
-        let bytes = client
+        let response = client
             .get(image_url)
             .send()
             .await
-            .map_err(|err| download_error(&err))?
+            .map_err(|err| download_error(&err))?;
+        debug!(index, status = %response.status(), "Received Twitter image response");
+        let bytes = response
             .error_for_status()
             .map_err(|err| download_error(&err))?
             .bytes()
@@ -72,11 +75,13 @@ async fn fetch_tweet_result(tweet_id: &str) -> Result<Value> {
         "https://cdn.syndication.twimg.com/tweet-result?id={tweet_id}&token={token}&lang=en"
     );
 
-    http_client()?
+    let response = http_client()?
         .get(url)
         .send()
         .await
-        .map_err(|err| fetch_error(&err))?
+        .map_err(|err| fetch_error(&err))?;
+    debug!(status = %response.status(), "Received Twitter syndication response");
+    response
         .error_for_status()
         .map_err(|err| fetch_error(&err))?
         .json::<Value>()

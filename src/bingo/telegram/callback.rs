@@ -14,6 +14,7 @@ use teloxide::{
     prelude::{Bot, Requester},
     types::{CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, MessageId},
 };
+use tracing::{debug, info};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CardCallback {
@@ -46,6 +47,12 @@ pub async fn answer_callback(
     } else {
         false
     };
+    debug!(
+        card_id = %callback.card_id,
+        %callback.position,
+        can_edit_any_card,
+        "Toggling bingo card cell"
+    );
     let result = store
         .toggle_cell(
             callback.card_id,
@@ -89,6 +96,12 @@ async fn finish_toggle(
                 .await,
         )?;
         if toggle.newly_completed {
+            info!(
+                card_id = %toggle.card.id,
+                game_slug = %toggle.card.game.slug,
+                owner_user_id = toggle.card.owner.user_id.0,
+                "Completed a bingo line"
+            );
             bot.send_message(
                 message.chat.id,
                 win_message(&toggle.card.owner.to_string(), &toggle.card.game.name),

@@ -6,13 +6,13 @@ use guenther::{
     utils::MediaKind,
 };
 use regex::{Error as RegexError, Regex};
-use std::{path::PathBuf, pin::Pin, result::Result as StdResult, sync::Arc};
+use std::{path::PathBuf, pin::Pin, result::Result as StdResult, sync::Arc, time::Instant};
 use teloxide::{
     Bot,
     prelude::*,
     types::{ChatId, InputFile},
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 type DownloadFn = fn(String) -> Pin<Box<dyn Future<Output = Result<DownloadResult>> + Send>>;
 
@@ -51,13 +51,23 @@ impl Handler {
     }
 
     pub async fn handle(&self, bot: &Bot, chat_id: ChatId, url: &str) -> Result<()> {
-        info!(handler = %self.platform, url = %url, "handling url");
+        let started_at = Instant::now();
+        info!(platform = %self.platform, "Handling media URL");
         let dr = (self.func)(url.to_owned()).await?;
         let source_text = dr.source_text.clone();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
+        let media_count = media_items.len();
         let base_caption = global_comments().build_caption();
         let include_source_text =
             should_include_source_text(self.platform(), &media_items, source_text.as_deref());
+
+        debug!(
+            platform = %self.platform,
+            media_count,
+            has_source_text = source_text.is_some(),
+            elapsed = ?started_at.elapsed(),
+            "Prepared downloaded media"
+        );
 
         for (index, (path, kind)) in media_items.into_iter().enumerate() {
             let caption = if include_source_text && index == 0 {
@@ -68,6 +78,12 @@ impl Handler {
             send_media_from_path(bot, chat_id, path, kind, &caption).await?;
         }
 
+        info!(
+            platform = %self.platform,
+            media_count,
+            elapsed = ?started_at.elapsed(),
+            "Handled media URL"
+        );
         Ok(())
     }
 }

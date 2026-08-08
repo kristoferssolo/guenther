@@ -125,14 +125,10 @@ async fn request_download(
         request = request.header(AUTHORIZATION, format!("Api-Key {api_key}"));
     }
 
-    debug!(api_url = %config.api_url, url = %source_url, "requesting Cobalt download");
-    request
-        .send()
-        .await
-        .map_err(Error::CobaltRequest)?
-        .json()
-        .await
-        .map_err(Error::CobaltRequest)
+    debug!("Requesting Cobalt download");
+    let response = request.send().await.map_err(Error::CobaltRequest)?;
+    debug!(status = %response.status(), "Received Cobalt response");
+    response.json().await.map_err(Error::CobaltRequest)
 }
 
 async fn download_media(
@@ -148,9 +144,9 @@ async fn download_media(
         .get(media_url)
         .send()
         .await
-        .map_err(Error::CobaltRequest)?
-        .error_for_status()
         .map_err(Error::CobaltRequest)?;
+    debug!(index, status = %response.status(), "Received Cobalt media response");
+    let response = response.error_for_status().map_err(Error::CobaltRequest)?;
     let mut stream = response.bytes_stream();
     let mut file = File::create(&path).await?;
 

@@ -31,6 +31,22 @@ pub enum Command {
     Bingo(String),
 }
 
+impl Command {
+    #[inline]
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Help => "help",
+            Self::Curse => "curse",
+            Self::Weekend => "weekend",
+            Self::Quali => "quali",
+            Self::Race => "race",
+            #[cfg(feature = "bingo")]
+            Self::Bingo(_) => "bingo",
+        }
+    }
+}
+
 pub async fn answer(
     bot: &Bot,
     message: &Message,

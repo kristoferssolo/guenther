@@ -22,7 +22,7 @@ pub async fn download_twitter(url: String) -> Result<DownloadResult> {
             result.source_text = match syndication::fetch_tweet_text(&url).await {
                 Ok(text) => text,
                 Err(err) => {
-                    warn!(url = %url, %err, "Could not fetch post text from Twitter syndication");
+                    warn!(%err, "Could not fetch post text from Twitter syndication");
                     None
                 }
             };
@@ -30,11 +30,11 @@ pub async fn download_twitter(url: String) -> Result<DownloadResult> {
         }
         Err(cobalt_error) => match syndication::download_tweet_images(&url).await {
             Ok(result) => {
-                warn!(url = %url, %cobalt_error, "Cobalt could not fetch Twitter media; used image fallback");
+                warn!(%cobalt_error, "Cobalt could not fetch Twitter media; used image fallback");
                 Ok(result)
             }
             Err(fallback_error) => {
-                warn!(url = %url, %fallback_error, "Twitter image fallback was not applicable");
+                warn!(%fallback_error, "Twitter image fallback was not applicable");
                 Err(cobalt_error)
             }
         },

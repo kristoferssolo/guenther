@@ -21,7 +21,7 @@ use guenther::{
 };
 use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
-use tracing::{error, info, warn};
+use tracing::{Span, error, info, warn};
 
 #[cfg(feature = "bingo")]
 use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
@@ -89,6 +89,17 @@ async fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
+#[tracing::instrument(
+    name = "telegram.message",
+    skip_all,
+    fields(
+        chat_id = msg.chat.id.0,
+        message_id = msg.id.0,
+        user_id = ?msg.from.as_ref().map(|user| user.id.0),
+        route = tracing::field::Empty,
+        command = tracing::field::Empty,
+    )
+)]
 async fn message_handler(
     bot: Bot,
     msg: Message,
@@ -97,6 +108,7 @@ async fn message_handler(
     #[cfg(feature = "bingo")] bingo_store: BingoStore,
     #[cfg(feature = "bingo")] admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
+    let span = Span::current();
     if let Err(err) = capture_incoming_voice_line(&bot, &msg).await {
         warn!(%err, "Failed to capture incoming voice line metadata");
     }
@@ -110,6 +122,8 @@ async fn message_handler(
 
     match decide_route(text.as_deref(), &bot_name) {
         RouteAction::HandleCommand(cmd) => {
+            span.record("route", "command");
+            span.record("command", cmd.name());
             if let Err(e) = answer(
                 &bot,
                 &msg,
@@ -124,21 +138,38 @@ async fn message_handler(
                 error!(%e, "Failed to answer command");
             }
         }
-        RouteAction::HandleMessage => process_message(&bot, &msg, &handlers).await,
-        RouteAction::Ignore => {}
+        RouteAction::HandleMessage => {
+            span.record("route", "message");
+            process_message(&bot, &msg, &handlers).await;
+        }
+        RouteAction::Ignore => {
+            span.record("route", "ignored");
+        }
     }
 
     Ok(())
 }
 
 #[cfg(feature = "bingo")]
+#[tracing::instrument(
+    name = "telegram.callback",
+    skip_all,
+    fields(
+        chat_id = ?query.regular_message().map(|message| message.chat.id.0),
+        message_id = ?query.regular_message().map(|message| message.id.0),
+        user_id = query.from.id.0,
+    )
+)]
 async fn bingo_callback_handler(
     bot: Bot,
     query: teloxide::types::CallbackQuery,
     bingo_store: BingoStore,
     admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
-    answer_callback(&bot, &query, &bingo_store, &admin_cache).await?;
+    if let Err(err) = answer_callback(&bot, &query, &bingo_store, &admin_cache).await {
+        error!(%err, "Failed to answer bingo callback");
+        return Err(err.into());
+    }
     Ok(())
 }
 
@@ -150,7 +181,7 @@ async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
     for handler in handlers {
         if let Some(url) = handler.try_extract(text) {
             if let Err(err) = handler.handle(bot, msg.chat.id, url).await {
-                error!(%err, "Handler failed");
+                error!(platform = %handler.platform(), %err, "Media handler failed");
                 let _ = bot.send_message(msg.chat.id, failure_comment()).await;
                 if let Some(chat_id) = global_config().chat_id {
                     let _ = bot.send_message(ChatId(chat_id), err.to_string()).await;

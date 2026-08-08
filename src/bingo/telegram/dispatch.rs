@@ -14,7 +14,18 @@ use teloxide::{
     prelude::Bot,
     types::{Message, UserId},
 };
+use tracing::{Span, debug, info};
 
+#[tracing::instrument(
+    name = "bingo.command",
+    skip_all,
+    fields(
+        chat_id = message.chat.id.0,
+        message_id = message.id.0,
+        user_id = ?message.from.as_ref().map(|user| user.id.0),
+        action = tracing::field::Empty,
+    )
+)]
 pub async fn execute_bingo(
     bot: &Bot,
     message: &Message,
@@ -24,6 +35,7 @@ pub async fn execute_bingo(
 ) -> Result<()> {
     observe_message_users(store, message).await?;
     let command = BingoCommand::parse(input)?;
+    Span::current().record("action", command.name());
     if command.requires_admin() && !is_chat_admin(bot, message, admin_cache).await? {
         return Err(BingoError::PermissionDenied);
     }
@@ -40,6 +52,11 @@ pub async fn execute_bingo(
         }
         BingoCommand::Add { slug, text } => {
             let entry = store.add_entry(chat_id, slug.as_deref(), &text).await?;
+            debug!(
+                game_id = %entry.game_id,
+                entry_number = %entry.number,
+                "Added bingo entry"
+            );
             send_text(
                 bot,
                 message.chat.id,
@@ -72,6 +89,7 @@ async fn execute_game_admin(
             let game = store
                 .create_game(chat_id, &slug, &name, actor.user_id)
                 .await?;
+            info!(game_id = %game.id, game_slug = %game.slug, "Created bingo game");
             send_text(
                 bot,
                 message.chat.id,
@@ -81,6 +99,7 @@ async fn execute_game_admin(
         }
         GameAdmin::Delete { slug } => {
             store.delete_game(chat_id, &slug).await?;
+            info!(game_slug = %slug, "Deleted bingo game");
             send_text(
                 bot,
                 message.chat.id,
@@ -90,6 +109,12 @@ async fn execute_game_admin(
         }
         GameAdmin::SetState { slug, state } => {
             let game = store.set_game_state(chat_id, &slug, state).await?;
+            info!(
+                game_id = %game.id,
+                game_slug = %game.slug,
+                state = %game.state,
+                "Changed bingo game state"
+            );
             send_text(
                 bot,
                 message.chat.id,
@@ -99,6 +124,7 @@ async fn execute_game_admin(
         }
         GameAdmin::SetDefault { slug } => {
             let game = store.set_default_game(chat_id, &slug).await?;
+            info!(game_id = %game.id, game_slug = %game.slug, "Changed default bingo game");
             send_text(
                 bot,
                 message.chat.id,
@@ -108,6 +134,7 @@ async fn execute_game_admin(
         }
         GameAdmin::SetCenter { slug, text } => {
             let game = store.set_center_text(chat_id, &slug, &text).await?;
+            debug!(game_id = %game.id, game_slug = %game.slug, "Changed bingo center cell");
             send_text(
                 bot,
                 message.chat.id,
@@ -122,6 +149,7 @@ async fn execute_game_admin(
             let game = store
                 .set_game_description(chat_id, &slug, &description)
                 .await?;
+            debug!(game_id = %game.id, game_slug = %game.slug, "Changed bingo game description");
             let confirmation = if game.description.is_empty() {
                 format!("Cleared the `{}` game description.", game.slug)
             } else {
@@ -143,6 +171,7 @@ async fn execute_entry_admin(
         EntryAdmin::Import { slug } => {
             let entries = read_entry_file(bot, message).await?;
             let imported = store.import_entries(chat_id, &slug, &entries).await?;
+            info!(game_slug = %slug, imported, "Imported bingo entries");
             send_text(
                 bot,
                 chat_id,
@@ -158,6 +187,11 @@ async fn execute_entry_admin(
             let entry = store
                 .edit_entry(chat_id, slug.as_deref(), entry_number, &text)
                 .await?;
+            debug!(
+                game_id = %entry.game_id,
+                entry_number = %entry.number,
+                "Edited bingo entry"
+            );
             send_text(
                 bot,
                 chat_id,
@@ -169,6 +203,7 @@ async fn execute_entry_admin(
             store
                 .delete_entry(chat_id, slug.as_deref(), entry_number)
                 .await?;
+            debug!(%entry_number, "Deleted bingo entry");
             send_text(
                 bot,
                 chat_id,
@@ -205,6 +240,13 @@ async fn execute_card_admin(
             let card = store
                 .generate_card(chat_id, slug.as_deref(), &owner, replace)
                 .await?;
+            info!(
+                card_id = %card.id,
+                game_slug = %card.game.slug,
+                owner_user_id = card.owner.user_id.0,
+                replaced = replace,
+                "Generated bingo card"
+            );
             send_card(bot, message.chat.id, &card).await
         }
         CardAdmin::Import {
@@ -217,6 +259,13 @@ async fn execute_card_admin(
             let card = store
                 .import_card(chat_id, &slug, &owner, &cells, replace)
                 .await?;
+            info!(
+                card_id = %card.id,
+                game_slug = %card.game.slug,
+                owner_user_id = card.owner.user_id.0,
+                replaced = replace,
+                "Imported bingo card"
+            );
             send_card(bot, message.chat.id, &card).await
         }
         CardAdmin::Set {
@@ -229,6 +278,14 @@ async fn execute_card_admin(
             let card = store
                 .set_card_cell(chat_id, &slug, owner.user_id, position, entry_number)
                 .await?;
+            debug!(
+                card_id = %card.id,
+                game_slug = %card.game.slug,
+                owner_user_id = card.owner.user_id.0,
+                %position,
+                %entry_number,
+                "Changed bingo card cell"
+            );
             send_card(bot, message.chat.id, &card).await
         }
         CardAdmin::Reset { slug, target } => {
@@ -236,6 +293,12 @@ async fn execute_card_admin(
             let card = store
                 .reset_card(chat_id, slug.as_deref(), owner.user_id)
                 .await?;
+            info!(
+                card_id = %card.id,
+                game_slug = %card.game.slug,
+                owner_user_id = card.owner.user_id.0,
+                "Reset bingo card"
+            );
             send_card(bot, message.chat.id, &card).await
         }
     }

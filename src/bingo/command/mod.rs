@@ -82,6 +82,21 @@ impl BingoCommand {
         parser::parse(input)
     }
 
+    #[inline]
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Help => "help",
+            Self::Games => "games",
+            Self::Entries { .. } => "entries.list",
+            Self::Get { .. } => "card.get",
+            Self::Add { .. } => "entry.add",
+            Self::Game(command) => command.name(),
+            Self::Entry(command) => command.name(),
+            Self::Card(command) => command.name(),
+        }
+    }
+
     #[must_use]
     pub const fn requires_admin(&self) -> bool {
         match self {
@@ -92,6 +107,42 @@ impl BingoCommand {
             | Self::Add { .. }
             | Self::Card(CardAdmin::Generate { replace: false, .. }) => false,
             Self::Game(_) | Self::Entry(_) | Self::Card(_) => true,
+        }
+    }
+}
+
+impl GameAdmin {
+    const fn name(&self) -> &'static str {
+        match self {
+            Self::Create { .. } => "game.create",
+            Self::Delete { .. } => "game.delete",
+            Self::SetState { .. } => "game.set_state",
+            Self::SetDefault { .. } => "game.set_default",
+            Self::SetCenter { .. } => "game.set_center",
+            Self::SetDescription { .. } => "game.set_description",
+        }
+    }
+}
+
+impl EntryAdmin {
+    const fn name(&self) -> &'static str {
+        match self {
+            Self::Import { .. } => "entry.import",
+            Self::Edit { .. } => "entry.edit",
+            Self::Delete { .. } => "entry.delete",
+        }
+    }
+}
+
+impl CardAdmin {
+    const fn name(&self) -> &'static str {
+        match self {
+            Self::Generate { replace: false, .. } => "card.generate",
+            Self::Generate { replace: true, .. } => "card.regenerate",
+            Self::Import { replace: false, .. } => "card.import",
+            Self::Import { replace: true, .. } => "card.reimport",
+            Self::Set { .. } => "card.set_cell",
+            Self::Reset { .. } => "card.reset",
         }
     }
 }
