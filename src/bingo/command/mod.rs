@@ -1,3 +1,4 @@
+mod args;
 mod parser;
 
 use crate::bingo::{
