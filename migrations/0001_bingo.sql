@@ -1,7 +1,6 @@
 CREATE TABLE bingo_users (
     chat_id INTEGER NOT NULL,
-    user_id BLOB NOT NULL
-    CHECK (typeof(user_id) = 'blob' AND length(user_id) = 8),
+    user_id INTEGER NOT NULL,
     username TEXT COLLATE nocase,
     display_name TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -21,8 +20,7 @@ CREATE TABLE bingo_games (
     state TEXT NOT NULL DEFAULT 'draft'
     CHECK (state IN ('draft', 'active', 'closed')),
     is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
-    created_by BLOB NOT NULL
-    CHECK (typeof(created_by) = 'blob' AND length(created_by) = 8),
+    created_by INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (chat_id, slug)
 );
@@ -47,8 +45,7 @@ ON bingo_entries (game_id, active);
 CREATE TABLE bingo_cards (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id INTEGER NOT NULL REFERENCES bingo_games(id) ON DELETE CASCADE,
-    user_id BLOB NOT NULL
-    CHECK (typeof(user_id) = 'blob' AND length(user_id) = 8),
+    user_id INTEGER NOT NULL,
     owner_name TEXT NOT NULL,
     bingo_announced INTEGER NOT NULL DEFAULT 0
     CHECK (bingo_announced IN (0, 1)),

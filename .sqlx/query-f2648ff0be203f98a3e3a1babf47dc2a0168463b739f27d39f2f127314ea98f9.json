@@ -1,12 +1,12 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT user_id AS `user_id: Vec<u8>`, username, display_name FROM bingo_users\nWHERE chat_id = ? AND username = ? COLLATE NOCASE",
+  "query": "SELECT user_id, username, display_name FROM bingo_users\nWHERE chat_id = ? AND user_id = ?",
   "describe": {
     "columns": [
       {
-        "name": "user_id: Vec<u8>",
+        "name": "user_id",
         "ordinal": 0,
-        "type_info": "Blob",
+        "type_info": "Integer",
         "origin": {
           "Table": {
             "table": "bingo_users",
@@ -46,5 +46,5 @@
       false
     ]
   },
-  "hash": "fa132232f71d2acefbe466a1073b0ecd2966ae200846fa7694224324000bdc06"
+  "hash": "f2648ff0be203f98a3e3a1babf47dc2a0168463b739f27d39f2f127314ea98f9"
 }

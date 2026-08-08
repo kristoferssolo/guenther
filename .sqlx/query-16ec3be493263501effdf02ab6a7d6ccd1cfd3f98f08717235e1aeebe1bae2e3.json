@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT\n    c.id AS card_id, c.user_id AS `user_id: Vec<u8>`, c.owner_name,\n    c.bingo_announced AS `bingo_announced: bool`,\n    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text,\n    g.state, g.is_default AS `is_default: bool`\nFROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
+  "query": "SELECT\n    c.id AS card_id, c.user_id, c.owner_name,\n    c.bingo_announced AS `bingo_announced: bool`,\n    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text,\n    g.state, g.is_default AS `is_default: bool`\nFROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
   "describe": {
     "columns": [
       {
@@ -15,9 +15,9 @@
         }
       },
       {
-        "name": "user_id: Vec<u8>",
+        "name": "user_id",
         "ordinal": 1,
-        "type_info": "Blob",
+        "type_info": "Integer",
         "origin": {
           "Table": {
             "table": "bingo_cards",
@@ -142,5 +142,5 @@
       false
     ]
   },
-  "hash": "af48cab98840e186a71c54f5c8508535bf6d846ae89d0d00b54c4c2adbeb53c7"
+  "hash": "16ec3be493263501effdf02ab6a7d6ccd1cfd3f98f08717235e1aeebe1bae2e3"
 }
