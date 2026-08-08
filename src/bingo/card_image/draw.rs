@@ -132,10 +132,27 @@ fn draw_character(
 }
 
 fn blend_pixel(background: &mut Rgba<u8>, foreground: [u8; 4], coverage: u8) {
-    let coverage = u16::from(coverage);
+    let [red, green, blue, alpha] = foreground;
+    let coverage = u16::from(coverage) * u16::from(alpha) / 255;
     let inverse = 255 - coverage;
-    for (background, foreground) in background.0[..3].iter_mut().zip(foreground) {
+    for (background, foreground) in background.0.iter_mut().take(3).zip([red, green, blue]) {
         let blended = (u16::from(*background) * inverse + u16::from(foreground) * coverage) / 255;
         *background = u8::try_from(blended).unwrap_or(u8::MAX);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blending_respects_foreground_alpha() {
+        let mut transparent = Rgba([255, 255, 255, 255]);
+        blend_pixel(&mut transparent, [0, 0, 0, 0], 255);
+        assert_eq!(transparent, Rgba([255, 255, 255, 255]));
+
+        let mut opaque = Rgba([255, 255, 255, 255]);
+        blend_pixel(&mut opaque, [0, 0, 0, 255], 255);
+        assert_eq!(opaque, Rgba([0, 0, 0, 255]));
     }
 }
