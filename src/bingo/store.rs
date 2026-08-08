@@ -187,19 +187,24 @@ WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
         .await?;
         let normalized_slug = slug.to_ascii_lowercase();
         let name = name.trim();
-        sqlx::query!(
+        let is_default = !has_default;
+        let row = sqlx::query_as!(
+            GameRow,
             r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
-VALUES (?, ?, ?, ?, ?)"#,
+VALUES (?, ?, ?, ?, ?)
+RETURNING
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`"#,
             chat_id,
             normalized_slug,
             name,
-            !has_default,
+            is_default,
             created_by,
         )
-        .execute(&mut *transaction)
+        .fetch_one(&mut *transaction)
         .await
         .map_err(|error| map_unique(error, format!("game `{slug}` already exists")))?;
-        let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
+        let game = row.try_into()?;
         transaction.commit().await?;
         Ok(game)
     }
@@ -223,20 +228,21 @@ FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
     }
 
     pub async fn set_game_state(&self, chat_id: i64, slug: &str, state: GameState) -> Result<Game> {
-        let result = sqlx::query!(
+        let row = sqlx::query_as!(
+            GameRow,
             r#"UPDATE bingo_games SET state = ?
-WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
+WHERE chat_id = ? AND slug = ? COLLATE NOCASE
+RETURNING
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`"#,
             state.as_str(),
             chat_id,
             slug,
         )
-        .execute(&self.pool)
-        .await?;
-        require_changed(
-            result.rows_affected(),
-            format!("game `{slug}` was not found"),
-        )?;
-        self.game(chat_id, Some(slug)).await
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| BingoError::NotFound(format!("game `{slug}` was not found")))?;
+        row.try_into()
     }
 
     pub async fn set_default_game(&self, chat_id: i64, slug: &str) -> Result<Game> {
@@ -248,28 +254,37 @@ WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
         )
         .execute(&mut *transaction)
         .await?;
-        sqlx::query!(
-            r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?"#,
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?
+RETURNING
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`"#,
             game.id,
         )
-        .execute(&mut *transaction)
+        .fetch_one(&mut *transaction)
         .await?;
+        let game = row.try_into()?;
         transaction.commit().await?;
-        self.game(chat_id, Some(slug)).await
+        Ok(game)
     }
 
     pub async fn set_center_text(&self, chat_id: i64, slug: &str, text: &str) -> Result<Game> {
         validate_nonempty(text, "center text", 60)?;
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
-        sqlx::query!(
-            r#"UPDATE bingo_games SET center_text = ? WHERE id = ?"#,
+        let row = sqlx::query_as!(
+            GameRow,
+            r#"UPDATE bingo_games SET center_text = ? WHERE id = ?
+RETURNING
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`"#,
             text.trim(),
             game.id,
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        self.game(chat_id, Some(slug)).await
+        row.try_into()
     }
 
     pub async fn add_entry(&self, chat_id: i64, slug: Option<&str>, text: &str) -> Result<Entry> {
