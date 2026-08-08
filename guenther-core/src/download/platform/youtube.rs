@@ -1,25 +1,13 @@
 use crate::{
-    config::global_config,
-    download::{DownloadResult, platform::run_yt_dlp},
+    download::{DownloadResult, platform::cobalt::download_with_cobalt},
     error::Result,
 };
 
-/// Download a URL with yt-dlp.
+/// Download `YouTube` media with Cobalt.
 ///
 /// # Errors
 ///
-/// - Propagates `run_command_in_tempdir` errors.
+/// Propagates Cobalt API and media download errors.
 pub async fn download_youtube(url: String) -> Result<DownloadResult> {
-    let config = global_config();
-    let mut args = vec![
-        "--no-playlist",
-        "-f",
-        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
-        "--merge-output-format",
-        "mp4",
-    ];
-    if !config.youtube.postprocessor_args.is_empty() {
-        args.extend(["--postprocessor-args", &config.youtube.postprocessor_args]);
-    }
-    run_yt_dlp(&args, config.youtube.cookies_path.as_deref(), &url).await
+    download_with_cobalt(&url).await
 }

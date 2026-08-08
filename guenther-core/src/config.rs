@@ -9,22 +9,16 @@ static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 #[derive(Debug, Clone, Default)]
 pub struct Config {
     pub chat_id: Option<i64>,
-    pub youtube: YoutubeConfig,
-    pub instagram: InstagramConfig,
+    pub cobalt: CobaltConfig,
     pub tiktok: TiktokConfig,
     pub twitter: TwitterConfig,
     pub f1: F1Config,
 }
 
 #[derive(Debug, Clone)]
-pub struct YoutubeConfig {
-    pub cookies_path: Option<PathBuf>,
-    pub postprocessor_args: String,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct InstagramConfig {
-    pub cookies_path: Option<PathBuf>,
+pub struct CobaltConfig {
+    pub api_url: String,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -62,8 +56,7 @@ impl Config {
         };
         Self {
             chat_id,
-            youtube: YoutubeConfig::from_env(),
-            instagram: InstagramConfig::from_env(),
+            cobalt: CobaltConfig::from_env(),
             tiktok: TiktokConfig::from_env(),
             twitter: TwitterConfig::from_env(),
             f1: F1Config::from_env(),
@@ -92,22 +85,14 @@ pub fn global_config() -> &'static Config {
     GLOBAL_CONFIG.get().expect("config not initialized")
 }
 
-impl YoutubeConfig {
-    const DEFAULT_POSTPROCESSOR_ARGS: &'static str = "ffmpeg:-vf setsar=1 -c:v libx264 -crf 20 -preset veryfast -c:a aac -b:a 128k -movflags +faststart";
+impl CobaltConfig {
+    const DEFAULT_API_URL: &'static str = "http://127.0.0.1:9000/";
 
     fn from_env() -> Self {
         Self {
-            cookies_path: get_path_from_env("YOUTUBE_SESSION_COOKIE_PATH"),
-            postprocessor_args: env::var("YOUTUBE_POSTPROCESSOR_ARGS")
-                .unwrap_or_else(|_| Self::DEFAULT_POSTPROCESSOR_ARGS.to_string()),
-        }
-    }
-}
-
-impl InstagramConfig {
-    fn from_env() -> Self {
-        Self {
-            cookies_path: get_path_from_env("IG_SESSION_COOKIE_PATH"),
+            api_url: get_string_from_env("COBALT_API_URL")
+                .unwrap_or_else(|| Self::DEFAULT_API_URL.to_owned()),
+            api_key: get_string_from_env("COBALT_API_KEY"),
         }
     }
 }
@@ -165,6 +150,20 @@ fn get_path_from_env(env_key: &str) -> Option<PathBuf> {
     }
 }
 
+fn get_string_from_env(env_key: &str) -> Option<String> {
+    match env::var(env_key) {
+        Ok(raw) => match raw.trim() {
+            "" => None,
+            value => Some(value.to_owned()),
+        },
+        Err(env::VarError::NotPresent) => None,
+        Err(env::VarError::NotUnicode(_)) => {
+            warn!(env_key = env_key, "env var is not valid unicode");
+            None
+        }
+    }
+}
+
 fn parse_utc_offset(raw: &str) -> Option<UtcOffset> {
     let trimmed = raw.trim();
     let (is_negative, offset) = match trimmed.as_bytes().first().copied() {
@@ -196,11 +195,11 @@ fn parse_utc_offset(raw: &str) -> Option<UtcOffset> {
     UtcOffset::from_hms(hours, minutes, 0).ok()
 }
 
-impl Default for YoutubeConfig {
+impl Default for CobaltConfig {
     fn default() -> Self {
         Self {
-            cookies_path: None,
-            postprocessor_args: Self::DEFAULT_POSTPROCESSOR_ARGS.into(),
+            api_url: Self::DEFAULT_API_URL.to_owned(),
+            api_key: None,
         }
     }
 }

@@ -1,31 +1,19 @@
 use claims::{assert_none, assert_some};
 use guenther_core::config::Config;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
 use temp_env::with_vars;
-use tempfile::tempdir;
 
 fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
     with_vars(
         [
             ("CHAT_ID", None::<&str>),
-            ("YOUTUBE_SESSION_COOKIE_PATH", None),
-            ("IG_SESSION_COOKIE_PATH", None),
+            ("COBALT_API_URL", None),
+            ("COBALT_API_KEY", None),
             ("TIKTOK_SESSION_COOKIE_PATH", None),
             ("TWITTER_SESSION_COOKIE_PATH", None),
-            ("YOUTUBE_POSTPROCESSOR_ARGS", None),
             ("F1_UTC_OFFSET", None),
         ],
         f,
     )
-}
-
-fn write_temp_cookie_file(dir: &Path, name: &str) -> PathBuf {
-    let file_path = dir.join(name);
-    fs::write(&file_path, "session=example\n").expect("write cookie fixture");
-    file_path
 }
 
 #[test]
@@ -58,46 +46,38 @@ fn from_env_uses_none_when_chat_id_missing() {
 }
 
 #[test]
-fn from_env_sets_youtube_cookie_path_when_file_exists() {
-    let tmp = tempdir().expect("create temp dir");
-    let cookie = write_temp_cookie_file(tmp.path(), "yt.cookies");
-    let cookie_str = cookie.to_string_lossy().into_owned();
-
+fn from_env_sets_cobalt_configuration() {
     with_clean_config_env(|| {
         with_vars(
-            [("YOUTUBE_SESSION_COOKIE_PATH", Some(cookie_str.as_str()))],
+            [
+                ("COBALT_API_URL", Some("https://cobalt.example/")),
+                ("COBALT_API_KEY", Some("secret-key")),
+            ],
             || {
                 let cfg = Config::from_env();
-                let yt_cookie = assert_some!(cfg.youtube.cookies_path);
-                assert_eq!(yt_cookie, cookie);
+                assert_eq!(cfg.cobalt.api_url, "https://cobalt.example/");
+                assert_eq!(cfg.cobalt.api_key.as_deref(), Some("secret-key"));
             },
         );
     });
 }
 
 #[test]
-fn from_env_uses_none_when_cookie_path_missing() {
+fn from_env_uses_default_cobalt_configuration() {
     with_clean_config_env(|| {
         let cfg = Config::from_env();
-        assert_none!(cfg.youtube.cookies_path);
+        assert_eq!(cfg.cobalt.api_url, "http://127.0.0.1:9000/");
+        assert_none!(cfg.cobalt.api_key);
     });
 }
 
 #[test]
-fn from_env_uses_none_when_cookie_path_is_not_a_file() {
-    let tmp = tempdir().expect("create temp dir");
-    let dir_path = tmp.path().join("not-a-file");
-    fs::create_dir(&dir_path).expect("create directory fixture");
-    let dir_str = dir_path.to_string_lossy().into_owned();
-
+fn from_env_ignores_empty_cobalt_api_key() {
     with_clean_config_env(|| {
-        with_vars(
-            [("YOUTUBE_SESSION_COOKIE_PATH", Some(dir_str.as_str()))],
-            || {
-                let cfg = Config::from_env();
-                assert_none!(cfg.youtube.cookies_path);
-            },
-        );
+        with_vars([("COBALT_API_KEY", Some("  "))], || {
+            let cfg = Config::from_env();
+            assert_none!(cfg.cobalt.api_key);
+        });
     });
 }
 

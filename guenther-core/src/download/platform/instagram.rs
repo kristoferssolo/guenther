@@ -1,20 +1,13 @@
 use crate::{
-    config::global_config,
-    download::{DownloadResult, platform::run_yt_dlp},
+    download::{DownloadResult, platform::cobalt::download_with_cobalt},
     error::Result,
 };
 
-/// Download a Instagram URL with yt-dlp.
+/// Download Instagram media with Cobalt.
 ///
 /// # Errors
 ///
-/// - Propagates `run_command_in_tempdir` errors.
+/// Propagates Cobalt API and media download errors.
 pub async fn download_instagram(url: String) -> Result<DownloadResult> {
-    let config = global_config();
-    run_yt_dlp(
-        &["-t", "mp4"],
-        config.instagram.cookies_path.as_deref(),
-        &url,
-    )
-    .await
+    download_with_cobalt(&url).await
 }

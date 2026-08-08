@@ -8,6 +8,15 @@ pub enum Error {
     #[error("yt-dlp failed: {0}")]
     YTDLPFailed(String),
 
+    #[error("cobalt request failed: {0}")]
+    CobaltRequest(#[source] reqwest::Error),
+
+    #[error("cobalt rejected the download: {0}")]
+    CobaltRejected(String),
+
+    #[error("cobalt returned unsupported local processing instructions")]
+    CobaltLocalProcessing,
+
     #[error("no media found")]
     NoMediaFound,
 

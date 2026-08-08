@@ -10,6 +10,8 @@ use tempfile::tempdir;
 use tokio::fs;
 use tracing::debug;
 
+#[cfg(any(feature = "instagram", feature = "youtube"))]
+mod cobalt;
 #[cfg(feature = "instagram")]
 pub mod instagram;
 #[cfg(feature = "tiktok")]
