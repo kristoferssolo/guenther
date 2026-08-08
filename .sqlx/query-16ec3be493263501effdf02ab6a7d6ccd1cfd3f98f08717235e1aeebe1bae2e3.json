@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT\n    c.id AS card_id, c.user_id, c.owner_name,\n    c.bingo_announced AS `bingo_announced: bool`, \n    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text, \n    g.state, g.is_default AS `is_default: bool`\nFROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
+  "query": "SELECT\n    c.id AS card_id, c.user_id, c.owner_name,\n    c.bingo_announced AS `bingo_announced: bool`,\n    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text,\n    g.state, g.is_default AS `is_default: bool`\nFROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
   "describe": {
     "columns": [
       {
@@ -142,5 +142,5 @@
       false
     ]
   },
-  "hash": "8a9346fce12c811dc0de07f503e4811ece7bb095549aa3666c2834ec3a2f910f"
+  "hash": "16ec3be493263501effdf02ab6a7d6ccd1cfd3f98f08717235e1aeebe1bae2e3"
 }

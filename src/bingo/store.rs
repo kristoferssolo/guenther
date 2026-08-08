@@ -535,7 +535,7 @@ WHERE card_id = ? AND position = ?"#,
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query!(
             r#"SELECT
-    c.user_id, c.bingo_announced AS `bingo_announced: bool`, 
+    c.user_id, c.bingo_announced AS `bingo_announced: bool`,
     g.state FROM bingo_cards c
     JOIN bingo_games g ON g.id = c.game_id
 WHERE c.id = ?"#,
@@ -584,8 +584,8 @@ WHERE card_id = ? AND position = ? AND is_free = 0"#,
             CardRow,
             r#"SELECT
     c.id AS card_id, c.user_id, c.owner_name,
-    c.bingo_announced AS `bingo_announced: bool`, 
-    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text, 
+    c.bingo_announced AS `bingo_announced: bool`,
+    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text,
     g.state, g.is_default AS `is_default: bool`
 FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
             card_id,
