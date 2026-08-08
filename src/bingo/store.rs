@@ -203,7 +203,7 @@ RETURNING
         )
         .fetch_one(&mut *transaction)
         .await
-        .map_err(|error| map_unique(error, format!("game `{slug}` already exists")))?;
+        .map_err(|error| map_unique(error, || format!("game `{slug}` already exists")))?;
         let game = row.try_into()?;
         transaction.commit().await?;
         Ok(game)
@@ -331,7 +331,7 @@ RETURNING id, game_id, text"#,
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| map_unique(error, "that entry already exists".to_owned()))?
+        .map_err(|error| map_unique(error, || "that entry already exists".to_owned()))?
         .ok_or_else(|| BingoError::NotFound(format!("entry `{entry_id}` was not found")))?;
         Ok(row.into())
     }
@@ -346,10 +346,9 @@ WHERE id = ? AND game_id IN
         )
         .execute(&self.pool)
         .await?;
-        require_changed(
-            result.rows_affected(),
-            format!("entry `{entry_id}` was not found"),
-        )
+        require_changed(result.rows_affected(), || {
+            format!("entry `{entry_id}` was not found")
+        })
     }
 
     pub async fn generate_card(
@@ -559,10 +558,9 @@ WHERE card_id = ? AND position = ? AND is_free = 0"#,
         )
         .execute(&mut *transaction)
         .await?;
-        require_changed(
-            result.rows_affected(),
-            "that card cell was not found".to_owned(),
-        )?;
+        require_changed(result.rows_affected(), || {
+            "that card cell was not found".to_owned()
+        })?;
         let cells = fetch_cells(&mut *transaction, card_id).await?;
         let newly_completed = !row.bingo_announced && has_bingo(&cells);
         if newly_completed {
@@ -895,17 +893,17 @@ fn ensure_editable(game: &Game) -> Result<()> {
     }
 }
 
-fn require_changed(rows_affected: u64, message: String) -> Result<()> {
+fn require_changed(rows_affected: u64, message: impl FnOnce() -> String) -> Result<()> {
     if rows_affected == 0 {
-        Err(BingoError::NotFound(message))
+        Err(BingoError::NotFound(message()))
     } else {
         Ok(())
     }
 }
 
-fn map_unique(error: sqlx::Error, message: String) -> BingoError {
+fn map_unique(error: sqlx::Error, message: impl FnOnce() -> String) -> BingoError {
     if matches!(&error, sqlx::Error::Database(database) if database.is_unique_violation()) {
-        BingoError::Conflict(message)
+        BingoError::Conflict(message())
     } else {
         BingoError::Database(error)
     }
