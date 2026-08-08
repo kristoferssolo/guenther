@@ -2,6 +2,7 @@ use crate::bingo::card_image::layout::Rect;
 use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster_width};
 
 const LINE_GAP: u32 = 5;
+const DEFAULT_FONT: Font = Font::new(Size::Small, Weight::Regular);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Weight {
@@ -39,19 +40,19 @@ impl Font {
 
     #[must_use]
     pub const fn height(self) -> u32 {
-        self.size.height() * self.scale
+        self.size.height().saturating_mul(self.scale)
     }
 
     #[must_use]
     pub fn character_width(self) -> u32 {
         u32::try_from(get_raster_width(self.weight.into(), self.size.into()))
-            .expect("font raster width fits in u32")
-            * self.scale
+            .unwrap_or(u32::MAX)
+            .saturating_mul(self.scale)
     }
 
     #[must_use]
     pub const fn line_height(self) -> u32 {
-        self.height() + LINE_GAP
+        self.height().saturating_add(LINE_GAP)
     }
 }
 
@@ -100,12 +101,14 @@ impl TextBlock {
             .map(|line| line.chars().count())
             .max()
             .unwrap_or_default();
-        u32::try_from(columns).expect("line length fits in u32") * self.font.character_width()
+        u32::try_from(columns)
+            .unwrap_or(u32::MAX)
+            .saturating_mul(self.font.character_width())
     }
 
     #[must_use]
     pub fn height(&self) -> u32 {
-        let line_count = u32::try_from(self.lines.len()).expect("line count fits in u32");
+        let line_count = u32::try_from(self.lines.len()).unwrap_or(u32::MAX);
         line_count
             .saturating_mul(self.font.line_height())
             .saturating_sub(LINE_GAP)
@@ -114,13 +117,12 @@ impl TextBlock {
 
 #[must_use]
 pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
-    assert!(!fonts.is_empty(), "font candidates cannot be empty");
     for &font in fonts {
-        let columns = bounds.width / font.character_width();
-        let lines = wrap_text(
-            text,
-            usize::try_from(columns).expect("column count fits in usize"),
-        );
+        let columns = column_capacity(font, bounds);
+        if columns == 0 {
+            continue;
+        }
+        let lines = layout(text, font, bounds);
         if lines_fit(&lines, font, bounds.height) {
             return TextBlock {
                 lines,
@@ -130,14 +132,19 @@ pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
         }
     }
 
-    let font = *fonts.last().expect("font candidates are not empty");
-    let columns = usize::try_from(bounds.width / font.character_width())
-        .expect("column count fits in usize")
-        .max(1);
-    let mut lines = wrap_text(text, columns);
-    let max_lines = usize::try_from((bounds.height + LINE_GAP) / font.line_height())
-        .expect("line count fits in usize")
-        .max(1);
+    let font = fonts.last().copied().unwrap_or(DEFAULT_FONT);
+    let columns = column_capacity(font, bounds);
+    let max_lines = usize::try_from(bounds.height.saturating_add(LINE_GAP) / font.line_height())
+        .unwrap_or(usize::MAX);
+    if columns == 0 || max_lines == 0 {
+        return TextBlock {
+            lines: Vec::new(),
+            font,
+            truncated: !text.is_empty(),
+        };
+    }
+
+    let mut lines = layout(text, font, bounds);
     lines.truncate(max_lines);
     if let Some(last) = lines.last_mut() {
         let keep = columns.saturating_sub(1);
@@ -148,6 +155,18 @@ pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
         font,
         truncated: true,
     }
+}
+
+fn layout(text: &str, font: Font, bounds: Rect) -> Vec<String> {
+    wrap_text(text, column_capacity(font, bounds))
+}
+
+fn column_capacity(font: Font, bounds: Rect) -> usize {
+    let character_width = font.character_width();
+    if character_width == 0 {
+        return 0;
+    }
+    usize::try_from(bounds.width / character_width).unwrap_or(usize::MAX)
 }
 
 #[must_use]
@@ -196,7 +215,7 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
 }
 
 fn lines_fit(lines: &[String], font: Font, height: u32) -> bool {
-    let line_count = u32::try_from(lines.len()).expect("line count fits in u32");
+    let line_count = u32::try_from(lines.len()).unwrap_or(u32::MAX);
     line_count
         .saturating_mul(font.line_height())
         .saturating_sub(LINE_GAP)
@@ -237,6 +256,23 @@ mod tests {
         assert!(block.lines.last().is_some_and(|line| line.ends_with('…')));
         assert!(block.width() <= CELL_BOUNDS.width);
         assert!(block.height() <= CELL_BOUNDS.height);
+    }
+
+    #[test]
+    fn reports_truncation_when_no_character_fits() {
+        let font = Font::new(Size::Small, Weight::Regular);
+        let bounds = Rect::new(
+            0,
+            0,
+            font.character_width().saturating_sub(1),
+            font.height(),
+        );
+        let block = fit_text("x", bounds, &[font]);
+
+        assert!(block.truncated);
+        assert!(block.lines.is_empty());
+        assert!(block.width() <= bounds.width);
+        assert!(block.height() <= bounds.height);
     }
 
     #[test]
