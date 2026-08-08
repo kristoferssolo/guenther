@@ -7,7 +7,7 @@ use crate::bingo::{
 };
 use rand::seq::SliceRandom;
 use sqlx::{
-    FromRow, Row, Sqlite, SqlitePool, Transaction,
+    Sqlite, SqlitePool, Transaction,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
 use std::{env, path::Path, str::FromStr, time::Duration};
@@ -19,7 +19,7 @@ pub struct BingoStore {
     pool: SqlitePool,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct GameRow {
     id: i64,
     chat_id: i64,
@@ -30,14 +30,14 @@ struct GameRow {
     is_default: bool,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct EntryRow {
     id: i64,
     game_id: i64,
     text: String,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct CardRow {
     card_id: i64,
     user_id: i64,
@@ -52,7 +52,7 @@ struct CardRow {
     is_default: bool,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug)]
 struct CellRow {
     position: i64,
     text: String,
@@ -91,24 +91,26 @@ impl BingoStore {
     pub async fn observe_user(&self, chat_id: i64, user: &KnownUser) -> Result<()> {
         let mut transaction = self.pool.begin().await?;
         if let Some(username) = &user.username {
-            sqlx::query(
-                "UPDATE bingo_users SET username = NULL WHERE chat_id = ? AND username = ? COLLATE NOCASE AND user_id != ?",
+            sqlx::query!(
+                r#"UPDATE bingo_users SET username = NULL
+WHERE chat_id = ? AND username = ? COLLATE NOCASE AND user_id != ?"#,
+                chat_id,
+                username,
+                user.user_id,
             )
-            .bind(chat_id)
-            .bind(username)
-            .bind(user.user_id)
             .execute(&mut *transaction)
             .await?;
         }
-        sqlx::query(
-            "INSERT INTO bingo_users (chat_id, user_id, username, display_name) VALUES (?, ?, ?, ?) \
-             ON CONFLICT(chat_id, user_id) DO UPDATE SET username = excluded.username, \
-             display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP",
+        sqlx::query!(
+            r#"INSERT INTO bingo_users (chat_id, user_id, username, display_name)
+VALUES (?, ?, ?, ?) 
+ON CONFLICT(chat_id, user_id) DO UPDATE SET username = excluded.username, 
+display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP"#,
+            chat_id,
+            user.user_id,
+            user.username,
+            user.display_name,
         )
-        .bind(chat_id)
-        .bind(user.user_id)
-        .bind(&user.username)
-        .bind(&user.display_name)
         .execute(&mut *transaction)
         .await?;
         transaction.commit().await?;
@@ -116,31 +118,38 @@ impl BingoStore {
     }
 
     pub async fn user_by_id(&self, chat_id: i64, user_id: i64) -> Result<KnownUser> {
-        sqlx::query_as::<_, (i64, Option<String>, String)>(
-            "SELECT user_id, username, display_name FROM bingo_users WHERE chat_id = ? AND user_id = ?",
+        sqlx::query!(
+            r#"SELECT user_id, username, display_name FROM bingo_users
+WHERE chat_id = ? AND user_id = ?"#,
+            chat_id,
+            user_id,
         )
-        .bind(chat_id)
-        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?
-        .map(|(user_id, username, display_name)| KnownUser { user_id, username, display_name })
-        .ok_or_else(|| BingoError::NotFound(format!("user `{user_id}` has not been seen in this chat")))
+        .map(|row| KnownUser {
+            user_id: row.user_id,
+            username: row.username,
+            display_name: row.display_name,
+        })
+        .ok_or_else(|| {
+            BingoError::NotFound(format!("user `{user_id}` has not been seen in this chat"))
+        })
     }
 
     pub async fn user_by_username(&self, chat_id: i64, username: &str) -> Result<KnownUser> {
         let username = username.trim_start_matches('@');
-        sqlx::query_as::<_, (i64, Option<String>, String)>(
-            "SELECT user_id, username, display_name FROM bingo_users \
-             WHERE chat_id = ? AND username = ? COLLATE NOCASE",
+        sqlx::query!(
+            r#"SELECT user_id, username, display_name FROM bingo_users
+WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
+            chat_id,
+            username,
         )
-        .bind(chat_id)
-        .bind(username)
         .fetch_optional(&self.pool)
         .await?
-        .map(|(user_id, username, display_name)| KnownUser {
-            user_id,
-            username,
-            display_name,
+        .map(|row| KnownUser {
+            user_id: row.user_id,
+            username: row.username,
+            display_name: row.display_name,
         })
         .ok_or_else(|| {
             BingoError::NotFound(format!(
@@ -159,20 +168,26 @@ impl BingoStore {
         validate_slug(slug)?;
         validate_nonempty(name, "game name", 100)?;
         let mut transaction = self.pool.begin().await?;
-        let has_default: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM bingo_games WHERE chat_id = ? AND is_default = 1)",
+        let has_default = sqlx::query_scalar!(
+            r#"SELECT EXISTS(
+    SELECT 1 FROM bingo_games
+    WHERE chat_id = ? AND is_default = 1
+) AS `has_default!: bool`"#,
+            chat_id,
         )
-        .bind(chat_id)
         .fetch_one(&mut *transaction)
         .await?;
-        let result = sqlx::query(
-            "INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by) VALUES (?, ?, ?, ?, ?)",
+        let normalized_slug = slug.to_ascii_lowercase();
+        let name = name.trim();
+        let result = sqlx::query!(
+            r#"INSERT INTO bingo_games (chat_id, slug, name, is_default, created_by)
+VALUES (?, ?, ?, ?, ?)"#,
+            chat_id,
+            normalized_slug,
+            name,
+            !has_default,
+            created_by,
         )
-        .bind(chat_id)
-        .bind(slug.to_ascii_lowercase())
-        .bind(name.trim())
-        .bind(!has_default)
-        .bind(created_by)
         .execute(&mut *transaction)
         .await
         .map_err(|error| map_unique(error, format!("game `{slug}` already exists")))?;
@@ -182,11 +197,14 @@ impl BingoStore {
     }
 
     pub async fn list_games(&self, chat_id: i64) -> Result<Vec<Game>> {
-        let rows = sqlx::query_as::<_, GameRow>(
-            "SELECT id, chat_id, slug, name, center_text, state, is_default \
-             FROM bingo_games WHERE chat_id = ? ORDER BY id DESC",
+        let rows = sqlx::query_as!(
+            GameRow,
+            r#"SELECT
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`
+FROM bingo_games WHERE chat_id = ? ORDER BY id DESC"#,
+            chat_id,
         )
-        .bind(chat_id)
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(Game::try_from).collect()
@@ -194,20 +212,26 @@ impl BingoStore {
 
     pub async fn game(&self, chat_id: i64, slug: Option<&str>) -> Result<Game> {
         let row = if let Some(slug) = slug {
-            sqlx::query_as::<_, GameRow>(
-                "SELECT id, chat_id, slug, name, center_text, state, is_default \
-                 FROM bingo_games WHERE chat_id = ? AND slug = ? COLLATE NOCASE",
+            sqlx::query_as!(
+                GameRow,
+                r#"SELECT
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`
+FROM bingo_games WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
+                chat_id,
+                slug,
             )
-            .bind(chat_id)
-            .bind(slug)
             .fetch_optional(&self.pool)
             .await?
         } else {
-            sqlx::query_as::<_, GameRow>(
-                "SELECT id, chat_id, slug, name, center_text, state, is_default \
-                 FROM bingo_games WHERE chat_id = ? AND is_default = 1",
+            sqlx::query_as!(
+                GameRow,
+                r#"SELECT
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`
+FROM bingo_games WHERE chat_id = ? AND is_default =1"#,
+                chat_id,
             )
-            .bind(chat_id)
             .fetch_optional(&self.pool)
             .await?
         };
@@ -225,12 +249,13 @@ impl BingoStore {
     }
 
     pub async fn set_game_state(&self, chat_id: i64, slug: &str, state: GameState) -> Result<Game> {
-        let result = sqlx::query(
-            "UPDATE bingo_games SET state = ? WHERE chat_id = ? AND slug = ? COLLATE NOCASE",
+        let result = sqlx::query!(
+            r#"UPDATE bingo_games SET state = ?
+WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
+            state.as_str(),
+            chat_id,
+            slug,
         )
-        .bind(state.as_str())
-        .bind(chat_id)
-        .bind(slug)
         .execute(&self.pool)
         .await?;
         require_changed(
@@ -243,14 +268,18 @@ impl BingoStore {
     pub async fn set_default_game(&self, chat_id: i64, slug: &str) -> Result<Game> {
         let mut transaction = self.pool.begin().await?;
         let game = game_by_slug_in(&mut transaction, chat_id, slug).await?;
-        sqlx::query("UPDATE bingo_games SET is_default = 0 WHERE chat_id = ?")
-            .bind(chat_id)
-            .execute(&mut *transaction)
-            .await?;
-        sqlx::query("UPDATE bingo_games SET is_default = 1 WHERE id = ?")
-            .bind(game.id)
-            .execute(&mut *transaction)
-            .await?;
+        sqlx::query!(
+            r#"UPDATE bingo_games SET is_default = 0 WHERE chat_id = ?"#,
+            chat_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"UPDATE bingo_games SET is_default = 1 WHERE id = ?"#,
+            game.id,
+        )
+        .execute(&mut *transaction)
+        .await?;
         transaction.commit().await?;
         self.game(chat_id, Some(slug)).await
     }
@@ -259,11 +288,13 @@ impl BingoStore {
         validate_nonempty(text, "center text", 60)?;
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
-        sqlx::query("UPDATE bingo_games SET center_text = ? WHERE id = ?")
-            .bind(text.trim())
-            .bind(game.id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query!(
+            r#"UPDATE bingo_games SET center_text = ? WHERE id = ?"#,
+            text.trim(),
+            game.id,
+        )
+        .execute(&self.pool)
+        .await?;
         self.game(chat_id, Some(slug)).await
     }
 
@@ -272,14 +303,16 @@ impl BingoStore {
         let game = self.game(chat_id, slug).await?;
         ensure_editable(&game)?;
         let normalized = normalize_entry(text);
-        let id: i64 = sqlx::query_scalar(
-            "INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?) \
-             ON CONFLICT(game_id, normalized_text) DO UPDATE SET text = excluded.text, active = 1 \
-             RETURNING id",
+        let id = sqlx::query_scalar!(
+            r#"INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)
+ON CONFLICT(game_id,
+normalized_text) DO UPDATE SET text = excluded.text,
+active = 1
+RETURNING id"#,
+            game.id,
+            text.trim(),
+            normalized,
         )
-        .bind(game.id)
-        .bind(text.trim())
-        .bind(normalized)
         .fetch_one(&self.pool)
         .await?;
         Ok(Entry {
@@ -295,11 +328,12 @@ impl BingoStore {
         slug: Option<&str>,
     ) -> Result<(Game, Vec<Entry>)> {
         let game = self.game(chat_id, slug).await?;
-        let rows = sqlx::query_as::<_, EntryRow>(
-            "SELECT id, game_id, text FROM bingo_entries \
-             WHERE game_id = ? AND active = 1 ORDER BY id",
+        let rows = sqlx::query_as!(
+            EntryRow,
+            r#"SELECT id, game_id, text FROM bingo_entries
+WHERE game_id = ? AND active = 1 ORDER BY id"#,
+            game.id,
         )
-        .bind(game.id)
         .fetch_all(&self.pool)
         .await?;
         Ok((game, rows.into_iter().map(Entry::from).collect()))
@@ -308,15 +342,15 @@ impl BingoStore {
     pub async fn edit_entry(&self, chat_id: i64, entry_id: i64, text: &str) -> Result<Entry> {
         validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
         let normalized = normalize_entry(text);
-        let result = sqlx::query(
-            "UPDATE bingo_entries SET text = ?, normalized_text = ? \
-             WHERE id = ? AND game_id IN \
-             (SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1",
+        let result = sqlx::query!(
+            r#"UPDATE bingo_entries SET text = ?, normalized_text = ?
+WHERE id = ? AND game_id IN
+(SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1"#,
+            text.trim(),
+            normalized,
+            entry_id,
+            chat_id,
         )
-        .bind(text.trim())
-        .bind(normalized)
-        .bind(entry_id)
-        .bind(chat_id)
         .execute(&self.pool)
         .await
         .map_err(|error| map_unique(error, "that entry already exists".to_owned()))?;
@@ -324,23 +358,24 @@ impl BingoStore {
             result.rows_affected(),
             format!("entry `{entry_id}` was not found"),
         )?;
-        let row = sqlx::query_as::<_, EntryRow>(
-            "SELECT id, game_id, text FROM bingo_entries WHERE id = ?",
+        let row = sqlx::query_as!(
+            EntryRow,
+            r#"SELECT id, game_id, text FROM bingo_entries WHERE id = ?"#,
+            entry_id,
         )
-        .bind(entry_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row.into())
     }
 
     pub async fn delete_entry(&self, chat_id: i64, entry_id: i64) -> Result<()> {
-        let result = sqlx::query(
-            "UPDATE bingo_entries SET active = 0 \
-             WHERE id = ? AND game_id IN \
-             (SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1",
+        let result = sqlx::query!(
+            r#"UPDATE bingo_entries SET active = 0
+WHERE id = ? AND game_id IN
+(SELECT id FROM bingo_games WHERE chat_id = ? AND state != 'closed') AND active = 1"#,
+            entry_id,
+            chat_id,
         )
-        .bind(entry_id)
-        .bind(chat_id)
         .execute(&self.pool)
         .await?;
         require_changed(
@@ -452,12 +487,13 @@ impl BingoStore {
 
     pub async fn card(&self, chat_id: i64, slug: Option<&str>, user_id: i64) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
-        let card_id: Option<i64> =
-            sqlx::query_scalar("SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?")
-                .bind(game.id)
-                .bind(user_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let card_id = sqlx::query_scalar!(
+            r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
+            game.id,
+            user_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
         self.card_by_id(card_id.ok_or_else(|| {
             BingoError::NotFound(format!(
                 "no card is assigned to that user for `{}`",
@@ -486,14 +522,14 @@ impl BingoStore {
         let entry_id = upsert_entry_in(&mut transaction, game.id, text).await?;
         let position = i64::try_from(position)
             .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
-        sqlx::query(
-            "UPDATE bingo_card_cells SET entry_id = ?,
-text = ? WHERE card_id = ? AND position = ?",
+        sqlx::query!(
+            r#"UPDATE bingo_card_cells SET entry_id = ?, text = ?
+WHERE card_id = ? AND position = ?"#,
+            entry_id,
+            text.trim(),
+            card_id,
+            position,
         )
-        .bind(entry_id)
-        .bind(text.trim())
-        .bind(card_id)
-        .bind(position)
         .execute(&mut *transaction)
         .await?;
         transaction.commit().await?;
@@ -504,14 +540,18 @@ text = ? WHERE card_id = ? AND position = ?",
         let game = self.game(chat_id, slug).await?;
         let mut transaction = self.pool.begin().await?;
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
-        sqlx::query("UPDATE bingo_card_cells SET marked = is_free WHERE card_id = ?")
-            .bind(card_id)
-            .execute(&mut *transaction)
-            .await?;
-        sqlx::query("UPDATE bingo_cards SET bingo_announced = 0 WHERE id = ?")
-            .bind(card_id)
-            .execute(&mut *transaction)
-            .await?;
+        sqlx::query!(
+            r#"UPDATE bingo_card_cells SET marked = is_free WHERE card_id = ?"#,
+            card_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"UPDATE bingo_cards SET bingo_announced = 0 WHERE id = ?"#,
+            card_id,
+        )
+        .execute(&mut *transaction)
+        .await?;
         transaction.commit().await?;
         self.card_by_id(card_id).await
     }
@@ -528,51 +568,55 @@ text = ? WHERE card_id = ? AND position = ?",
         let position = i64::try_from(position)
             .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
         let mut transaction = self.pool.begin().await?;
-        let row = sqlx::query(
-            "SELECT c.user_id, c.bingo_announced, g.state FROM bingo_cards c \
-             JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?",
+        let row = sqlx::query!(
+            r#"SELECT
+    c.user_id, c.bingo_announced AS `bingo_announced: bool`, 
+    g.state FROM bingo_cards c
+    JOIN bingo_games g ON g.id = c.game_id
+WHERE c.id = ?"#,
+            card_id,
         )
-        .bind(card_id)
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
-        let owner_id: i64 = row.try_get("user_id")?;
-        let announced: bool = row.try_get("bingo_announced")?;
-        let state: String = row.try_get("state")?;
-        if owner_id != user_id {
+        if row.user_id != user_id {
             return Err(BingoError::NotCardOwner);
         }
-        if GameState::try_from(state.as_str())? != GameState::Active {
+        if GameState::try_from(row.state.as_str())? != GameState::Active {
             return Err(BingoError::GameNotActive);
         }
-        let result = sqlx::query(
-            "UPDATE bingo_card_cells SET marked = NOT marked
-\
-             WHERE card_id = ? AND position = ? AND is_free = 0",
+        let result = sqlx::query!(
+            r#"UPDATE bingo_card_cells SET marked = NOT marked
+WHERE card_id = ? AND position = ? AND is_free = 0"#,
+            card_id,
+            position,
         )
-        .bind(card_id)
-        .bind(position)
         .execute(&mut *transaction)
         .await?;
         require_changed(
             result.rows_affected(),
             "that card cell was not found".to_owned(),
         )?;
-        let cell_rows = sqlx::query_as::<_, CellRow>(
-            "SELECT position, text, marked, is_free FROM bingo_card_cells
-\
-             WHERE card_id = ? ORDER BY position",
+        let cell_rows = sqlx::query_as!(
+            CellRow,
+            r#"SELECT
+    position, text, marked AS `marked: bool`,
+    is_free AS `is_free: bool`
+FROM bingo_card_cells
+WHERE card_id = ? ORDER BY position"#,
+            card_id,
         )
-        .bind(card_id)
         .fetch_all(&mut *transaction)
         .await?;
         let cells = convert_cells(cell_rows)?;
-        let newly_completed = !announced && has_bingo(&cells);
+        let newly_completed = !row.bingo_announced && has_bingo(&cells);
         if newly_completed {
-            sqlx::query("UPDATE bingo_cards SET bingo_announced = 1 WHERE id = ?")
-                .bind(card_id)
-                .execute(&mut *transaction)
-                .await?;
+            sqlx::query!(
+                r#"UPDATE bingo_cards SET bingo_announced = 1 WHERE id = ?"#,
+                card_id,
+            )
+            .execute(&mut *transaction)
+            .await?;
         }
         transaction.commit().await?;
         let card = self.card_by_id(card_id).await?;
@@ -583,24 +627,25 @@ text = ? WHERE card_id = ? AND position = ?",
     }
 
     async fn card_by_id(&self, card_id: i64) -> Result<Card> {
-        let row = sqlx::query_as::<_, CardRow>(
-            "SELECT c.id AS card_id, c.user_id, c.owner_name, c.bingo_announced, \
-             g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text, \
-             g.state, g.is_default FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id \
-             WHERE c.id = ?",
+        let row = sqlx::query_as!(
+            CardRow,
+            r#"SELECT
+    c.id AS card_id, c.user_id, c.owner_name,
+    c.bingo_announced AS `bingo_announced: bool`, 
+    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.center_text, 
+    g.state, g.is_default AS `is_default: bool`
+FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
+            card_id,
         )
-        .bind(card_id)
         .fetch_optional(&self.pool)
         .await?
         .ok_or_else(|| BingoError::NotFound("that bingo card no longer exists".to_owned()))?;
-        let user = sqlx::query_as::<_, (i64, Option<String>, String)>(
-            "SELECT user_id, username, display_name
-FROM bingo_users
-WHERE chat_id
-= ? AND user_id = ?",
+        let user = sqlx::query!(
+            r#"SELECT user_id, username, display_name FROM bingo_users
+WHERE chat_id = ? AND user_id = ?"#,
+            row.chat_id,
+            row.user_id,
         )
-        .bind(row.chat_id)
-        .bind(row.user_id)
         .fetch_optional(&self.pool)
         .await?
         .map_or_else(
@@ -609,18 +654,21 @@ WHERE chat_id
                 username: None,
                 display_name: row.owner_name.clone(),
             },
-            |(user_id, username, display_name)| KnownUser {
-                user_id,
-                username,
-                display_name,
+            |known| KnownUser {
+                user_id: known.user_id,
+                username: known.username,
+                display_name: known.display_name,
             },
         );
-        let cells = sqlx::query_as::<_, CellRow>(
-            "SELECT position, text, marked, is_free FROM bingo_card_cells
-\
-             WHERE card_id = ? ORDER BY position",
+        let cells = sqlx::query_as!(
+            CellRow,
+            r#"SELECT
+    position, text, marked AS `marked: bool`,
+    is_free AS `is_free: bool`
+FROM bingo_card_cells
+WHERE card_id = ? ORDER BY position"#,
+            card_id,
         )
-        .bind(card_id)
         .fetch_all(&self.pool)
         .await?;
         Ok(Card {
@@ -685,13 +733,16 @@ async fn create_database_parent(database_url: &str) -> Result<()> {
 }
 
 async fn game_by_id_in(transaction: &mut Transaction<'_, Sqlite>, game_id: i64) -> Result<Game> {
-    let row = sqlx::query_as::<_, GameRow>(
-        "SELECT id, chat_id, slug, name, center_text, state, is_default
+    let row = sqlx::query_as!(
+        GameRow,
+        r#"SELECT
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`
 FROM bingo_games
 WHERE id
-= ?",
+= ?"#,
+        game_id,
     )
-    .bind(game_id)
     .fetch_one(&mut **transaction)
     .await?;
     row.try_into()
@@ -702,13 +753,16 @@ async fn game_by_slug_in(
     chat_id: i64,
     slug: &str,
 ) -> Result<Game> {
-    let row = sqlx::query_as::<_, GameRow>(
-        "SELECT id, chat_id, slug, name, center_text, state, is_default
-\
-         FROM bingo_games WHERE chat_id = ? AND slug = ? COLLATE NOCASE",
+    let row = sqlx::query_as!(
+        GameRow,
+        r#"SELECT
+    id, chat_id, slug, name, center_text, state,
+    is_default AS `is_default: bool`
+FROM bingo_games
+WHERE chat_id = ? AND slug = ? COLLATE NOCASE"#,
+        chat_id,
+        slug,
     )
-    .bind(chat_id)
-    .bind(slug)
     .fetch_optional(&mut **transaction)
     .await?
     .ok_or_else(|| BingoError::NotFound(format!("game `{slug}` was not found")))?;
@@ -721,20 +775,20 @@ async fn delete_or_reject_existing(
     user_id: i64,
     replace: bool,
 ) -> Result<()> {
-    let existing: Option<i64> =
-        sqlx::query_scalar("SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?")
-            .bind(game_id)
-            .bind(user_id)
-            .fetch_optional(&mut **transaction)
-            .await?;
+    let existing = sqlx::query_scalar!(
+        r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
+        game_id,
+        user_id,
+    )
+    .fetch_optional(&mut **transaction)
+    .await?;
     if let Some(card_id) = existing {
         if !replace {
             return Err(BingoError::Conflict(
                 "that user already has a card; use regenerate or reimport to replace it".to_owned(),
             ));
         }
-        sqlx::query("DELETE FROM bingo_cards WHERE id = ?")
-            .bind(card_id)
+        sqlx::query!(r#"DELETE FROM bingo_cards WHERE id = ?"#, card_id)
             .execute(&mut **transaction)
             .await?;
     }
@@ -746,13 +800,15 @@ async fn insert_card(
     game_id: i64,
     owner: &KnownUser,
 ) -> Result<i64> {
-    let result =
-        sqlx::query("INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)")
-            .bind(game_id)
-            .bind(owner.user_id)
-            .bind(owner.label())
-            .execute(&mut **transaction)
-            .await?;
+    let owner_name = owner.label();
+    let result = sqlx::query!(
+        r#"INSERT INTO bingo_cards (game_id, user_id, owner_name) VALUES (?, ?, ?)"#,
+        game_id,
+        owner.user_id,
+        owner_name,
+    )
+    .execute(&mut **transaction)
+    .await?;
     Ok(result.last_insert_rowid())
 }
 
@@ -768,22 +824,16 @@ async fn insert_cell(
 ) -> Result<()> {
     let position = i64::try_from(position)
         .map_err(|_| BingoError::InvalidCommand("invalid cell position".to_owned()))?;
-    sqlx::query(
-        "INSERT INTO bingo_card_cells (card_id,
-position,
-entry_id,
-text,
-marked,
-is_free)
-\
-         VALUES (?, ?, ?, ?, ?, ?)",
+    sqlx::query!(
+        r#"INSERT INTO bingo_card_cells
+(card_id, position, entry_id, text, marked, is_free) VALUES (?, ?, ?, ?, ?, ?)"#,
+        card_id,
+        position,
+        entry_id,
+        text.trim(),
+        marked,
+        is_free,
     )
-    .bind(card_id)
-    .bind(position)
-    .bind(entry_id)
-    .bind(text.trim())
-    .bind(marked)
-    .bind(is_free)
     .execute(&mut **transaction)
     .await?;
     Ok(())
@@ -795,15 +845,17 @@ async fn upsert_entry_in(
     text: &str,
 ) -> Result<i64> {
     validate_nonempty(text, "entry", MAX_ENTRY_CHARS)?;
-    Ok(sqlx::query_scalar(
-        "INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)
-\
-         ON CONFLICT(game_id, normalized_text) DO UPDATE SET text = excluded.text, active = 1 \
-         RETURNING id",
+    let normalized = normalize_entry(text);
+    Ok(sqlx::query_scalar!(
+        r#"INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)
+ON CONFLICT(game_id,
+normalized_text) DO UPDATE SET text = excluded.text,
+active = 1
+RETURNING id"#,
+        game_id,
+        text.trim(),
+        normalized,
     )
-    .bind(game_id)
-    .bind(text.trim())
-    .bind(normalize_entry(text))
     .fetch_one(&mut **transaction)
     .await?)
 }
@@ -813,14 +865,14 @@ async fn card_id_in(
     game_id: i64,
     user_id: i64,
 ) -> Result<i64> {
-    sqlx::query_scalar("SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?")
-        .bind(game_id)
-        .bind(user_id)
-        .fetch_optional(&mut **transaction)
-        .await?
-        .ok_or_else(|| {
-            BingoError::NotFound("that user does not have a card for this game".to_owned())
-        })
+    sqlx::query_scalar!(
+        r#"SELECT id FROM bingo_cards WHERE game_id = ? AND user_id = ?"#,
+        game_id,
+        user_id,
+    )
+    .fetch_optional(&mut **transaction)
+    .await?
+    .ok_or_else(|| BingoError::NotFound("that user does not have a card for this game".to_owned()))
 }
 
 fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {

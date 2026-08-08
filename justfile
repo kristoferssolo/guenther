@@ -71,6 +71,19 @@ clean:
 [group("dev")]
 setup:
     cargo install cargo-nextest sccache
+    cargo install sqlx-cli --no-default-features --features sqlite
+
+[group("database")]
+sqlx-prepare:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sqlx_prepare_dir="$(mktemp -d)"
+    trap 'rm -r -- "$sqlx_prepare_dir"' EXIT
+    export DATABASE_URL="sqlite://$sqlx_prepare_dir/prepare.sqlite3"
+    export SQLX_OFFLINE=false
+    cargo sqlx database create
+    cargo sqlx migrate run
+    cargo sqlx prepare -- --all-targets --all-features
 
 [group("services")]
 cobalt-up:

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE bingo_games SET is_default = 1 WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "d5eed35ba57c0f7cc31be480e808f066f288a74693393bd2c4061bd45eaeef4e"
+}

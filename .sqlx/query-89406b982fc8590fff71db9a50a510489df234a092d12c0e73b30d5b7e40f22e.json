@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE bingo_games SET state = ?\nWHERE chat_id = ? AND slug = ? COLLATE NOCASE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "89406b982fc8590fff71db9a50a510489df234a092d12c0e73b30d5b7e40f22e"
+}

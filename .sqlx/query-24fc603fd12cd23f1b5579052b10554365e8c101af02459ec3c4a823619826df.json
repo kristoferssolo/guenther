@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO bingo_entries (game_id, text, normalized_text) VALUES (?, ?, ?)\nON CONFLICT(game_id,\nnormalized_text) DO UPDATE SET text = excluded.text,\nactive = 1\nRETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "24fc603fd12cd23f1b5579052b10554365e8c101af02459ec3c4a823619826df"
+}

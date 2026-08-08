@@ -6,6 +6,7 @@ ENV CARGO_INCREMENTAL=0
 
 
 FROM chef AS planner
+COPY .cargo ./.cargo
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && touch src/lib.rs src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
@@ -13,12 +14,14 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder-rs
 ARG RUST_FEATURES=""
+COPY .cargo ./.cargo
 COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
     cargo chef cook --locked --release ${RUST_FEATURES} --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
+COPY .sqlx ./.sqlx
 COPY src ./src
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \

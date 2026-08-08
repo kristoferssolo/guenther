@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE bingo_card_cells SET marked = NOT marked\nWHERE card_id = ? AND position = ? AND is_free = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "390b8765357febd81a7a7fd99ff3edad3dc19bbeefbf0d29a661532796fc6668"
+}

@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT EXISTS(\n    SELECT 1 FROM bingo_games\n    WHERE chat_id = ? AND is_default = 1\n) AS `has_default!: bool`",
+  "describe": {
+    "columns": [
+      {
+        "name": "has_default!: bool",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "667c2993202fc62a101054c375cae86dd626afb99b3e63b356c404a1e2110a9b"
+}

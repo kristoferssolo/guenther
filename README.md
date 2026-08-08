@@ -239,6 +239,14 @@ The database schema is applied automatically at startup through embedded SQLx
 migrations. For local runs, back up `data/bingo.sqlite3`; Compose deployments
 should back up the `bingo-data` volume.
 
+Bingo queries use SQLx's compile-time checked macros. Offline query metadata is
+stored in `.sqlx`, so builds and CI do not need a live database. After changing
+a query or migration, regenerate that metadata with:
+
+```bash
+just sqlx-prepare
+```
+
 ## Inline Voice Lines
 
 Inline queries search entries from `voice_lines.toml` and return cached Telegram voice messages. When built with the `voice-line-capture` feature, the bot can also:
