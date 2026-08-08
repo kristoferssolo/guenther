@@ -45,11 +45,8 @@ pub enum Error {
     ParseF1SessionTime {
         raw: String,
         #[source]
-        source: time::error::Parse,
+        source: chrono::ParseError,
     },
-
-    #[error("failed to format F1 session time: {0}")]
-    FormatF1SessionTime(#[source] time::error::Format),
 
     #[error("other: {0}")]
     Other(String),

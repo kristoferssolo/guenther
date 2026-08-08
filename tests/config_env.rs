@@ -120,7 +120,7 @@ fn from_env_sets_f1_utc_offset_when_valid() {
     with_clean_config_env(|| {
         with_vars([("F1_UTC_OFFSET", Some("+3"))], || {
             let cfg = Config::from_env();
-            assert_eq!(cfg.f1.utc_offset.whole_seconds(), 10_800);
+            assert_eq!(cfg.f1.utc_offset.local_minus_utc(), 10_800);
         });
     });
 }
@@ -130,7 +130,7 @@ fn from_env_uses_utc_when_f1_utc_offset_invalid() {
     with_clean_config_env(|| {
         with_vars([("F1_UTC_OFFSET", Some("wat"))], || {
             let cfg = Config::from_env();
-            assert_eq!(cfg.f1.utc_offset.whole_seconds(), 0);
+            assert_eq!(cfg.f1.utc_offset.local_minus_utc(), 0);
         });
     });
 }

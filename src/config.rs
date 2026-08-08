@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
+use chrono::{FixedOffset, Offset, Utc};
 use std::{collections::HashSet, env, fmt::Debug, sync::OnceLock};
-use time::UtcOffset;
 use tracing::warn;
 
 static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
@@ -34,7 +34,7 @@ pub enum Platform {
 
 #[derive(Debug, Clone, Copy)]
 pub struct F1Config {
-    pub utc_offset: UtcOffset,
+    pub utc_offset: FixedOffset,
 }
 
 impl Config {
@@ -162,12 +162,12 @@ impl F1Config {
         let utc_offset = match env::var("F1_UTC_OFFSET") {
             Ok(raw) => parse_utc_offset(&raw).unwrap_or_else(|| {
                 warn!(raw = %raw, "F1_UTC_OFFSET is set but invalid; expected +3, +03, or +03:00");
-                UtcOffset::UTC
+                Utc.fix()
             }),
-            Err(env::VarError::NotPresent) => UtcOffset::UTC,
+            Err(env::VarError::NotPresent) => Utc.fix(),
             Err(env::VarError::NotUnicode(_)) => {
                 warn!("F1_UTC_OFFSET is not valid unicode");
-                UtcOffset::UTC
+                Utc.fix()
             }
         };
 
@@ -189,7 +189,7 @@ fn get_string_from_env(env_key: &str) -> Option<String> {
     }
 }
 
-fn parse_utc_offset(raw: &str) -> Option<UtcOffset> {
+fn parse_utc_offset(raw: &str) -> Option<FixedOffset> {
     let trimmed = raw.trim();
     let (is_negative, offset) = match trimmed.as_bytes().first().copied() {
         Some(b'+') => (false, &trimmed[1..]),
@@ -204,20 +204,16 @@ fn parse_utc_offset(raw: &str) -> Option<UtcOffset> {
         return None;
     }
 
-    let Ok(hours) = hours.parse::<i8>() else {
+    let Ok(hours) = hours.parse::<i32>() else {
         return None;
     };
-    let Ok(minutes) = minutes.parse::<i8>() else {
+    let Ok(minutes) = minutes.parse::<i32>() else {
         return None;
     };
-
-    let (hours, minutes) = if is_negative {
-        (-hours, -minutes)
-    } else {
-        (hours, minutes)
-    };
-
-    UtcOffset::from_hms(hours, minutes, 0).ok()
+    let seconds = hours
+        .checked_mul(3_600)?
+        .checked_add(minutes.checked_mul(60)?)?;
+    FixedOffset::east_opt(if is_negative { -seconds } else { seconds })
 }
 
 impl Default for CobaltConfig {
@@ -240,7 +236,7 @@ impl Default for PlatformConfig {
 impl Default for F1Config {
     fn default() -> Self {
         Self {
-            utc_offset: UtcOffset::UTC,
+            utc_offset: Utc.fix(),
         }
     }
 }

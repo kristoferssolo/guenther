@@ -11,6 +11,7 @@ voice-line-capture = []
 [dependencies]
 async-trait = "0.1"
 capitalize = "0.3.4"
+chrono = "0.4"
 color-eyre = "0.6"
 dotenv = "0.15"
 futures = "0.3"
@@ -31,7 +32,6 @@ teloxide = { version = "0.17", default-features = false, features = [
 ] }
 tempfile = "3"
 thiserror = "2.0"
-time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 tokio = { version = "1", features = [
   "fs",
   "io-util",

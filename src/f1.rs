@@ -1,14 +1,9 @@
 use crate::error::{Error, Result};
+use chrono::{DateTime, FixedOffset};
 use serde::Deserialize;
-use time::{
-    OffsetDateTime, UtcOffset,
-    format_description::{FormatItem, well_known::Rfc3339},
-    macros::format_description,
-};
 
 const NEXT_RACE_URL: &str = "https://api.jolpi.ca/ergast/f1/current/next.json";
-const DISPLAY_FORMAT: &[FormatItem<'_>] =
-    format_description!("[weekday repr:short], [day] [month repr:short] [hour]:[minute]");
+const DISPLAY_FORMAT: &str = "%a, %d %b %H:%M";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScheduleView {
@@ -79,7 +74,7 @@ struct Session {
 }
 
 impl Race {
-    fn header(&self, offset: UtcOffset) -> String {
+    fn header(&self, offset: FixedOffset) -> String {
         format!(
             "🏎️ {}\n📍 {}, {}, {}\n🕒 Time: UTC{}",
             self.name,
@@ -90,7 +85,7 @@ impl Race {
         )
     }
 
-    fn session_lines(&self, view: ScheduleView, offset: UtcOffset) -> Result<Vec<String>> {
+    fn session_lines(&self, view: ScheduleView, offset: FixedOffset) -> Result<Vec<String>> {
         let mut lines = Vec::new();
         match view {
             ScheduleView::Weekend => {
@@ -127,7 +122,7 @@ impl Race {
         Ok(lines)
     }
 
-    fn format_race_session(&self, offset: UtcOffset) -> Result<String> {
+    fn format_race_session(&self, offset: FixedOffset) -> Result<String> {
         format_labeled_session("🏁 Race", &self.date, &self.time, offset)
     }
 }
@@ -138,7 +133,7 @@ impl Race {
 ///
 /// Returns an error if the API request fails, no race is available, or the API returns invalid
 /// session date/time data.
-pub async fn next_race_message(view: ScheduleView, offset: UtcOffset) -> Result<String> {
+pub async fn next_race_message(view: ScheduleView, offset: FixedOffset) -> Result<String> {
     let response = reqwest::get(NEXT_RACE_URL)
         .await
         .map_err(Error::FetchF1Schedule)?
@@ -166,7 +161,7 @@ pub async fn next_race_message(view: ScheduleView, offset: UtcOffset) -> Result<
 fn push_sessions<const N: usize>(
     lines: &mut Vec<String>,
     sessions: [(&str, Option<&Session>); N],
-    offset: UtcOffset,
+    offset: FixedOffset,
 ) -> Result<()> {
     for (label, session) in sessions {
         let Some(session) = session else {
@@ -187,26 +182,23 @@ fn format_labeled_session(
     label: &str,
     date: &str,
     time: &str,
-    offset: UtcOffset,
+    offset: FixedOffset,
 ) -> Result<String> {
     format_session(date, time, offset).map(|session| format!("{label}: {session}"))
 }
 
-fn format_session(date: &str, time: &str, offset: UtcOffset) -> Result<String> {
-    let session_time = parse_session_time(date, time)?.to_offset(offset);
-    session_time
-        .format(DISPLAY_FORMAT)
-        .map_err(Error::FormatF1SessionTime)
+fn format_session(date: &str, time: &str, offset: FixedOffset) -> Result<String> {
+    let session_time = parse_session_time(date, time)?.with_timezone(&offset);
+    Ok(session_time.format(DISPLAY_FORMAT).to_string())
 }
 
-fn parse_session_time(date: &str, time: &str) -> Result<OffsetDateTime> {
+fn parse_session_time(date: &str, time: &str) -> Result<DateTime<FixedOffset>> {
     let raw = format!("{date}T{time}");
-    OffsetDateTime::parse(&raw, &Rfc3339)
-        .map_err(|source| Error::ParseF1SessionTime { raw, source })
+    DateTime::parse_from_rfc3339(&raw).map_err(|source| Error::ParseF1SessionTime { raw, source })
 }
 
-fn format_offset(offset: UtcOffset) -> String {
-    let total_minutes = offset.whole_minutes();
+fn format_offset(offset: FixedOffset) -> String {
+    let total_minutes = offset.local_minus_utc() / 60;
     let sign = if total_minutes >= 0 { '+' } else { '-' };
     let absolute_minutes = total_minutes.unsigned_abs();
     let hours = absolute_minutes / 60;
@@ -222,7 +214,6 @@ fn format_offset(offset: UtcOffset) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use time::UtcOffset;
 
     #[test]
     fn decodes_jolpica_next_race_response() {
@@ -271,7 +262,7 @@ mod tests {
 
     #[test]
     fn format_session_applies_positive_offset() {
-        let offset = UtcOffset::from_hms(3, 0, 0).expect("valid offset");
+        let offset = FixedOffset::east_opt(3 * 3_600).expect("valid offset");
 
         let formatted = format_session("2026-06-28", "13:00:00Z", offset).expect("format session");
 
@@ -280,7 +271,7 @@ mod tests {
 
     #[test]
     fn format_session_handles_date_rollover() {
-        let offset = UtcOffset::from_hms(-3, 0, 0).expect("valid offset");
+        let offset = FixedOffset::west_opt(3 * 3_600).expect("valid offset");
 
         let formatted = format_session("2026-06-28", "01:00:00Z", offset).expect("format session");
 
@@ -289,7 +280,7 @@ mod tests {
 
     #[test]
     fn format_offset_omits_zero_minutes() {
-        let offset = UtcOffset::from_hms(3, 0, 0).expect("valid offset");
+        let offset = FixedOffset::east_opt(3 * 3_600).expect("valid offset");
 
         assert_eq!(format_offset(offset), "+3");
     }
