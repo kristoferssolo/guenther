@@ -22,6 +22,43 @@ struct CardRow {
     is_default: bool,
 }
 
+impl CardRow {
+    fn into_card(self, known_user: Option<KnownUserRow>, cells: Vec<CardCell>) -> Result<Card> {
+        let (username, display_name) = known_user.map_or_else(
+            || (None, self.owner_name),
+            |user| (user.username, user.display_name),
+        );
+        let owner = KnownUser {
+            user_id: user_id_from_db(self.user_id)?,
+            username,
+            display_name,
+        };
+
+        Ok(Card {
+            id: self.card_id.into(),
+            game: Game {
+                id: self.game_id.into(),
+                chat_id: ChatId(self.chat_id),
+                slug: self.slug,
+                name: self.game_name,
+                description: self.description,
+                center_text: self.center_text,
+                state: self.state.parse()?,
+                is_default: self.is_default,
+            },
+            owner,
+            bingo_announced: self.bingo_announced,
+            cells,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct KnownUserRow {
+    username: Option<String>,
+    display_name: String,
+}
+
 #[derive(Debug)]
 struct CellRow {
     position: i64,
@@ -69,7 +106,12 @@ pub async fn fetch_card(pool: &SqlitePool, card_id: CardId) -> Result<Card> {
         r#"SELECT
     c.id AS card_id, c.user_id, c.owner_name,
     c.bingo_announced AS `bingo_announced: bool`,
-    g.id AS game_id, g.chat_id, g.slug, g.name AS game_name, g.description, g.center_text,
+    g.id AS game_id,
+    g.chat_id,
+    g.slug,
+    g.name AS game_name,
+    g.description,
+    g.center_text,
     g.state, g.is_default AS `is_default: bool`
 FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
         card_id.get(),
@@ -77,44 +119,17 @@ FROM bingo_cards c JOIN bingo_games g ON g.id = c.game_id WHERE c.id = ?"#,
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
-    let known_user = sqlx::query!(
-        r#"SELECT user_id, username, display_name FROM bingo_users
+    let known_user = sqlx::query_as!(
+        KnownUserRow,
+        r#"SELECT username, display_name FROM bingo_users
 WHERE chat_id = ? AND user_id = ?"#,
         row.chat_id,
         row.user_id,
     )
     .fetch_optional(pool)
     .await?;
-    let user_id = user_id_from_db(row.user_id)?;
-    let user = match known_user {
-        Some(known) => KnownUser {
-            user_id,
-            username: known.username,
-            display_name: known.display_name,
-        },
-        None => KnownUser {
-            user_id,
-            username: None,
-            display_name: row.owner_name,
-        },
-    };
     let cells = fetch_cells(pool, card_id).await?;
-    Ok(Card {
-        id: row.card_id.into(),
-        game: Game {
-            id: row.game_id.into(),
-            chat_id: ChatId(row.chat_id),
-            slug: row.slug,
-            name: row.game_name,
-            description: row.description,
-            center_text: row.center_text,
-            state: row.state.parse()?,
-            is_default: row.is_default,
-        },
-        owner: user,
-        bingo_announced: row.bingo_announced,
-        cells,
-    })
+    row.into_card(known_user, cells)
 }
 
 pub async fn delete_or_reject_existing(
