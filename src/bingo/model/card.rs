@@ -18,7 +18,6 @@ pub struct Card {
 }
 
 impl Card {
-    #[must_use]
     pub fn has_bingo(&self) -> bool {
         has_bingo(&self.cells)
     }
@@ -37,7 +36,6 @@ pub struct ToggleResult {
     pub newly_completed: bool,
 }
 
-#[must_use]
 pub fn has_bingo(cells: &[CardCell]) -> bool {
     if cells.len() != CELL_COUNT {
         return false;

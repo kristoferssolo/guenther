@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{env, io, path::PathBuf};
+use std::{
+    env, io,
+    path::{Path, PathBuf},
+};
 use tokio::fs;
 
 const MAX_INLINE_RESULTS: usize = 25;
@@ -62,7 +65,7 @@ async fn load_voice_lines() -> color_eyre::Result<Vec<VoiceLine>> {
     Ok(file.voice_lines)
 }
 
-async fn load_voice_lines_file(path: &PathBuf) -> color_eyre::Result<VoiceLinesFile> {
+async fn load_voice_lines_file(path: &Path) -> color_eyre::Result<VoiceLinesFile> {
     match fs::read_to_string(path).await {
         Ok(content) => Ok(toml::from_str(&content)?),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(VoiceLinesFile::default()),
@@ -71,7 +74,7 @@ async fn load_voice_lines_file(path: &PathBuf) -> color_eyre::Result<VoiceLinesF
 }
 
 #[cfg(feature = "voice-line-capture")]
-async fn save_voice_lines_file(path: &PathBuf, file: &VoiceLinesFile) -> color_eyre::Result<()> {
+async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre::Result<()> {
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -82,7 +85,6 @@ async fn save_voice_lines_file(path: &PathBuf, file: &VoiceLinesFile) -> color_e
     Ok(())
 }
 
-#[inline]
 fn matches_query(line: &VoiceLine, needle: &str) -> bool {
     contains_ignore_ascii_case(&line.title, needle)
         || contains_ignore_ascii_case(&line.id, needle)
@@ -92,7 +94,6 @@ fn matches_query(line: &VoiceLine, needle: &str) -> bool {
             .any(|tag| contains_ignore_ascii_case(tag, needle))
 }
 
-#[inline]
 fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
     if needle.len() > haystack.len() {
         return false;
@@ -104,7 +105,6 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
         .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
-#[inline]
 fn normalize(text: &str) -> String {
     text.trim().to_ascii_lowercase()
 }

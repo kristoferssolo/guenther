@@ -168,10 +168,11 @@ async fn upsert_entry<'e>(
     let row = sqlx::query!(
         r#"INSERT INTO bingo_entries (game_id, number, text, normalized_text)
 VALUES (
-    ?,
-    (SELECT COALESCE(MAX(number), 0) + 1 FROM bingo_entries WHERE game_id = ?),
-    ?,
-    ?
+?,
+(SELECT COALESCE(MAX(number),
+0) + 1 FROM bingo_entries WHERE game_id = ?),
+?,
+?
 )
 ON CONFLICT(game_id, normalized_text)
 DO UPDATE SET text = excluded.text, active = 1

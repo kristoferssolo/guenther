@@ -14,7 +14,6 @@ pub struct Position(u8);
 impl Position {
     pub const FREE: Self = Self(12);
 
-    #[must_use]
     pub fn index(self) -> usize {
         usize::from(self.0)
     }

@@ -12,7 +12,7 @@ use teloxide::{
     prelude::*,
     types::{ChatId, InputFile},
 };
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 type DownloadFn = fn(String) -> Pin<Box<dyn Future<Output = Result<DownloadResult>> + Send>>;
 
@@ -26,7 +26,7 @@ pub struct Handler {
 impl Handler {
     pub fn new(
         platform: Platform,
-        regex_pattern: &'static str,
+        regex_pattern: &str,
         func: DownloadFn,
     ) -> StdResult<Self, RegexError> {
         let regex = Regex::new(regex_pattern)?;
@@ -37,24 +37,19 @@ impl Handler {
         })
     }
 
-    #[inline]
-    #[must_use]
     pub const fn platform(&self) -> Platform {
         self.platform
     }
 
-    #[must_use]
     pub fn try_extract<'a>(&self, text: &'a str) -> Option<&'a str> {
-        self.regex
-            .captures(text)
-            .and_then(|c| c.get(0).map(|m| m.as_str()))
+        self.regex.find(text).map(|matched| matched.as_str())
     }
 
     pub async fn handle(&self, bot: &Bot, chat_id: ChatId, url: &str) -> Result<()> {
         let started_at = Instant::now();
         info!(platform = %self.platform, "Handling media URL");
-        let dr = (self.func)(url.to_owned()).await?;
-        let source_text = dr.source_text.clone();
+        let mut dr = (self.func)(url.to_owned()).await?;
+        let source_text = dr.source_text.take();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
         let media_count = media_items.len();
         let base_caption = global_comments().build_caption();
@@ -137,15 +132,8 @@ async fn send_media_from_path(
 
     macro_rules! send_msg {
         ($request_expr:expr) => {{
-            let mut request = $request_expr;
-            request = request.caption(caption.to_owned());
-            match request.await {
-                Ok(message) => info!(message_id = message.id.to_string(), "{} sent", kind),
-                Err(e) => {
-                    error!("Failed to send {}: {e}", kind.to_str());
-                    return Err(Error::other(format!("Telegram request failed: {e}")));
-                }
-            }
+            let message = $request_expr.caption(caption.to_owned()).await?;
+            info!(message_id = message.id.to_string(), "{} sent", kind);
         }};
     }
 
@@ -154,8 +142,7 @@ async fn send_media_from_path(
         MediaKind::Image => send_msg!(bot.send_photo(chat_id, input)),
         MediaKind::Unknown => {
             bot.send_message(chat_id, "No supported media found")
-                .await
-                .map_err(|e| Error::other(format!("Telegram request failed: {e}")))?;
+                .await?;
             return Err(Error::UnknownMediaKind);
         }
     }

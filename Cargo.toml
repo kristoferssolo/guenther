@@ -11,8 +11,6 @@ bingo = ["dep:image", "dep:noto-sans-mono-bitmap", "dep:sqlx"]
 voice-line-capture = []
 
 [dependencies]
-async-trait = "0.1"
-capitalize = "0.3"
 chrono = "0.4"
 color-eyre = "0.6"
 dotenv = "0.15"
@@ -64,18 +62,17 @@ tokio = { version = "1", features = [
 ] }
 toml = "1.1"
 tracing = "0.1"
-tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 url = "2.5"
 
 [dev-dependencies]
 claims = "0.8"
-rstest = "0.26"
 temp-env = "0.3"
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
+must_use_candidate = "allow"
 # DENY PANICS:
 unwrap_used = "deny"
 expect_used = "deny"

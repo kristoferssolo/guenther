@@ -57,7 +57,6 @@ impl PlatformConfig {
         config
     }
 
-    #[must_use]
     pub fn is_enabled(&self, platform: Platform) -> bool {
         self.enabled.contains(&platform)
     }

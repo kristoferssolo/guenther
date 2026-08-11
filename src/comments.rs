@@ -61,7 +61,6 @@ impl Comments {
     }
 
     /// Pick a random comment. Falls back to a default if the list is empty.
-    #[must_use]
     pub fn pick(&self) -> &str {
         let mut rng = rng();
         self.lines
@@ -70,7 +69,6 @@ impl Comments {
     }
 
     /// Build a caption by picking a random comment and truncating if necessary.
-    #[must_use]
     pub fn build_caption(&self) -> String {
         let mut caption = self.pick().to_string();
 
@@ -87,7 +85,6 @@ impl Comments {
 
     /// Get a reference to the underlying lines for debugging or testing.
     #[cfg(test)]
-    #[must_use]
     pub fn lines(&self) -> &[String] {
         &self.lines
     }
@@ -113,14 +110,11 @@ impl Default for Comments {
 }
 
 /// Get global comments, lazily using built-in fallbacks when not explicitly initialized.
-#[inline]
-#[must_use]
 pub fn global_comments() -> &'static Comments {
     GLOBAL_COMMENTS.get_or_init(Comments::default)
 }
 
 /// Pick a random built-in response for a failed media download.
-#[must_use]
 pub fn failure_comment() -> &'static str {
     let mut rng = rng();
     FAILURE_COMMENTS

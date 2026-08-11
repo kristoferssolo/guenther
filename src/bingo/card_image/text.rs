@@ -38,19 +38,16 @@ impl Font {
         self
     }
 
-    #[must_use]
     pub const fn height(self) -> u32 {
         self.size.height().saturating_mul(self.scale)
     }
 
-    #[must_use]
     pub fn character_width(self) -> u32 {
         u32::try_from(get_raster_width(self.weight.into(), self.size.into()))
             .unwrap_or(u32::MAX)
             .saturating_mul(self.scale)
     }
 
-    #[must_use]
     pub const fn line_height(self) -> u32 {
         self.height().saturating_add(LINE_GAP)
     }
@@ -93,7 +90,6 @@ pub struct TextBlock {
 }
 
 impl TextBlock {
-    #[must_use]
     pub fn width(&self) -> u32 {
         let columns = self
             .lines
@@ -106,7 +102,6 @@ impl TextBlock {
             .saturating_mul(self.font.character_width())
     }
 
-    #[must_use]
     pub fn height(&self) -> u32 {
         let line_count = u32::try_from(self.lines.len()).unwrap_or(u32::MAX);
         line_count
@@ -115,7 +110,6 @@ impl TextBlock {
     }
 }
 
-#[must_use]
 pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
     for &font in fonts {
         let columns = column_capacity(font, bounds);
@@ -181,7 +175,6 @@ fn column_capacity(font: Font, bounds: Rect) -> usize {
     .unwrap_or(usize::MAX)
 }
 
-#[must_use]
 pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
     if columns == 0 {
         return vec![String::new()];

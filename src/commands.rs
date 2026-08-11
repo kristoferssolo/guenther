@@ -32,8 +32,6 @@ pub enum Command {
 }
 
 impl Command {
-    #[inline]
-    #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
             Self::Help => "help",

@@ -8,7 +8,6 @@ macro_rules! define_id {
         pub struct $name(i64);
 
         impl $name {
-            #[must_use]
             pub const fn get(self) -> i64 {
                 self.0
             }
@@ -50,7 +49,6 @@ define_id!(GameId);
 pub struct EntryNumber(i64);
 
 impl EntryNumber {
-    #[must_use]
     pub const fn get(self) -> i64 {
         self.0
     }

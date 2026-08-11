@@ -82,8 +82,6 @@ impl BingoCommand {
         parser::parse(input)
     }
 
-    #[inline]
-    #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
             Self::Help => "help",
@@ -97,7 +95,6 @@ impl BingoCommand {
         }
     }
 
-    #[must_use]
     pub const fn requires_admin(&self) -> bool {
         match self {
             Self::Help
@@ -149,10 +146,8 @@ impl CardAdmin {
 
 #[cfg(test)]
 mod tests {
-    use crate::bingo::{
-        command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
-        model::FREE_POSITION,
-    };
+    use super::*;
+    use crate::bingo::model::FREE_POSITION;
     use claims::{assert_err, assert_matches, assert_ok, assert_ok_eq, assert_some};
 
     #[test]

@@ -26,7 +26,6 @@ pub struct Rect {
 }
 
 impl Rect {
-    #[must_use]
     pub const fn new(x: u32, y: u32, width: u32, height: u32) -> Self {
         Self {
             x,
@@ -36,7 +35,6 @@ impl Rect {
         }
     }
 
-    #[must_use]
     pub const fn inset(self, amount: u32) -> Self {
         let inset = amount.saturating_mul(2);
         Self {
@@ -55,7 +53,6 @@ pub enum CellFill {
     Free,
 }
 
-#[must_use]
 pub fn cell_rect(position: Position) -> Rect {
     let index = u32::try_from(position.index()).unwrap_or_default();
     let grid_side = u32::try_from(GRID_SIDE).unwrap_or(1);
@@ -69,7 +66,6 @@ pub fn cell_rect(position: Position) -> Rect {
     )
 }
 
-#[must_use]
 pub const fn cell_fill(cell: &CardCell) -> CellFill {
     if cell.is_free {
         CellFill::Free

@@ -8,6 +8,9 @@ pub enum Error {
     #[error("Cobalt request failed: {0}")]
     CobaltRequest(#[source] reqwest::Error),
 
+    #[error("Telegram request failed: {0}")]
+    Telegram(#[from] teloxide::RequestError),
+
     #[error("Cobalt rejected the download: {0}")]
     CobaltRejected(String),
 
@@ -35,6 +38,24 @@ pub enum Error {
     #[error("Failed to decode the F1 schedule: {0}")]
     DecodeF1Schedule(#[source] reqwest::Error),
 
+    #[error("Failed to extract the tweet ID")]
+    InvalidTwitterUrl,
+
+    #[error("No downloadable images were found in this post")]
+    MissingTwitterImages,
+
+    #[error("Failed to build the HTTP client: {0}")]
+    BuildHttpClient(#[source] reqwest::Error),
+
+    #[error("Failed to fetch Twitter syndication data: {0}")]
+    FetchTwitterSyndication(#[source] reqwest::Error),
+
+    #[error("Failed to parse Twitter syndication data: {0}")]
+    ParseTwitterSyndication(#[source] reqwest::Error),
+
+    #[error("Failed to download the Twitter image: {0}")]
+    DownloadTwitterImage(#[source] reqwest::Error),
+
     #[error("No upcoming F1 race was found")]
     MissingF1Race,
 
@@ -53,17 +74,14 @@ pub enum Error {
 }
 
 impl Error {
-    #[inline]
     pub fn other(text: impl Into<String>) -> Self {
         Self::Other(text.into())
     }
 
-    #[inline]
     pub fn validation_failed(text: impl Into<String>) -> Self {
         Self::ValidationFailed(text.into())
     }
 
-    #[inline]
     pub fn env(text: impl Into<String>) -> Self {
         Self::EnvNotFound(text.into())
     }

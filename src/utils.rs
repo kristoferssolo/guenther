@@ -1,4 +1,3 @@
-use capitalize::Capitalize;
 use std::{ffi::OsStr, fmt::Display, path::Path};
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::warn;
@@ -15,8 +14,6 @@ pub enum MediaKind {
 }
 
 impl MediaKind {
-    #[must_use]
-    #[inline]
     pub const fn to_str(&self) -> &str {
         match self {
             Self::Video => "video",
@@ -27,7 +24,6 @@ impl MediaKind {
 }
 
 /// Check if extension matches any in the given list (case-insensitive).
-#[inline]
 fn ext_matches(ext: &str, extensions: &[&str]) -> bool {
     extensions.iter().any(|e| e.eq_ignore_ascii_case(ext))
 }
@@ -54,7 +50,6 @@ fn detect_from_mime(mime_type: &str) -> MediaKind {
 }
 
 /// Detect media kind first by extension, then by content/magic (sync).
-#[must_use]
 pub fn detect_media_kind(path: &Path) -> MediaKind {
     if let Some(kind) = detect_from_extension(path) {
         return kind;
@@ -102,7 +97,11 @@ impl AsRef<str> for MediaKind {
 
 impl Display for MediaKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.capitalize())
+        f.write_str(match self {
+            Self::Video => "Video",
+            Self::Image => "Image",
+            Self::Unknown => "Unknown",
+        })
     }
 }
 

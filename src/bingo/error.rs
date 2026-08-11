@@ -57,7 +57,6 @@ pub enum BingoError {
 }
 
 impl BingoError {
-    #[must_use]
     pub const fn is_user_facing(&self) -> bool {
         matches!(
             self,

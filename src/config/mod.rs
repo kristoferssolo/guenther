@@ -22,7 +22,6 @@ pub struct Config {
 
 impl Config {
     /// Load configuration from environment variables.
-    #[must_use]
     pub fn from_env() -> Self {
         let chat_id = match env::var("CHAT_ID") {
             Ok(raw) => raw.parse::<i64>().map_or_else(
@@ -59,8 +58,6 @@ impl Config {
 }
 
 /// Get global config, lazily using defaults when not explicitly initialized.
-#[inline]
-#[must_use]
 pub fn global_config() -> &'static Config {
     GLOBAL_CONFIG.get_or_init(Config::default)
 }

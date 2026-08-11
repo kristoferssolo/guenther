@@ -12,15 +12,12 @@ use url::Url;
 const USER_AGENT: &str = concat!("guenther/", env!("CARGO_PKG_VERSION"));
 
 pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
-    let tweet_id =
-        extract_tweet_id(url).ok_or_else(|| Error::other("Failed to extract the tweet ID"))?;
+    let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
     let payload = fetch_tweet_result(&tweet_id).await?;
     let image_urls = extract_photo_urls(&payload);
 
     if image_urls.is_empty() {
-        return Err(Error::other(
-            "No downloadable images were found in this post",
-        ));
+        return Err(Error::MissingTwitterImages);
     }
 
     let client = http_client()?;
@@ -32,14 +29,14 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
             .get(image_url)
             .send()
             .await
-            .map_err(|err| download_error(&err))?;
+            .map_err(Error::DownloadTwitterImage)?;
         debug!(index, status = %response.status(), "Received Twitter image response");
         let bytes = response
             .error_for_status()
-            .map_err(|err| download_error(&err))?
+            .map_err(Error::DownloadTwitterImage)?
             .bytes()
             .await
-            .map_err(|e| Error::other(format!("Failed to read Twitter image bytes: {e}")))?;
+            .map_err(Error::DownloadTwitterImage)?;
 
         let path = tempdir
             .path()
@@ -56,8 +53,7 @@ pub async fn download_tweet_images(url: &str) -> Result<DownloadResult> {
 }
 
 pub async fn fetch_tweet_text(url: &str) -> Result<Option<String>> {
-    let tweet_id =
-        extract_tweet_id(url).ok_or_else(|| Error::other("Failed to extract the tweet ID"))?;
+    let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
     let payload = fetch_tweet_result(&tweet_id).await?;
     Ok(parse_post_text_from_value(&payload))
 }
@@ -66,7 +62,7 @@ fn http_client() -> Result<Client> {
     Client::builder()
         .user_agent(USER_AGENT)
         .build()
-        .map_err(|e| Error::other(format!("Failed to build the HTTP client: {e}")))
+        .map_err(Error::BuildHttpClient)
 }
 
 async fn fetch_tweet_result(tweet_id: &str) -> Result<Value> {
@@ -79,14 +75,14 @@ async fn fetch_tweet_result(tweet_id: &str) -> Result<Value> {
         .get(url)
         .send()
         .await
-        .map_err(|err| fetch_error(&err))?;
+        .map_err(Error::FetchTwitterSyndication)?;
     debug!(status = %response.status(), "Received Twitter syndication response");
     response
         .error_for_status()
-        .map_err(|err| fetch_error(&err))?
+        .map_err(Error::FetchTwitterSyndication)?
         .json::<Value>()
         .await
-        .map_err(|e| Error::other(format!("Failed to parse Twitter syndication data: {e}")))
+        .map_err(Error::ParseTwitterSyndication)
 }
 
 fn extract_tweet_id(url: &str) -> Option<String> {
@@ -148,14 +144,6 @@ fn image_extension(url: &str) -> String {
         })
         .filter(|ext| matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif"))
         .unwrap_or_else(|| "jpg".to_owned())
-}
-
-fn fetch_error(err: &reqwest::Error) -> Error {
-    Error::other(format!("Failed to fetch Twitter syndication data: {err}"))
-}
-
-fn download_error(err: &reqwest::Error) -> Error {
-    Error::other(format!("Failed to download the Twitter image: {err}"))
 }
 
 #[cfg(test)]

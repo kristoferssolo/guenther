@@ -1,6 +1,5 @@
 use crate::voice_lines::{VoiceLine, search_voice_lines};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 use teloxide::{prelude::*, types::InlineQuery};
 
 pub async fn answer_inline_query(bot: Bot, query: InlineQuery) -> color_eyre::Result<()> {
@@ -38,12 +37,7 @@ async fn answer_inline_query_raw(
     };
     let url = telegram_method_url(bot, "answerInlineQuery");
 
-    let response = bot
-        .client()
-        .post(url)
-        .json(&payload.to_json())
-        .send()
-        .await?;
+    let response = bot.client().post(url).json(&payload).send().await?;
     let body = response.text().await?;
     let telegram_response = serde_json::from_str::<TelegramResponse>(&body)?;
 
@@ -74,6 +68,7 @@ fn telegram_method_url(bot: &Bot, method_name: &str) -> String {
     url.to_string()
 }
 
+#[derive(Debug, Serialize)]
 struct AnswerInlineQueryPayload<'a> {
     inline_query_id: &'a str,
     results: Vec<InlineResult>,
@@ -81,7 +76,10 @@ struct AnswerInlineQueryPayload<'a> {
     is_personal: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
 enum InlineResult {
+    #[serde(rename = "voice")]
     CachedVoice {
         id: String,
         voice_file_id: String,
@@ -95,34 +93,6 @@ struct TelegramResponse {
     description: Option<String>,
 }
 
-impl AnswerInlineQueryPayload<'_> {
-    fn to_json(&self) -> Value {
-        json!({
-            "inline_query_id": self.inline_query_id,
-            "results": self.results.iter().map(InlineResult::to_json).collect::<Vec<_>>(),
-            "cache_time": self.cache_time,
-            "is_personal": self.is_personal,
-        })
-    }
-}
-
-impl InlineResult {
-    fn to_json(&self) -> Value {
-        match self {
-            Self::CachedVoice {
-                id,
-                voice_file_id,
-                title,
-            } => json!({
-                "type": "voice",
-                "id": id,
-                "voice_file_id": voice_file_id,
-                "title": title,
-            }),
-        }
-    }
-}
-
 fn normalized_title(line: &VoiceLine) -> String {
     let trimmed = line.title.trim();
     if trimmed.is_empty() {
@@ -134,6 +104,8 @@ fn normalized_title(line: &VoiceLine) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::assert_ok;
+    use serde_json::json;
     use teloxide::Bot;
 
     #[test]
@@ -143,6 +115,25 @@ mod tests {
         assert_eq!(
             telegram_method_url(&bot, "answerInlineQuery"),
             "https://api.telegram.org/bot123:abc/answerInlineQuery"
+        );
+    }
+
+    #[test]
+    fn serializes_cached_voice_results() {
+        let result = InlineResult::CachedVoice {
+            id: "result-id".to_owned(),
+            voice_file_id: "file-id".to_owned(),
+            title: "Radio message".to_owned(),
+        };
+
+        assert_eq!(
+            assert_ok!(serde_json::to_value(result)),
+            json!({
+                "type": "voice",
+                "id": "result-id",
+                "voice_file_id": "file-id",
+                "title": "Radio message",
+            })
         );
     }
 }

@@ -55,7 +55,7 @@ fn parse_entry_lines(text: &str) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::bingo::telegram::document::parse_entry_lines;
+    use super::*;
     use claims::{assert_err, assert_ok_eq};
 
     #[test]

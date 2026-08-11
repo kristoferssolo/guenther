@@ -13,9 +13,8 @@ pub fn user_id_from_db(user_id: i64) -> Result<UserId> {
 
 #[cfg(test)]
 mod tests {
-    use crate::bingo::store::id::{db_user_id, user_id_from_db};
+    use super::*;
     use claims::{assert_err, assert_ok_eq};
-    use teloxide::types::UserId;
 
     #[test]
     fn converts_valid_user_ids() {
