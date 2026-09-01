@@ -53,14 +53,50 @@ pub async fn collect_supported_media(
         return Err(Error::NoMediaFound);
     }
 
-    media_items.sort_by_key(|(path, kind)| {
-        let priority = match kind {
-            MediaKind::Video => 0,
-            MediaKind::Image => 1,
-            MediaKind::Unknown => 2,
-        };
-        (priority, path.clone())
-    });
+    sort_media_items(&mut media_items);
 
     Ok((dr.tempdir, media_items))
+}
+
+fn sort_media_items(media_items: &mut [(PathBuf, MediaKind)]) {
+    media_items.sort_unstable_by(|(left_path, left_kind), (right_path, right_kind)| {
+        media_priority(*left_kind)
+            .cmp(&media_priority(*right_kind))
+            .then_with(|| left_path.cmp(right_path))
+    });
+}
+
+const fn media_priority(kind: MediaKind) -> u8 {
+    match kind {
+        MediaKind::Video => 0,
+        MediaKind::Image => 1,
+        MediaKind::Unknown => 2,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sorts_videos_before_images_and_paths_within_a_kind() {
+        let mut media_items = vec![
+            (PathBuf::from("image-b.jpg"), MediaKind::Image),
+            (PathBuf::from("video-b.mp4"), MediaKind::Video),
+            (PathBuf::from("image-a.jpg"), MediaKind::Image),
+            (PathBuf::from("video-a.mp4"), MediaKind::Video),
+        ];
+
+        sort_media_items(&mut media_items);
+
+        assert_eq!(
+            media_items,
+            vec![
+                (PathBuf::from("video-a.mp4"), MediaKind::Video),
+                (PathBuf::from("video-b.mp4"), MediaKind::Video),
+                (PathBuf::from("image-a.jpg"), MediaKind::Image),
+                (PathBuf::from("image-b.jpg"), MediaKind::Image),
+            ]
+        );
+    }
 }
