@@ -186,23 +186,24 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
             continue;
         }
         let mut current = String::new();
+        let mut current_columns = 0_usize;
         for word in paragraph.split_whitespace() {
-            let required = word
-                .chars()
-                .count()
-                .saturating_add(usize::from(!current.is_empty()));
-            if current.chars().count().saturating_add(required) <= columns {
+            let word_columns = word.chars().count();
+            let required = word_columns.saturating_add(usize::from(!current.is_empty()));
+            if current_columns.saturating_add(required) <= columns {
                 if !current.is_empty() {
                     current.push(' ');
                 }
                 current.push_str(word);
+                current_columns = current_columns.saturating_add(required);
                 continue;
             }
             if !current.is_empty() {
                 lines.push(std::mem::take(&mut current));
             }
             let mut remaining = word;
-            while remaining.chars().count() > columns {
+            let mut remaining_columns = word_columns;
+            while remaining_columns > columns {
                 let split = remaining
                     .char_indices()
                     .nth(columns)
@@ -210,8 +211,10 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
                 let (line, rest) = remaining.split_at(split);
                 lines.push(line.to_owned());
                 remaining = rest;
+                remaining_columns = remaining_columns.saturating_sub(columns);
             }
             current.push_str(remaining);
+            current_columns = remaining_columns;
         }
         if !current.is_empty() {
             lines.push(current);
