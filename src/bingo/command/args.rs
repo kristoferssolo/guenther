@@ -5,13 +5,15 @@ pub fn parse_slug_and_target(
     input: &str,
     expected: &str,
 ) -> Result<(Option<String>, Option<String>)> {
-    let words = input.split_whitespace().collect::<Vec<_>>();
-    match words.as_slice() {
-        [] => Ok((None, None)),
-        [only] if is_target_token(only) => Ok((None, Some((*only).to_owned()))),
-        [slug] => Ok((Some((*slug).to_owned()), None)),
-        [slug, target] if is_target_token(target) => {
-            Ok((Some((*slug).to_owned()), Some((*target).to_owned())))
+    let mut words = input.split_whitespace();
+    match (words.next(), words.next(), words.next()) {
+        (None, None, None) => Ok((None, None)),
+        (Some(target), None, None) if is_target_token(target) => {
+            Ok((None, Some(target.to_owned())))
+        }
+        (Some(slug), None, None) => Ok((Some(slug.to_owned()), None)),
+        (Some(slug), Some(target), None) if is_target_token(target) => {
+            Ok((Some(slug.to_owned()), Some(target.to_owned())))
         }
         _ => Err(usage(expected)),
     }
