@@ -11,8 +11,23 @@ pub struct Entry {
 }
 
 pub fn normalize_entry(text: &str) -> String {
-    text.split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
+    let mut normalized = String::with_capacity(text.len());
+    for (index, word) in text.split_whitespace().enumerate() {
+        if index > 0 {
+            normalized.push(' ');
+        }
+        normalized.extend(word.chars().flat_map(char::to_lowercase));
+    }
+    normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_whitespace_and_case() {
+        assert_eq!(normalize_entry("  Safety\tCAR  "), "safety car");
+        assert_eq!(normalize_entry(""), "");
+    }
 }
