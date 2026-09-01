@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [features]
 default = ["bingo"]
-bingo = ["dep:image", "dep:noto-sans-mono-bitmap", "dep:sqlx"]
+bingo = ["dep:image", "dep:noto-sans-mono-bitmap"]
 voice-line-capture = []
 
 [dependencies]
@@ -44,7 +44,7 @@ sqlx = { version = "0.9", default-features = false, features = [
   "migrate",
   "runtime-tokio",
   "sqlite",
-], optional = true }
+] }
 teloxide = { version = "0.17", default-features = false, features = [
   "ctrlc_handler",
   "macros",

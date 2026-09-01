@@ -12,6 +12,7 @@ It currently supports:
 ## Features
 
 - Accepts supported URLs in chat and replies with downloaded media
+- Serves repeat links instantly from Telegram's servers using cached `file_id`s
 - Uses random caption lines from `comments.txt`
 - Extracts post text from image-only X/Twitter posts when available
 - Uses a private Cobalt instance for media from every supported platform
@@ -28,6 +29,7 @@ Guenther expects these services and tools at runtime:
 - [Cobalt](https://github.com/imputnet/cobalt) for social media downloads
 - `ffmpeg` (when creating/saving voice lines)
 - a Telegram bot token exposed as `TELOXIDE_TOKEN`
+- a SQLite database file (created automatically at `data/bingo.sqlite3` by default)
 
 ## Configuration
 
@@ -45,7 +47,7 @@ Optional:
 - `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
 - `ENABLED_PLATFORMS`: comma-separated platforms to enable; defaults to all platforms
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
-- `BINGO_DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`
+- `BINGO_DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
 - `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture
 
@@ -97,9 +99,11 @@ To enable F1 bingo:
 cargo run --features bingo
 ```
 
-The `bingo` Cargo feature contains the SQLx dependency, migrations, commands,
-and callback-query handler. When the feature is disabled, the database is not
-opened and `/bingo` is not registered.
+The SQLite database is always opened at startup and applies its schema through
+embedded migrations. Besides F1 bingo, it stores the media `file_id` cache that
+lets repeat links be served from Telegram's servers without re-downloading. The
+`bingo` Cargo feature only gates the bingo commands, card rendering, and
+callback-query handler.
 
 ## Docker
 
@@ -309,6 +313,9 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 ## Notes
 
 - All social media downloads use Cobalt without account cookies and support public media only.
+- Media sent for a previously seen link is reused from Telegram's servers via
+  cached `file_id`s; captions are still generated per request. If a cached send
+  fails, the entry is invalidated and the media is downloaded again.
 - X/Twitter post text and the image-only fallback use its public syndication endpoint.
 - Do not point `COBALT_API_URL` at `api.cobalt.tools`; hosted Cobalt instances are not intended for third-party projects without permission.
 - Guenther is intended for self-hosting.

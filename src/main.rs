@@ -15,8 +15,10 @@ use crate::{
 };
 use dotenv::dotenv;
 use guenther::{
+    cache::MediaCache,
     comments::{Comments, failure_comment},
     config::{Config, global_config},
+    db,
     telemetry::setup_logger,
 };
 use std::sync::Arc;
@@ -54,37 +56,37 @@ async fn main() -> color_eyre::Result<()> {
         .collect::<Vec<_>>();
     info!(?enabled_platforms, "platform handlers configured");
 
-    #[cfg(feature = "bingo")]
-    {
-        let bingo_store = BingoStore::connect_from_env().await?;
-        let admin_cache = AdminCache::default();
-        info!("bingo database initialized");
-        let schema = dptree::entry()
-            .branch(Update::filter_message().endpoint(message_handler))
-            .branch(Update::filter_callback_query().endpoint(bingo_callback_handler))
-            .branch(Update::filter_inline_query().endpoint(answer_inline_query));
+    let pool = db::connect_from_env().await?;
+    let media_cache = MediaCache::new(pool.clone());
+    info!("database initialized");
 
-        Dispatcher::builder(bot, schema)
-            .dependencies(dptree::deps![handlers, bot_name, bingo_store, admin_cache])
-            .enable_ctrlc_handler()
-            .build()
-            .dispatch()
-            .await;
-    }
+    #[cfg(feature = "bingo")]
+    let bingo_store = BingoStore::new(pool);
+
+    #[cfg(feature = "bingo")]
+    let schema = dptree::entry()
+        .branch(Update::filter_message().endpoint(message_handler))
+        .branch(Update::filter_callback_query().endpoint(bingo_callback_handler))
+        .branch(Update::filter_inline_query().endpoint(answer_inline_query));
 
     #[cfg(not(feature = "bingo"))]
-    {
-        let schema = dptree::entry()
-            .branch(Update::filter_message().endpoint(message_handler))
-            .branch(Update::filter_inline_query().endpoint(answer_inline_query));
+    let schema = dptree::entry()
+        .branch(Update::filter_message().endpoint(message_handler))
+        .branch(Update::filter_inline_query().endpoint(answer_inline_query));
 
-        Dispatcher::builder(bot, schema)
-            .dependencies(dptree::deps![handlers, bot_name])
-            .enable_ctrlc_handler()
-            .build()
-            .dispatch()
-            .await;
-    }
+    #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
+    let mut deps = dptree::deps![handlers, bot_name, media_cache];
+    #[cfg(feature = "bingo")]
+    deps.insert(bingo_store);
+    #[cfg(feature = "bingo")]
+    deps.insert(AdminCache::default());
+
+    Dispatcher::builder(bot, schema)
+        .dependencies(deps)
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 
     Ok(())
 }
@@ -105,6 +107,7 @@ async fn message_handler(
     msg: Message,
     handlers: Arc<[Handler]>,
     bot_name: Arc<str>,
+    cache: MediaCache,
     #[cfg(feature = "bingo")] bingo_store: BingoStore,
     #[cfg(feature = "bingo")] admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
@@ -140,7 +143,7 @@ async fn message_handler(
         }
         RouteAction::HandleMessage => {
             span.record("route", "message");
-            process_message(&bot, &msg, &handlers).await;
+            process_message(&bot, &msg, &handlers, &cache).await;
         }
         RouteAction::Ignore => {
             span.record("route", "ignored");
@@ -173,14 +176,14 @@ async fn bingo_callback_handler(
     Ok(())
 }
 
-async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler]) {
+async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler], cache: &MediaCache) {
     let Some(text) = msg.text() else {
         return;
     };
 
     for handler in handlers {
         if let Some(url) = handler.try_extract(text) {
-            if let Err(err) = handler.handle(bot, msg.chat.id, url).await {
+            if let Err(err) = handler.handle(bot, msg.chat.id, url, cache).await {
                 error!(platform = %handler.platform(), %err, "Media handler failed");
                 let _ = bot.send_message(msg.chat.id, failure_comment()).await;
                 if let Some(chat_id) = global_config().chat_id {

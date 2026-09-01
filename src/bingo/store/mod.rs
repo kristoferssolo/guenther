@@ -13,5 +13,11 @@ pub struct BingoStore {
     pool: SqlitePool,
 }
 
+impl BingoStore {
+    pub const fn new(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+}
+
 #[cfg(test)]
 mod tests;
