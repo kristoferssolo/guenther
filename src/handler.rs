@@ -129,20 +129,23 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
 async fn send_media(
     bot: &Bot,
     chat_id: ChatId,
-    media_items: Vec<(PathBuf, MediaKind)>,
+    mut media_items: Vec<(PathBuf, MediaKind)>,
     caption: &str,
 ) -> Result<()> {
-    if let [(path, kind)] = media_items.as_slice() {
-        return send_single(bot, chat_id, path.clone(), *kind, caption).await;
+    if media_items.len() == 1
+        && let Some((path, kind)) = media_items.pop()
+    {
+        return send_single(bot, chat_id, path, kind, caption).await;
     }
 
-    for chunk in media_items.chunks(MEDIA_GROUP_LIMIT) {
-        let group = chunk
-            .iter()
+    while !media_items.is_empty() {
+        let chunk_len = media_items.len().min(MEDIA_GROUP_LIMIT);
+        let group = media_items
+            .drain(..chunk_len)
             .enumerate()
             .map(|(index, (path, kind))| {
                 let caption = (index == 0).then(|| caption.to_owned());
-                into_input_media(path.clone(), *kind, caption)
+                into_input_media(path, kind, caption)
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -166,8 +169,12 @@ fn into_input_media(path: PathBuf, kind: MediaKind, caption: Option<String>) -> 
     }
 
     match kind {
-        MediaKind::Video => Ok(InputMedia::Video(with_caption!(InputMediaVideo::new(input)))),
-        MediaKind::Image => Ok(InputMedia::Photo(with_caption!(InputMediaPhoto::new(input)))),
+        MediaKind::Video => Ok(InputMedia::Video(with_caption!(InputMediaVideo::new(
+            input
+        )))),
+        MediaKind::Image => Ok(InputMedia::Photo(with_caption!(InputMediaPhoto::new(
+            input
+        )))),
         MediaKind::Unknown => Err(Error::UnknownMediaKind),
     }
 }
