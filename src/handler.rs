@@ -109,7 +109,7 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
         ),
         handler!(
             Platform::Tiktok,
-            r"https?://(?:www\.)?(?:vm|vt|tt|tik)\.tiktok\.com/([A-Za-z0-9_-]+)[/?#]?",
+            r"https?://(?:(?:www\.)?tiktok\.com/@[A-Za-z0-9._-]+/video/\d+(?:\?[^\s]*)?|(?:vm|vt|tt|tik)\.tiktok\.com/[A-Za-z0-9_-]+[/?#]?)",
             guenther::download::platform::tiktok::download_tiktok
         ),
     ]
@@ -291,5 +291,18 @@ mod tests {
     fn compose_caption_ignores_missing_source_text() {
         let caption = compose_caption("quote", None);
         assert_eq!(caption, "quote");
+    }
+
+    #[test]
+    fn extracts_tiktok_profile_video_url_with_query() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = assert_some!(
+            handlers
+                .iter()
+                .find(|handler| handler.platform() == Platform::Tiktok)
+        );
+        let url = "https://www.tiktok.com/@apple/video/7673917526358641950?is_from_webapp=1&sender_device=pc";
+
+        assert_eq!(handler.try_extract(url), Some(url));
     }
 }

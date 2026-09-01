@@ -33,7 +33,7 @@ check: clippy docs test
 # Run the development server
 [group("run")]
 run:
-    cargo run
+    bacon run-long
 
 # Format code
 [group("dev")]
