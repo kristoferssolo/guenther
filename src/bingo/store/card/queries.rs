@@ -155,23 +155,7 @@ pub async fn delete_or_reject_existing(
     user_id: UserId,
     replace: bool,
 ) -> Result<()> {
-    let user_id = db_user_id(user_id)?;
-    let existing = sqlx::query_scalar!(
-        r#"
-        SELECT
-            id
-        FROM
-            bingo_cards
-        WHERE
-            game_id = ?
-            AND user_id = ?
-        "#,
-        game_id.get(),
-        user_id,
-    )
-    .fetch_optional(&mut **transaction)
-    .await?;
-    if let Some(card_id) = existing.map(CardId::from) {
+    if let Some(card_id) = find_card_id(&mut **transaction, game_id, user_id).await? {
         if !replace {
             return Err(BingoError::Conflict(
                 "That user already has a card; use `/bingo regenerate` or `/bingo reimport` to replace it"
@@ -193,8 +177,8 @@ pub async fn delete_or_reject_existing(
     Ok(())
 }
 
-pub async fn find_card_id(
-    pool: &SqlitePool,
+pub async fn find_card_id<'e>(
+    executor: impl SqliteExecutor<'e>,
     game_id: GameId,
     user_id: UserId,
 ) -> Result<Option<CardId>> {
@@ -212,7 +196,7 @@ pub async fn find_card_id(
         game_id.get(),
         user_id,
     )
-    .fetch_optional(pool)
+    .fetch_optional(executor)
     .await?
     .map(CardId::from))
 }
@@ -480,24 +464,11 @@ pub async fn card_id_in(
     game_id: GameId,
     user_id: UserId,
 ) -> Result<CardId> {
-    let user_id = db_user_id(user_id)?;
-    sqlx::query_scalar!(
-        r#"
-        SELECT
-            id
-        FROM
-            bingo_cards
-        WHERE
-            game_id = ?
-            AND user_id = ?
-        "#,
-        game_id.get(),
-        user_id,
-    )
-    .fetch_optional(&mut **transaction)
-    .await?
-    .map(CardId::from)
-    .ok_or_else(|| BingoError::NotFound("That user does not have a card for this game".to_owned()))
+    find_card_id(&mut **transaction, game_id, user_id)
+        .await?
+        .ok_or_else(|| {
+            BingoError::NotFound("That user does not have a card for this game".to_owned())
+        })
 }
 
 fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
