@@ -41,19 +41,21 @@ pub fn has_bingo(cells: &[CardCell]) -> bool {
         return false;
     }
 
-    let marked = |position: usize| cells.get(position).is_some_and(|cell| cell.marked);
-    (0..GRID_SIDE).any(|row| {
-        (0..GRID_SIDE).all(|column| marked(row.saturating_mul(GRID_SIDE).saturating_add(column)))
-    }) || (0..GRID_SIDE).any(|column| {
-        (0..GRID_SIDE).all(|row| marked(row.saturating_mul(GRID_SIDE).saturating_add(column)))
-    }) || (0..GRID_SIDE).all(|index| marked(index.saturating_mul(GRID_SIDE.saturating_add(1))))
-        || (0..GRID_SIDE).all(|index| {
-            marked(
-                index
-                    .saturating_add(1)
-                    .saturating_mul(GRID_SIDE.saturating_sub(1)),
-            )
+    let (rows, remainder) = cells.as_chunks::<GRID_SIDE>();
+    debug_assert!(remainder.is_empty());
+    rows.iter().any(|row| row.iter().all(|cell| cell.marked))
+        || (0..GRID_SIDE).any(|column| {
+            rows.iter()
+                .all(|row| row.get(column).is_some_and(|cell| cell.marked))
         })
+        || rows
+            .iter()
+            .enumerate()
+            .all(|(row, cells)| cells.get(row).is_some_and(|cell| cell.marked))
+        || rows
+            .iter()
+            .zip((0..GRID_SIDE).rev())
+            .all(|(cells, column)| cells.get(column).is_some_and(|cell| cell.marked))
 }
 
 #[cfg(test)]
