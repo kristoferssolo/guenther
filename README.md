@@ -162,12 +162,13 @@ The bot currently exposes:
 - `/weekend` or `/f1`: show the next F1 weekend schedule, including practice sessions when available
 - `/quali`: show the next F1 qualifying sessions, including sprint qualifying when available
 - `/race`: show the next F1 race sessions, including the sprint when available
+- `/standings`: show the current F1 driver and constructor standings
 - `/bingo`: show F1 bingo help when built with the `bingo` feature
 
 ## F1 Bingo
 
 Bingo games are isolated per Telegram chat. A chat can have several active
-games at once – for example, a full-season game alongside a race-weekend game—but
+games at once – for example, a full-season game alongside a race-weekend game-but
 one game is the default for commands that omit a game slug. Each card has 24
 entries and a pre-marked F1-themed center cell. `LIGHTS OUT!` is the default
 center text and chat administrators can customize it per game. Games can also

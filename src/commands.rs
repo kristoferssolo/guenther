@@ -1,12 +1,11 @@
+#[cfg(feature = "bingo")]
+use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 use guenther::{
     comments::global_comments,
     config::global_config,
-    f1::{ScheduleView, next_race_message},
+    f1::{ScheduleView, next_race_message, standings_message},
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
-
-#[cfg(feature = "bingo")]
-use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 
 #[derive(Debug, Clone, PartialEq, Eq, BotCommands)]
 #[command(rename_rule = "lowercase")]
@@ -26,6 +25,9 @@ pub enum Command {
     /// Show the next F1 race schedule
     #[command()]
     Race,
+    /// Show the current F1 driver and constructor standings
+    #[command()]
+    Standings,
     /// Manage and play F1 bingo
     #[cfg(feature = "bingo")]
     Bingo(String),
@@ -39,6 +41,7 @@ impl Command {
             Self::Weekend => "weekend",
             Self::Quali => "quali",
             Self::Race => "race",
+            Self::Standings => "standings",
             #[cfg(feature = "bingo")]
             Self::Bingo(_) => "bingo",
         }
@@ -65,6 +68,7 @@ pub async fn answer(
         Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend).await?,
         Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying).await?,
         Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race).await?,
+        Command::Standings => send_f1_standings(bot, chat_id).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
             answer_bingo(bot, message, bingo_store, admin_cache, &input).await?;
@@ -84,6 +88,14 @@ async fn send_f1_schedule(
     let message = next_race_message(view, offset)
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
+
+    bot.send_message(chat_id, message).await
+}
+
+async fn send_f1_standings(bot: &Bot, chat_id: ChatId) -> ResponseResult<Message> {
+    let message = standings_message()
+        .await
+        .unwrap_or_else(|e| format!("Failed to load F1 standings: {e}"));
 
     bot.send_message(chat_id, message).await
 }

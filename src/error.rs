@@ -62,6 +62,15 @@ pub enum Error {
     #[error("No matching F1 sessions were found")]
     MissingF1Sessions,
 
+    #[error("Failed to fetch the F1 standings: {0}")]
+    FetchF1Standings(#[source] reqwest::Error),
+
+    #[error("Failed to decode the F1 standings: {0}")]
+    DecodeF1Standings(#[source] reqwest::Error),
+
+    #[error("No F1 standings were found")]
+    MissingF1Standings,
+
     #[error("Failed to parse F1 session time `{raw}`")]
     ParseF1SessionTime {
         raw: String,
