@@ -3,7 +3,7 @@ use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 use guenther::{
     comments::global_comments,
     config::global_config,
-    f1::{ScheduleView, next_race_message, standings_message},
+    f1::{ScheduleView, countdown_message, next_race_message, standings_message},
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 
@@ -25,6 +25,9 @@ pub enum Command {
     /// Show the next F1 race schedule
     #[command()]
     Race,
+    /// Show time until the next F1 session
+    #[command()]
+    Countdown,
     /// Show the current F1 driver and constructor standings
     #[command()]
     Standings,
@@ -41,6 +44,7 @@ impl Command {
             Self::Weekend => "weekend",
             Self::Quali => "quali",
             Self::Race => "race",
+            Self::Countdown => "countdown",
             Self::Standings => "standings",
             #[cfg(feature = "bingo")]
             Self::Bingo(_) => "bingo",
@@ -68,6 +72,7 @@ pub async fn answer(
         Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend).await?,
         Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying).await?,
         Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race).await?,
+        Command::Countdown => send_f1_countdown(bot, chat_id).await?,
         Command::Standings => send_f1_standings(bot, chat_id).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
@@ -86,6 +91,15 @@ async fn send_f1_schedule(
 ) -> ResponseResult<Message> {
     let offset = global_config().f1.utc_offset;
     let message = next_race_message(view, offset)
+        .await
+        .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
+
+    bot.send_message(chat_id, message).await
+}
+
+async fn send_f1_countdown(bot: &Bot, chat_id: ChatId) -> ResponseResult<Message> {
+    let offset = global_config().f1.utc_offset;
+    let message = countdown_message(offset)
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 

@@ -162,6 +162,7 @@ The bot currently exposes:
 - `/weekend` or `/f1`: show the next F1 weekend schedule, including practice sessions when available
 - `/quali`: show the next F1 qualifying sessions, including sprint qualifying when available
 - `/race`: show the next F1 race sessions, including the sprint when available
+- `/countdown`: show how long until the next F1 session of the upcoming race weekend starts
 - `/standings`: show the current F1 driver and constructor standings
 - `/bingo`: show F1 bingo help when built with the `bingo` feature
 
