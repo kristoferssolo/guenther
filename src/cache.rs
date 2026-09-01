@@ -46,7 +46,17 @@ impl MediaCache {
     /// invalid `kind`.
     pub async fn get(&self, url: &str) -> Result<Option<Vec<CachedMedia>>> {
         let rows = sqlx::query!(
-            r#"SELECT kind, file_id FROM media_cache WHERE url = ? ORDER BY position"#,
+            r#"
+            SELECT
+                kind,
+                file_id
+            FROM
+                media_cache
+            WHERE
+                url = ?
+            ORDER BY
+                position
+            "#,
             url
         )
         .fetch_all(&self.pool)
@@ -77,9 +87,17 @@ impl MediaCache {
             return Ok(());
         }
         let mut transaction = self.pool.begin().await?;
-        sqlx::query!(r#"DELETE FROM media_cache WHERE url = ?"#, url)
-            .execute(&mut *transaction)
-            .await?;
+        sqlx::query!(
+            r#"
+            DELETE FROM
+                media_cache
+            WHERE
+                url = ?
+            "#,
+            url
+        )
+        .execute(&mut *transaction)
+        .await?;
         for (index, item) in items.iter().enumerate() {
             let position =
                 i64::try_from(index).map_err(|_| CacheError::PositionOutOfRange(index))?;
@@ -93,7 +111,12 @@ impl MediaCache {
                 }
             };
             sqlx::query!(
-                r#"INSERT INTO media_cache (url, position, kind, file_id) VALUES (?, ?, ?, ?)"#,
+                r#"
+                INSERT INTO
+                    media_cache (url, position, kind, file_id)
+                VALUES
+                    (?, ?, ?, ?)
+                "#,
                 url,
                 position,
                 kind,
@@ -112,9 +135,17 @@ impl MediaCache {
     ///
     /// Returns an error when the database query fails.
     pub async fn invalidate(&self, url: &str) -> Result<()> {
-        sqlx::query!(r#"DELETE FROM media_cache WHERE url = ?"#, url)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query!(
+            r#"
+            DELETE FROM
+                media_cache
+            WHERE
+                url = ?
+    "#,
+            url
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }

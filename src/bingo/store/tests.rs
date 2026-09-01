@@ -134,8 +134,14 @@ async fn deletes_games_with_their_contents_and_promotes_a_new_default() {
     assert!(default.is_default);
     let entry_count = assert_ok!(
         sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS `count!: i64`
-FROM bingo_entries WHERE game_id = ?"#,
+            r#"
+            SELECT
+                COUNT(*) AS `count!: i64`
+            FROM
+                bingo_entries
+            WHERE
+                game_id = ?
+            "#,
             deleted_game_id.get(),
         )
         .fetch_one(&store.pool)
@@ -143,8 +149,14 @@ FROM bingo_entries WHERE game_id = ?"#,
     );
     let card_count = assert_ok!(
         sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS `count!: i64`
-FROM bingo_cards WHERE game_id = ?"#,
+            r#"
+            SELECT
+                COUNT(*) AS `count!: i64`
+            FROM
+                bingo_cards
+            WHERE
+                game_id = ?
+            "#,
             deleted_game_id.get(),
         )
         .fetch_one(&store.pool)
@@ -152,8 +164,14 @@ FROM bingo_cards WHERE game_id = ?"#,
     );
     let cell_count = assert_ok!(
         sqlx::query_scalar!(
-            r#"SELECT COUNT(*) AS `count!: i64`
-FROM bingo_card_cells WHERE card_id = ?"#,
+            r#"
+            SELECT
+                COUNT(*) AS `count!: i64`
+            FROM
+                bingo_card_cells
+            WHERE
+                card_id = ?
+            "#,
             card.id.get(),
         )
         .fetch_one(&store.pool)

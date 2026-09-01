@@ -50,14 +50,13 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool> {
     Ok(pool)
 }
 
-/// Connect using `BINGO_DATABASE_URL`, falling back to the default location.
+/// Connect using `DATABASE_URL`, falling back to the default location.
 ///
 /// # Errors
 ///
 /// Returns an error when the database cannot be opened or migrated.
 pub async fn connect_from_env() -> Result<SqlitePool> {
-    let database_url =
-        env::var("BINGO_DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_owned());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_owned());
     connect(&database_url).await
 }
 

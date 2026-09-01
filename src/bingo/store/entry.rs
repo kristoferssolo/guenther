@@ -50,8 +50,20 @@ impl BingoStore {
         let game = self.game(chat_id, slug).await?;
         let rows = sqlx::query_as!(
             EntryRow,
-            r#"SELECT id, number, game_id, text FROM bingo_entries
-WHERE game_id = ? AND active = 1 ORDER BY number"#,
+            r#"
+            SELECT
+                id,
+                number,
+                game_id,
+                text
+            FROM
+                bingo_entries
+            WHERE
+                game_id = ?
+                AND active = 1
+            ORDER BY
+                number
+            "#,
             game.id.get(),
         )
         .fetch_all(&self.pool)
@@ -99,9 +111,22 @@ WHERE game_id = ? AND active = 1 ORDER BY number"#,
         let normalized = normalize_entry(text);
         let row = sqlx::query_as!(
             EntryRow,
-            r#"UPDATE bingo_entries SET text = ?, normalized_text = ?
-WHERE game_id = ? AND number = ? AND active = 1
-RETURNING id, number, game_id, text"#,
+            r#"
+            UPDATE
+                bingo_entries
+            SET
+                text = ?,
+                normalized_text = ?
+            WHERE
+                game_id = ?
+                AND number = ?
+                AND active = 1
+            RETURNING
+                id,
+                number,
+                game_id,
+                text
+            "#,
             text.trim(),
             normalized,
             game.id.get(),
@@ -128,8 +153,16 @@ RETURNING id, number, game_id, text"#,
         let game = self.game(chat_id, slug).await?;
         ensure_editable(&game)?;
         let result = sqlx::query!(
-            r#"UPDATE bingo_entries SET active = 0
-WHERE game_id = ? AND number = ? AND active = 1"#,
+            r#"
+            UPDATE
+                bingo_entries
+            SET
+                active = 0
+            WHERE
+                game_id = ?
+                AND number = ?
+                AND active = 1
+            "#,
             game.id.get(),
             entry_number.get(),
         )
@@ -166,17 +199,31 @@ async fn upsert_entry<'e>(
     let normalized = normalize_entry(text);
     let text = text.trim();
     let row = sqlx::query!(
-        r#"INSERT INTO bingo_entries (game_id, number, text, normalized_text)
-VALUES (
-?,
-(SELECT COALESCE(MAX(number),
-0) + 1 FROM bingo_entries WHERE game_id = ?),
-?,
-?
-)
-ON CONFLICT(game_id, normalized_text)
-DO UPDATE SET text = excluded.text, active = 1
-RETURNING id, number"#,
+        r#"
+        INSERT INTO
+            bingo_entries (game_id, number, text, normalized_text)
+        VALUES
+            (
+                ?,
+                (
+                    SELECT
+                        COALESCE(MAX(number), 0) + 1
+                    FROM
+                        bingo_entries
+                    WHERE
+                        game_id = ?
+                ),
+                ?,
+                ?
+            ) ON CONFLICT(game_id, normalized_text) DO
+        UPDATE
+        SET
+            text = excluded.text,
+            active = 1
+        RETURNING
+            id,
+            number
+        "#,
         game_id.get(),
         game_id.get(),
         text,

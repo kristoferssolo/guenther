@@ -15,8 +15,16 @@ impl BingoStore {
         let mut transaction = self.pool.begin().await?;
         if let Some(username) = &user.username {
             sqlx::query!(
-                r#"UPDATE bingo_users SET username = NULL
-WHERE chat_id = ? AND username = ? COLLATE NOCASE AND user_id != ?"#,
+                r#"
+                UPDATE
+                    bingo_users
+                SET
+                    username = NULL
+                WHERE
+                    chat_id = ?
+                    AND username = ? COLLATE NOCASE
+                    AND user_id != ?
+                "#,
                 chat_id,
                 username,
                 user_id,
@@ -25,10 +33,17 @@ WHERE chat_id = ? AND username = ? COLLATE NOCASE AND user_id != ?"#,
             .await?;
         }
         sqlx::query!(
-            r#"INSERT INTO bingo_users (chat_id, user_id, username, display_name)
-VALUES (?, ?, ?, ?) 
-ON CONFLICT(chat_id, user_id) DO UPDATE SET username = excluded.username, 
-display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP"#,
+            r#"
+            INSERT INTO
+                bingo_users (chat_id, user_id, username, display_name)
+            VALUES
+                (?, ?, ?, ?) ON CONFLICT(chat_id, user_id) DO
+            UPDATE
+            SET
+                username = excluded.username,
+                display_name = excluded.display_name,
+                updated_at = CURRENT_TIMESTAMP
+            "#,
             chat_id,
             user_id,
             user.username,
@@ -44,8 +59,17 @@ display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP"#,
         let chat_id = chat_id.0;
         let db_user_id = db_user_id(user_id)?;
         sqlx::query!(
-            r#"SELECT user_id, username, display_name FROM bingo_users
-WHERE chat_id = ? AND user_id = ?"#,
+            r#"
+            SELECT
+                user_id,
+                username,
+                display_name
+            FROM
+                bingo_users
+            WHERE
+                chat_id = ?
+                AND user_id = ?
+            "#,
             chat_id,
             db_user_id,
         )
@@ -68,8 +92,17 @@ WHERE chat_id = ? AND user_id = ?"#,
         let username = username.trim_start_matches('@');
         let chat_id = chat_id.0;
         sqlx::query!(
-            r#"SELECT user_id, username, display_name FROM bingo_users
-WHERE chat_id = ? AND username = ? COLLATE NOCASE"#,
+            r#"
+            SELECT
+                user_id,
+                username,
+                display_name
+            FROM
+                bingo_users
+            WHERE
+                chat_id = ?
+                AND username = ? COLLATE NOCASE
+            "#,
             chat_id,
             username,
         )

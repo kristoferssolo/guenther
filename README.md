@@ -47,7 +47,7 @@ Optional:
 - `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
 - `ENABLED_PLATFORMS`: comma-separated platforms to enable; defaults to all platforms
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
-- `BINGO_DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache
+- `DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
 - `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture
 
@@ -59,7 +59,7 @@ CHAT_ID=123456789
 COBALT_API_URL=http://127.0.0.1:9000/
 ENABLED_PLATFORMS=instagram,tiktok,twitter,youtube
 F1_UTC_OFFSET=+3
-BINGO_DATABASE_URL=sqlite://data/bingo.sqlite3
+DATABASE_URL=sqlite://data/bingo.sqlite3
 ```
 
 Supported platform names are `instagram`, `tiktok`, `twitter` (or `x`), and
