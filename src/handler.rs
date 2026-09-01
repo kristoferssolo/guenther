@@ -10,11 +10,14 @@ use std::{path::PathBuf, pin::Pin, result::Result as StdResult, sync::Arc, time:
 use teloxide::{
     Bot,
     prelude::*,
-    types::{ChatId, InputFile},
+    types::{ChatId, InputFile, InputMedia, InputMediaPhoto, InputMediaVideo},
 };
 use tracing::{debug, info};
 
 type DownloadFn = fn(String) -> Pin<Box<dyn Future<Output = Result<DownloadResult>> + Send>>;
+
+/// Maximum number of items Telegram accepts in a single media group.
+const MEDIA_GROUP_LIMIT: usize = 10;
 
 #[derive(Debug, Clone)]
 pub struct Handler {
@@ -64,14 +67,12 @@ impl Handler {
             "Prepared downloaded media"
         );
 
-        for (index, (path, kind)) in media_items.into_iter().enumerate() {
-            let caption = if include_source_text && index == 0 {
-                compose_caption(&base_caption, source_text.as_deref())
-            } else {
-                base_caption.clone()
-            };
-            send_media_from_path(bot, chat_id, path, kind, &caption).await?;
-        }
+        let caption = if include_source_text {
+            compose_caption(&base_caption, source_text.as_deref())
+        } else {
+            base_caption
+        };
+        send_media(bot, chat_id, media_items, &caption).await?;
 
         info!(
             platform = %self.platform,
@@ -121,7 +122,57 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
         .into())
 }
 
-async fn send_media_from_path(
+/// Send downloaded media, grouping multiple items into a single album message.
+///
+/// Only the first item of each message carries the caption, so Telegram shows
+/// it once for the whole album.
+async fn send_media(
+    bot: &Bot,
+    chat_id: ChatId,
+    media_items: Vec<(PathBuf, MediaKind)>,
+    caption: &str,
+) -> Result<()> {
+    if let [(path, kind)] = media_items.as_slice() {
+        return send_single(bot, chat_id, path.clone(), *kind, caption).await;
+    }
+
+    for chunk in media_items.chunks(MEDIA_GROUP_LIMIT) {
+        let group = chunk
+            .iter()
+            .enumerate()
+            .map(|(index, (path, kind))| {
+                let caption = (index == 0).then(|| caption.to_owned());
+                into_input_media(path.clone(), *kind, caption)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let messages = bot.send_media_group(chat_id, group).await?;
+        info!(media_count = messages.len(), "Album sent");
+    }
+
+    Ok(())
+}
+
+fn into_input_media(path: PathBuf, kind: MediaKind, caption: Option<String>) -> Result<InputMedia> {
+    let input = InputFile::file(path);
+
+    macro_rules! with_caption {
+        ($media:expr) => {
+            match caption {
+                Some(caption) => $media.caption(caption),
+                None => $media,
+            }
+        };
+    }
+
+    match kind {
+        MediaKind::Video => Ok(InputMedia::Video(with_caption!(InputMediaVideo::new(input)))),
+        MediaKind::Image => Ok(InputMedia::Photo(with_caption!(InputMediaPhoto::new(input)))),
+        MediaKind::Unknown => Err(Error::UnknownMediaKind),
+    }
+}
+
+async fn send_single(
     bot: &Bot,
     chat_id: ChatId,
     path: PathBuf,
@@ -200,11 +251,33 @@ fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
 
     #[test]
     fn compose_caption_appends_source_text() {
         let caption = compose_caption("quote", Some("tweet text"));
         assert_eq!(caption, "quote\n\ntweet text");
+    }
+
+    #[test]
+    fn input_media_carries_only_the_given_caption() {
+        let photo = into_input_media(
+            PathBuf::from("photo.jpg"),
+            MediaKind::Image,
+            Some("caption".to_owned()),
+        );
+        let photo = assert_some!(match assert_ok!(photo) {
+            InputMedia::Photo(photo) => Some(photo),
+            _ => None,
+        });
+        assert_some_eq!(photo.caption, "caption");
+
+        let video = into_input_media(PathBuf::from("video.mp4"), MediaKind::Video, None);
+        let video = assert_some!(match assert_ok!(video) {
+            InputMedia::Video(video) => Some(video),
+            _ => None,
+        });
+        assert_none!(video.caption);
     }
 
     #[test]
