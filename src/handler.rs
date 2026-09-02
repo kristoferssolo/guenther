@@ -2,7 +2,7 @@ use guenther::{
     cache::{CachedMedia, MediaCache},
     comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
     config::{Platform, PlatformConfig},
-    download::{DownloadResult, collect_supported_media},
+    download::{DownloadResult, collect_supported_media, platform::instagram},
     error::{Error, Result},
     utils::MediaKind,
 };
@@ -46,7 +46,10 @@ impl Handler {
     }
 
     pub fn try_extract<'a>(&self, text: &'a str) -> Option<&'a str> {
-        self.regex.find(text).map(|matched| matched.as_str())
+        self.regex
+            .captures(text)
+            .and_then(|captures| captures.name("url").or_else(|| captures.get(0)))
+            .map(|matched| matched.as_str())
     }
 
     pub async fn handle(
@@ -58,8 +61,9 @@ impl Handler {
     ) -> Result<()> {
         let started_at = Instant::now();
         info!(platform = %self.platform, "Handling media URL");
+        let cache_key = self.cache_key(url);
 
-        match self.try_send_cached(bot, chat_id, url, cache).await {
+        match self.try_send_cached(bot, chat_id, &cache_key, cache).await {
             Ok(true) => {
                 info!(
                     platform = %self.platform,
@@ -76,7 +80,7 @@ impl Handler {
                     %err,
                     "Cached media send failed; invalidating entry and falling back to download"
                 );
-                if let Err(err) = cache.invalidate(url).await {
+                if let Err(err) = cache.invalidate(&cache_key).await {
                     warn!(platform = %self.platform, %err, "Failed to invalidate the cache entry");
                 }
             }
@@ -108,7 +112,7 @@ impl Handler {
             .map(|(path, kind)| (InputFile::file(path), kind))
             .collect::<Vec<_>>();
         let cached = send_media(bot, chat_id, inputs, &caption).await?;
-        if let Err(err) = cache.put(url, &cached).await {
+        if let Err(err) = cache.put(&cache_key, &cached).await {
             warn!(platform = %self.platform, %err, "Failed to persist media file_ids");
         }
 
@@ -120,6 +124,13 @@ impl Handler {
             "Handled media URL"
         );
         Ok(())
+    }
+
+    fn cache_key(&self, url: &str) -> String {
+        match self.platform {
+            Platform::Instagram => instagram::normalized_cache_key(url),
+            _ => url.to_owned(),
+        }
     }
 
     /// Send the URL's media from cached Telegram `file_id`s.
@@ -167,7 +178,7 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
     let handlers = [
         handler!(
             Platform::Instagram,
-            r"https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/([A-Za-z0-9_-]+)",
+            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
             guenther::download::platform::instagram::download_instagram
         ),
         handler!(
@@ -364,6 +375,14 @@ mod tests {
     use super::*;
     use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
 
+    fn instagram_handler(handlers: &[Handler]) -> &Handler {
+        assert_some!(
+            handlers
+                .iter()
+                .find(|handler| handler.platform() == Platform::Instagram)
+        )
+    }
+
     #[test]
     fn compose_caption_appends_source_text() {
         let caption = compose_caption("quote", Some("tweet text"));
@@ -412,5 +431,69 @@ mod tests {
         let url = "https://www.tiktok.com/@apple/video/7673917526358641950?is_from_webapp=1&sender_device=pc";
 
         assert_eq!(handler.try_extract(url), Some(url));
+    }
+    #[test]
+    fn extracts_instagram_posts_on_supported_hosts() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = instagram_handler(&handlers);
+        let urls = [
+            "https://instagram.com/p/ABC123",
+            "https://www.instagram.com/p/ABC123/",
+            "https://instagr.am/p/ABC123",
+            "http://www.instagr.am/p/ABC123",
+        ];
+
+        for url in urls {
+            assert_eq!(handler.try_extract(url), Some(url));
+        }
+    }
+    #[test]
+    fn extracts_instagram_post_with_query_and_fragment() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = instagram_handler(&handlers);
+        let url = "https://www.instagram.com/p/ABC123/?utm_source=share#carousel";
+
+        assert_eq!(handler.try_extract(url), Some(url));
+    }
+    #[test]
+    fn instagram_cache_key_is_stable_for_equivalent_post_urls() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = instagram_handler(&handlers);
+        let clean_url = "https://www.instagram.com/p/ABC123";
+        let decorated_url = "https://www.instagram.com/p/ABC123/?utm_source=share#carousel";
+
+        assert_eq!(
+            handler.cache_key(clean_url),
+            handler.cache_key(decorated_url)
+        );
+    }
+
+    #[test]
+    fn existing_instagram_reel_and_tv_urls_still_match() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = instagram_handler(&handlers);
+
+        for url in [
+            "https://www.instagram.com/reel/ABC123",
+            "https://instagr.am/tv/ABC123",
+        ] {
+            assert_eq!(handler.try_extract(url), Some(url));
+        }
+    }
+
+    #[test]
+    fn rejects_non_post_instagram_paths_and_malformed_posts() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = instagram_handler(&handlers);
+
+        for url in [
+            "https://www.instagram.com/photographer",
+            "https://www.instagram.com/stories/photographer/123",
+            "https://www.instagram.com/accounts/login",
+            "https://www.instagram.com/p/",
+            "https://www.instagram.com/p/ABC123/extra",
+        ] {
+            assert_none!(handler.try_extract(url));
+        }
     }
 }

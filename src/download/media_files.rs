@@ -44,58 +44,46 @@ pub async fn collect_supported_media(
             k => Some((path, k)),
         }
     }))
-    .buffer_unordered(concurrency)
+    .buffered(concurrency)
     .collect::<Vec<_>>()
     .await;
 
-    let mut media_items = results.into_iter().flatten().collect::<Vec<_>>();
+    let media_items = results.into_iter().flatten().collect::<Vec<_>>();
     if media_items.is_empty() {
         return Err(Error::NoMediaFound);
     }
 
-    sort_media_items(&mut media_items);
-
     Ok((dr.tempdir, media_items))
-}
-
-fn sort_media_items(media_items: &mut [(PathBuf, MediaKind)]) {
-    media_items.sort_unstable_by(|(left_path, left_kind), (right_path, right_kind)| {
-        media_priority(*left_kind)
-            .cmp(&media_priority(*right_kind))
-            .then_with(|| left_path.cmp(right_path))
-    });
-}
-
-const fn media_priority(kind: MediaKind) -> u8 {
-    match kind {
-        MediaKind::Video => 0,
-        MediaKind::Image => 1,
-        MediaKind::Unknown => 2,
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::assert_ok;
 
-    #[test]
-    fn sorts_videos_before_images_and_paths_within_a_kind() {
-        let mut media_items = vec![
-            (PathBuf::from("image-b.jpg"), MediaKind::Image),
-            (PathBuf::from("video-b.mp4"), MediaKind::Video),
-            (PathBuf::from("image-a.jpg"), MediaKind::Image),
-            (PathBuf::from("video-a.mp4"), MediaKind::Video),
-        ];
+    #[tokio::test]
+    async fn collect_preserves_download_order_for_mixed_media() {
+        let tempdir = assert_ok!(tempfile::tempdir());
+        let image = tempdir.path().join("first.jpg");
+        let video = tempdir.path().join("second.mp4");
+        let second_image = tempdir.path().join("third.png");
+        assert_ok!(std::fs::write(&image, b"image"));
+        assert_ok!(std::fs::write(&video, b"video"));
+        assert_ok!(std::fs::write(&second_image, b"image"));
 
-        sort_media_items(&mut media_items);
+        let result = DownloadResult {
+            tempdir,
+            files: vec![image.clone(), video.clone(), second_image.clone()],
+            source_text: None,
+        };
+        let (_, media_items) = assert_ok!(collect_supported_media(result).await);
 
         assert_eq!(
             media_items,
             vec![
-                (PathBuf::from("video-a.mp4"), MediaKind::Video),
-                (PathBuf::from("video-b.mp4"), MediaKind::Video),
-                (PathBuf::from("image-a.jpg"), MediaKind::Image),
-                (PathBuf::from("image-b.jpg"), MediaKind::Image),
+                (image, MediaKind::Image),
+                (video, MediaKind::Video),
+                (second_image, MediaKind::Image),
             ]
         );
     }

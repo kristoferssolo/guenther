@@ -4,7 +4,7 @@ Guenther is a Rust Telegram bot that takes social media links and sends back the
 
 It currently supports:
 
-- Instagram reels and TV posts
+- Instagram posts, reels, and TV posts, including photos, videos, and galleries
 - TikTok short links
 - X/Twitter posts
 - YouTube Shorts
