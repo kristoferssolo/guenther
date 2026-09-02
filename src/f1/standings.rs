@@ -5,7 +5,6 @@ const DRIVER_STANDINGS_URL: &str =
     "https://api.jolpi.ca/ergast/f1/current/driverStandings.json?limit=40";
 const CONSTRUCTOR_STANDINGS_URL: &str =
     "https://api.jolpi.ca/ergast/f1/current/constructorStandings.json?limit=40";
-const DRIVER_STANDINGS_LIMIT: usize = 20;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -115,7 +114,7 @@ fn format_driver_standings(list: &StandingsList<DriverStanding>) -> String {
         list.season, list.round,
     )];
 
-    for standing in list.standings.iter().take(DRIVER_STANDINGS_LIMIT) {
+    for standing in &list.standings {
         lines.push(format_driver_line(standing));
     }
 
