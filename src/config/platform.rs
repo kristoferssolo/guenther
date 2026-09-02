@@ -15,6 +15,7 @@ pub struct PlatformConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Platform {
     Instagram,
+    Reddit,
     Tiktok,
     Twitter,
     Youtube,
@@ -77,7 +78,13 @@ impl Default for PlatformConfig {
 }
 
 impl Platform {
-    pub const ALL: [Self; 4] = [Self::Instagram, Self::Tiktok, Self::Twitter, Self::Youtube];
+    pub const ALL: [Self; 5] = [
+        Self::Instagram,
+        Self::Reddit,
+        Self::Tiktok,
+        Self::Twitter,
+        Self::Youtube,
+    ];
 }
 
 impl FromStr for Platform {
@@ -86,6 +93,7 @@ impl FromStr for Platform {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
             "instagram" => Ok(Self::Instagram),
+            "reddit" => Ok(Self::Reddit),
             "tiktok" => Ok(Self::Tiktok),
             "twitter" | "x" => Ok(Self::Twitter),
             "youtube" => Ok(Self::Youtube),
@@ -98,6 +106,7 @@ impl Display for Platform {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Instagram => "instagram",
+            Self::Reddit => "reddit",
             Self::Tiktok => "tiktok",
             Self::Twitter => "twitter",
             Self::Youtube => "youtube",

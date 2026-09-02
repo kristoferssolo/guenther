@@ -66,23 +66,39 @@ struct CobaltApiError {
 /// Returns an error when Cobalt rejects the source URL, requests local
 /// processing, or a media response cannot be downloaded to temporary storage.
 pub async fn download_with_cobalt(source_url: &str) -> Result<DownloadResult> {
+    download_with_cobalt_options(source_url, false).await
+}
+
+/// Download public media through Cobalt, converting animated GIFs to video.
+pub async fn download_with_cobalt_converting_gifs(source_url: &str) -> Result<DownloadResult> {
+    download_with_cobalt_options(source_url, true).await
+}
+
+async fn download_with_cobalt_options(
+    source_url: &str,
+    convert_gif: bool,
+) -> Result<DownloadResult> {
     let config = &global_config().cobalt;
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(REQUEST_TIMEOUT)
         .build()
         .map_err(Error::CobaltRequest)?;
-    let response = request_download(&client, config, source_url).await?;
+    let response = request_download(&client, config, source_url, convert_gif).await?;
     let tempdir = tempdir()?;
 
     let files = match response {
         CobaltResponse::Tunnel { url, filename } | CobaltResponse::Redirect { url, filename } => {
+            let filename = converted_filename(&filename, convert_gif);
             vec![download_media(&client, &tempdir, &url, &filename, 0).await?]
         }
         CobaltResponse::Picker { picker } => {
             let mut files = Vec::with_capacity(picker.len());
             for (index, item) in picker.into_iter().enumerate() {
-                let filename = format!("media-{index}.{}", extension_for(&item.media_type));
+                let filename = format!(
+                    "media-{index}.{}",
+                    extension_for(&item.media_type, convert_gif)
+                );
                 files.push(download_media(&client, &tempdir, &item.url, &filename, index).await?);
             }
             files
@@ -106,13 +122,14 @@ async fn request_download(
     client: &Client,
     config: &CobaltConfig,
     source_url: &str,
+    convert_gif: bool,
 ) -> Result<CobaltResponse> {
     let payload = CobaltRequest {
         url: source_url,
         video_quality: "1080",
         youtube_video_codec: "h264",
         youtube_video_container: "mp4",
-        convert_gif: false,
+        convert_gif,
         filename_style: "basic",
         always_proxy: true,
         local_processing: "disabled",
@@ -168,13 +185,34 @@ fn safe_filename(suggested: &str, index: usize) -> String {
     format!("{index:03}-{basename}")
 }
 
-fn extension_for(media_type: &str) -> &'static str {
+fn extension_for(media_type: &str, convert_gif: bool) -> &'static str {
     match media_type {
         "photo" => "jpg",
         "video" => "mp4",
+        "gif" if convert_gif => "mp4",
         "gif" => "gif",
         _ => "bin",
     }
+}
+
+fn converted_filename(filename: &str, convert_gif: bool) -> String {
+    if !convert_gif {
+        return filename.to_owned();
+    }
+
+    let path = Path::new(filename);
+    if !path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("gif"))
+    {
+        return filename.to_owned();
+    }
+
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return filename.to_owned();
+    };
+    format!("{stem}.mp4")
 }
 
 #[cfg(test)]
@@ -240,5 +278,13 @@ mod tests {
     fn strips_directories_from_suggested_filename() {
         assert_eq!(safe_filename("../../video.mp4", 2), "002-video.mp4");
         assert_eq!(safe_filename("..", 0), "000-media");
+    }
+
+    #[test]
+    fn converts_gif_output_names_to_video_names() {
+        assert_eq!(converted_filename("reddit.gif", true), "reddit.mp4");
+        assert_eq!(converted_filename("reddit.GIF", true), "reddit.mp4");
+        assert_eq!(converted_filename("reddit.mp4", true), "reddit.mp4");
+        assert_eq!(converted_filename("reddit.gif", false), "reddit.gif");
     }
 }

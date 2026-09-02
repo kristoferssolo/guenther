@@ -5,6 +5,7 @@ Guenther is a Rust Telegram bot that takes social media links and sends back the
 It currently supports:
 
 - Instagram posts, reels, and TV posts, including photos, videos, and galleries
+- Reddit videos and GIFs
 - TikTok short links
 - X/Twitter posts
 - YouTube Shorts
@@ -59,15 +60,15 @@ Sample `.env`:
 TELOXIDE_TOKEN=123456:telegram-token
 CHAT_ID=123456789
 COBALT_API_URL=http://127.0.0.1:9000/
-ENABLED_PLATFORMS=instagram,tiktok,twitter,youtube
+ENABLED_PLATFORMS=instagram,reddit,tiktok,twitter,youtube
 F1_UTC_OFFSET=+3
 DATABASE_URL=sqlite://data/bingo.sqlite3
 ```
 
-Supported platform names are `instagram`, `tiktok`, `twitter` (or `x`), and
-`youtube`. Use `all` or leave the variable unset to enable everything. Set it
-to an empty value to disable all media handlers. Changes take effect when the
-bot restarts.
+Supported platform names are `instagram`, `reddit`, `tiktok`, `twitter` (or
+`x`), and `youtube`. Use `all` or leave the variable unset to enable
+everything. Set it to an empty value to disable all media handlers. Changes
+take effect when the bot restarts.
 
 ## Running Locally
 
@@ -120,7 +121,7 @@ docker compose up --build
 Platform selection can also be passed directly to Compose:
 
 ```bash
-ENABLED_PLATFORMS=instagram,youtube docker compose up --build
+ENABLED_PLATFORMS=instagram,reddit,youtube docker compose up --build
 ```
 
 Build the Compose bot with bingo enabled:
@@ -321,5 +322,6 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
   cached `file_id`s; captions are still generated per request. If a cached send
   fails, the entry is invalidated and the media is downloaded again.
 - X/Twitter post text and the image-only fallback use its public syndication endpoint.
+- Reddit video and GIF downloads use the configured private Cobalt instance; Reddit credentials, API calls, and HTML scraping are not used.
 - Do not point `COBALT_API_URL` at `api.cobalt.tools`; hosted Cobalt instances are not intended for third-party projects without permission.
 - Guenther is intended for self-hosting.

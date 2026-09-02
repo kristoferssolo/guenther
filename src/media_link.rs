@@ -1,5 +1,5 @@
 use crate::handler::Handler;
-use guenther::config::Platform;
+use guenther::{config::Platform, download::platform::reddit};
 use std::collections::HashSet;
 use url::Url;
 
@@ -48,6 +48,7 @@ pub fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
 
     let stable_key = match platform {
         Platform::Instagram => instagram_post_key(&url),
+        Platform::Reddit => reddit::normalize_reddit_url(original_url),
         Platform::Tiktok => tiktok_video_key(&url),
         Platform::Twitter => twitter_status_key(&url),
         Platform::Youtube => youtube_video_key(&url),
@@ -223,6 +224,17 @@ mod tests {
                 "https://www.youtube.com/shorts/video-123?si=tracking#comments"
             ),
             "youtube:shorts:video-123"
+        );
+        assert_eq!(
+            normalize_cache_key(
+                Platform::Reddit,
+                "https://old.reddit.com/r/rust/comments/abc123/title?sort=top"
+            ),
+            "reddit:abc123"
+        );
+        assert_eq!(
+            normalize_cache_key(Platform::Reddit, "https://redd.it/abc123"),
+            "reddit:abc123"
         );
     }
 

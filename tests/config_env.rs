@@ -93,22 +93,28 @@ fn from_env_enables_all_platforms_by_default() {
 #[test]
 fn from_env_enables_selected_platforms() {
     with_clean_config_env(|| {
-        with_vars([("ENABLED_PLATFORMS", Some(" Instagram, X "))], || {
-            let platforms = Config::from_env().platforms;
-            assert!(platforms.is_enabled(Platform::Instagram));
-            assert!(platforms.is_enabled(Platform::Twitter));
-            assert!(!platforms.is_enabled(Platform::Tiktok));
-            assert!(!platforms.is_enabled(Platform::Youtube));
-        });
+        with_vars(
+            [("ENABLED_PLATFORMS", Some(" Instagram, Reddit, X "))],
+            || {
+                let platforms = Config::from_env().platforms;
+                assert!(platforms.is_enabled(Platform::Instagram));
+                assert!(platforms.is_enabled(Platform::Reddit));
+                assert!(platforms.is_enabled(Platform::Twitter));
+                assert!(!platforms.is_enabled(Platform::Tiktok));
+                assert!(!platforms.is_enabled(Platform::Youtube));
+            },
+        );
     });
 }
 
 #[test]
 fn platforms_parse_and_display_with_standard_traits() {
     assert_ok_eq!(" Instagram ".parse::<Platform>(), Platform::Instagram);
+    assert_ok_eq!("reddit".parse::<Platform>(), Platform::Reddit);
     assert_ok_eq!("x".parse::<Platform>(), Platform::Twitter);
     assert_err!("mastodon".parse::<Platform>());
     assert_eq!(Platform::Youtube.to_string(), "youtube");
+    assert_eq!(Platform::Reddit.to_string(), "reddit");
 }
 
 #[test]

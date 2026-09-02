@@ -195,6 +195,11 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
             guenther::download::platform::instagram::download_instagram
         ),
         handler!(
+            Platform::Reddit,
+            r"(?P<url>https?://(?:(?:www|old|new|m)\.)?reddit\.com/r/[A-Za-z0-9_-]+/comments/[A-Za-z0-9]+(?:[/\?#][^\s]*)?|https?://redd\.it/[A-Za-z0-9]+(?:[/\?#][^\s]*)?)(?:[^\w/?#-]|$)",
+            guenther::download::platform::reddit::download_reddit
+        ),
+        handler!(
             Platform::Youtube,
             r"https?://(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
             guenther::download::platform::youtube::download_youtube
@@ -396,6 +401,14 @@ mod tests {
         )
     }
 
+    fn reddit_handler(handlers: &[Handler]) -> &Handler {
+        assert_some!(
+            handlers
+                .iter()
+                .find(|handler| handler.platform() == Platform::Reddit)
+        )
+    }
+
     #[test]
     fn compose_caption_appends_source_text() {
         let caption = compose_caption("quote", Some("tweet text"));
@@ -511,6 +524,39 @@ mod tests {
             "https://www.instagram.com/accounts/login",
             "https://www.instagram.com/p/",
             "https://www.instagram.com/p/ABC123/extra",
+        ] {
+            assert_none!(handler.try_extract(url));
+        }
+    }
+
+    #[test]
+    fn extracts_reddit_host_variants() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = reddit_handler(&handlers);
+
+        for url in [
+            "https://reddit.com/r/rust/comments/abc123/title",
+            "https://www.reddit.com/r/rust/comments/abc123/title",
+            "https://old.reddit.com/r/rust/comments/abc123/title",
+            "https://new.reddit.com/r/rust/comments/abc123/title",
+            "https://m.reddit.com/r/rust/comments/abc123/title",
+            "https://redd.it/abc123",
+        ] {
+            assert_eq!(handler.try_extract(url), Some(url));
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_reddit_urls() {
+        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handler = reddit_handler(&handlers);
+
+        for url in [
+            "https://reddit.com/r/rust/comments/",
+            "https://reddit.com/r/rust/post/abc123",
+            "https://reddit.com/r/rust/comments/abc-123/title",
+            "https://reddit.com.evil/r/rust/comments/abc123/title",
+            "reddit.com/r/rust/comments/abc123/title",
         ] {
             assert_none!(handler.try_extract(url));
         }
