@@ -8,6 +8,7 @@ use url::Url;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RedditUrl {
     post_id: String,
+    share_link: bool,
 }
 
 impl RedditUrl {
@@ -24,8 +25,8 @@ impl RedditUrl {
 
         let host = url.host_str()?;
         let mut segments = url.path_segments()?;
-        let post_id = if is_reddit_host(host) {
-            let (Some("r"), Some(subreddit), Some("comments"), Some(post_id)) = (
+        let (post_id, share_link) = if is_reddit_host(host) {
+            let (Some("r"), Some(subreddit), Some(link_type), Some(post_id)) = (
                 segments.next(),
                 segments.next(),
                 segments.next(),
@@ -36,20 +37,26 @@ impl RedditUrl {
             if !valid_segment(subreddit) {
                 return None;
             }
-            post_id
+            let share_link = match link_type {
+                "comments" => false,
+                "s" => true,
+                _ => return None,
+            };
+            (post_id, share_link)
         } else if host.eq_ignore_ascii_case("redd.it") {
             let path = url.path().strip_suffix('/').unwrap_or_else(|| url.path());
             let post_id = path.strip_prefix('/')?;
             if post_id.is_empty() || post_id.contains('/') {
                 return None;
             }
-            post_id
+            (post_id, false)
         } else {
             return None;
         };
 
         valid_post_id(post_id).then(|| Self {
             post_id: post_id.to_owned(),
+            share_link,
         })
     }
 
@@ -60,7 +67,11 @@ impl RedditUrl {
 
     /// Return the stable cache key for this post.
     pub fn cache_key(&self) -> String {
-        format!("reddit:{}", self.post_id)
+        if self.share_link {
+            format!("reddit:share:{}", self.post_id)
+        } else {
+            format!("reddit:{}", self.post_id)
+        }
     }
 }
 
@@ -132,6 +143,16 @@ mod tests {
     }
 
     #[test]
+    fn recognizes_share_links_without_resolving_them() {
+        let source = "https://www.reddit.com/r/europe/s/2VOdpFNS8p";
+
+        assert_eq!(
+            normalize_reddit_url(source).as_deref(),
+            Some("reddit:share:2VOdpFNS8p")
+        );
+    }
+
+    #[test]
     fn preserves_short_link_identifier_without_resolution() {
         let source = "https://redd.it/abc123";
 
@@ -151,6 +172,7 @@ mod tests {
             "https://reddit.com/r/rust/comments/",
             "https://reddit.com/r/rust/post/abc123",
             "https://reddit.com/r/rust/comments/abc-123/title",
+            "https://reddit.com/r/rust/s/abc-123",
             "https://reddit.com.evil/r/rust/comments/abc123/title",
             "https://example.com/r/rust/comments/abc123/title",
             "https://reddit.com:8080/r/rust/comments/abc123/title",

@@ -196,7 +196,7 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
         ),
         handler!(
             Platform::Reddit,
-            r"(?P<url>https?://(?:(?:www|old|new|m)\.)?reddit\.com/r/[A-Za-z0-9_-]+/comments/[A-Za-z0-9]+(?:[/\?#][^\s]*)?|https?://redd\.it/[A-Za-z0-9]+(?:[/\?#][^\s]*)?)(?:[^\w/?#-]|$)",
+            r"(?P<url>https?://(?:(?:www|old|new|m)\.)?reddit\.com/r/[A-Za-z0-9_-]+/(?:comments|s)/[A-Za-z0-9]+(?:[/\?#][^\s]*)?|https?://redd\.it/[A-Za-z0-9]+(?:[/\?#][^\s]*)?)(?:[^\w/?#-]|$)",
             guenther::download::platform::reddit::download_reddit
         ),
         handler!(
@@ -540,6 +540,7 @@ mod tests {
             "https://old.reddit.com/r/rust/comments/abc123/title",
             "https://new.reddit.com/r/rust/comments/abc123/title",
             "https://m.reddit.com/r/rust/comments/abc123/title",
+            "https://www.reddit.com/r/europe/s/2VOdpFNS8p",
             "https://redd.it/abc123",
         ] {
             assert_eq!(handler.try_extract(url), Some(url));
