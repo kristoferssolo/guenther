@@ -178,7 +178,7 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
     let handlers = [
         handler!(
             Platform::Instagram,
-            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
+            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|(?:[A-Za-z0-9._]+/)?p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
             guenther::download::platform::instagram::download_instagram
         ),
         handler!(
@@ -439,6 +439,7 @@ mod tests {
         let urls = [
             "https://instagram.com/p/ABC123",
             "https://www.instagram.com/p/ABC123/",
+            "https://www.instagram.com/f1/p/DcyZobPjRyI/",
             "https://instagr.am/p/ABC123",
             "http://www.instagr.am/p/ABC123",
         ];
@@ -461,13 +462,14 @@ mod tests {
         let handler = instagram_handler(&handlers);
         let clean_url = "https://www.instagram.com/p/ABC123";
         let decorated_url = "https://www.instagram.com/p/ABC123/?utm_source=share#carousel";
+        let profile_url = "https://www.instagram.com/f1/p/ABC123/";
 
         assert_eq!(
             handler.cache_key(clean_url),
             handler.cache_key(decorated_url)
         );
+        assert_eq!(handler.cache_key(clean_url), handler.cache_key(profile_url));
     }
-
     #[test]
     fn existing_instagram_reel_and_tv_urls_still_match() {
         let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
@@ -480,7 +482,6 @@ mod tests {
             assert_eq!(handler.try_extract(url), Some(url));
         }
     }
-
     #[test]
     fn rejects_non_post_instagram_paths_and_malformed_posts() {
         let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));

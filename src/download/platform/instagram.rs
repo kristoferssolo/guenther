@@ -21,7 +21,14 @@ pub fn normalized_cache_key(source_url: &str) -> String {
 
     url.set_query(None);
     url.set_fragment(None);
-    let path = url.path().trim_end_matches('/').to_owned();
+    let path = url.path().trim_end_matches('/');
+    let path = path
+        .rsplit_once("/p/")
+        .filter(|(_, shortcode)| !shortcode.contains('/'))
+        .map_or_else(
+            || path.to_owned(),
+            |(_, shortcode)| format!("/p/{shortcode}"),
+        );
     if path != url.path() {
         url.set_path(&path);
     }
@@ -36,6 +43,10 @@ mod tests {
     fn normalized_cache_key_omits_query_fragment_and_trailing_slash() {
         assert_eq!(
             normalized_cache_key("https://www.instagram.com/p/ABC123/?utm_source=chat#media"),
+            "https://www.instagram.com/p/ABC123"
+        );
+        assert_eq!(
+            normalized_cache_key("https://www.instagram.com/f1/p/ABC123/"),
             "https://www.instagram.com/p/ABC123"
         );
     }
