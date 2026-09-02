@@ -12,6 +12,8 @@ It currently supports:
 ## Features
 
 - Accepts supported URLs in chat and replies with downloaded media
+- Handles multiple supported links in one message in their order of appearance
+- Reads links from message text and document or media captions, while ignoring duplicates
 - Serves repeat links instantly from Telegram's servers using cached `file_id`s
 - Uses random caption lines from `comments.txt`
 - Extracts post text from image-only X/Twitter posts when available

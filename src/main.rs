@@ -3,6 +3,7 @@ mod bingo;
 mod commands;
 mod handler;
 mod inline;
+mod media_link;
 mod router;
 mod voice_lines;
 
@@ -10,6 +11,7 @@ use crate::{
     commands::answer,
     handler::{Handler, create_handlers},
     inline::answer_inline_query,
+    media_link::{MediaLink, extract_media_links},
     router::{RouteAction, decide_route},
     voice_lines::capture_incoming_voice_line,
 };
@@ -19,9 +21,10 @@ use guenther::{
     comments::{Comments, failure_comment},
     config::{Config, global_config},
     db,
+    error::{Error, Result as MediaResult},
     telemetry::setup_logger,
 };
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{Span, error, info, warn};
 
@@ -177,20 +180,96 @@ async fn bingo_callback_handler(
 }
 
 async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler], cache: &MediaCache) {
-    let Some(text) = msg.text() else {
-        return;
-    };
+    let links = extract_media_links(msg.text(), msg.caption(), handlers);
+    process_links(
+        links,
+        handlers,
+        |handler, link| async move { handler.handle(bot, msg.chat.id, &link, cache).await },
+        |link, err| async move { report_media_failure(bot, msg.chat.id, &link, &err).await },
+    )
+    .await;
+}
 
-    for handler in handlers {
-        if let Some(url) = handler.try_extract(text) {
-            if let Err(err) = handler.handle(bot, msg.chat.id, url, cache).await {
-                error!(platform = %handler.platform(), %err, "Media handler failed");
-                let _ = bot.send_message(msg.chat.id, failure_comment()).await;
-                if let Some(chat_id) = global_config().chat_id {
-                    let _ = bot.send_message(ChatId(chat_id), err.to_string()).await;
-                }
-            }
-            return;
+async fn process_links<F, Fut, E, Eut>(
+    links: Vec<MediaLink>,
+    handlers: &[Handler],
+    mut handle: F,
+    mut on_error: E,
+) where
+    F: FnMut(Handler, MediaLink) -> Fut,
+    Fut: Future<Output = MediaResult<()>>,
+    E: FnMut(MediaLink, Error) -> Eut,
+    Eut: Future<Output = ()>,
+{
+    for link in links {
+        let Some(handler) = handlers
+            .iter()
+            .find(|handler| handler.platform() == link.platform)
+            .cloned()
+        else {
+            continue;
+        };
+
+        if let Err(err) = handle(handler, link.clone()).await {
+            on_error(link, err).await;
         }
+    }
+}
+
+async fn report_media_failure(bot: &Bot, chat_id: ChatId, link: &MediaLink, err: &Error) {
+    error!(platform = %link.platform, %err, "Media handler failed");
+    let _ = bot.send_message(chat_id, failure_comment()).await;
+    if let Some(admin_chat_id) = global_config().chat_id {
+        let _ = bot
+            .send_message(ChatId(admin_chat_id), err.to_string())
+            .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::assert_ok;
+    use guenther::config::Platform;
+
+    #[tokio::test]
+    async fn failed_link_does_not_stop_later_links() {
+        let handlers = assert_ok!(create_handlers(&guenther::config::PlatformConfig::default()));
+        let links = extract_media_links(
+            Some("https://x.com/driver/status/111 https://www.youtube.com/shorts/after-222"),
+            None,
+            &handlers,
+        );
+        let mut attempted = Vec::new();
+        let mut failures = Vec::new();
+
+        process_links(
+            links,
+            &handlers,
+            |_, link| {
+                let url = link.original_url.clone();
+                let failed = link.platform == Platform::Twitter;
+                attempted.push(url);
+                async move {
+                    if failed {
+                        Err(Error::other("network failure"))
+                    } else {
+                        Ok(())
+                    }
+                }
+            },
+            |link, _| {
+                failures.push(link.original_url);
+                async {}
+            },
+        )
+        .await;
+
+        assert_eq!(attempted.len(), 2);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(
+            attempted.get(1).map(String::as_str),
+            Some("https://www.youtube.com/shorts/after-222")
+        );
     }
 }
