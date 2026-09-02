@@ -8,3 +8,6 @@ docker-compose.yml
 README.md
 LICENSE
 voice/
+.github/
+cookies/
+data/

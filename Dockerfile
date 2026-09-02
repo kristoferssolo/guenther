@@ -1,40 +1,25 @@
 # syntax=docker/dockerfile:1.7
 
-FROM lukemathwalker/cargo-chef:0.1.77-rust-1.94.0-slim-trixie AS chef
-WORKDIR /app
-ENV CARGO_INCREMENTAL=0
-
-
-FROM chef AS planner
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir -p src && touch src/lib.rs src/main.rs
-RUN cargo chef prepare --recipe-path recipe.json
-
-
-FROM chef AS builder-rs
+FROM rust:1.94.0-slim-trixie AS builder-rs
 ARG RUST_FEATURES=""
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update -y \
-    && apt-get install -y --no-install-recommends sqlite3
-COPY --from=planner /app/recipe.json recipe.json
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/target \
-    cargo chef cook --locked --release ${RUST_FEATURES} --recipe-path recipe.json
+WORKDIR /app
+# Offline sqlx keeps the builder free of a database and of `sqlx-cli`; the query
+# cache in `.sqlx` is regenerated with `cargo sqlx prepare`.
+ENV CARGO_INCREMENTAL=0 \
+    SQLX_OFFLINE=true
+
 COPY Cargo.toml Cargo.lock ./
+COPY .sqlx ./.sqlx
 COPY migrations ./migrations
 COPY src ./src
-ENV DATABASE_URL=sqlite:///tmp/guenther-build.sqlite3
-RUN for migration in migrations/*.sql; do \
-        case "$migration" in *.down.sql) continue ;; esac; \
-        sqlite3 /tmp/guenther-build.sqlite3 < "$migration"; \
-    done
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/target \
-    cargo build --locked --release ${RUST_FEATURES}\
-    && strip target/release/guenther \
+
+# The target directory and the cargo registry live in build cache mounts, so a
+# rebuild only recompiles this crate. Nothing here survives into the image, which
+# is why the binary is copied out of the mount before the layer is committed.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build --locked --release --bin guenther ${RUST_FEATURES} \
     && cp target/release/guenther /app/guenther
 
 
