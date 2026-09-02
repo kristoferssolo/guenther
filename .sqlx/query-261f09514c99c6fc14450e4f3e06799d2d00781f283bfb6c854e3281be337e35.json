@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                user_id,\n                username,\n                display_name\n            FROM\n                bingo_users\n            WHERE\n                chat_id = ?\n                AND user_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_users",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "name": "username",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "name": "display_name",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_users",
+            "name": "display_name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "261f09514c99c6fc14450e4f3e06799d2d00781f283bfb6c854e3281be337e35"
+}

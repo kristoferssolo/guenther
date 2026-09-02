@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id,\n                number,\n                game_id,\n                text\n            FROM\n                bingo_entries\n            WHERE\n                game_id = ?\n                AND active = 1\n            ORDER BY\n                number\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "number",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "name": "game_id",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "game_id"
+          }
+        }
+      },
+      {
+        "name": "text",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "text"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a46e59f075f35e8e4283ed6dc9cf276f4285b0c087051e30fee1aa9963935ab1"
+}

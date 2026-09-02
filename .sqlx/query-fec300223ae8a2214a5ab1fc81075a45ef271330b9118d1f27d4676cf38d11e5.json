@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO\n            bingo_entries (game_id, number, text, normalized_text)\n        VALUES\n            (\n                ?,\n                (\n                    SELECT\n                        COALESCE(MAX(number), 0) + 1\n                    FROM\n                        bingo_entries\n                    WHERE\n                        game_id = ?\n                ),\n                ?,\n                ?\n            ) ON CONFLICT(game_id, normalized_text) DO\n        UPDATE\n        SET\n            text = excluded.text,\n            active = 1\n        RETURNING\n            id,\n            number\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "number",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "number"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fec300223ae8a2214a5ab1fc81075a45ef271330b9118d1f27d4676cf38d11e5"
+}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            id\n        FROM\n            bingo_cards\n        WHERE\n            game_id = ?\n            AND user_id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_cards",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d5b6fbe1b92ea8548f0ce46585931a361a78d6fc3c1cb95befe1859eaa27e0a2"
+}

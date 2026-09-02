@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM\n                media_cache\n            WHERE\n                url = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "464e35b9394aeb001b963884a14603d26e66cf3648a84e5915061176605501a3"
+}

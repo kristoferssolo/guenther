@@ -1,0 +1,110 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            id,\n            chat_id,\n            slug,\n            name,\n            description,\n            center_text,\n            state,\n            is_default AS `is_default: bool`\n        FROM\n            bingo_games\n        WHERE\n            chat_id = ?1\n            AND (\n                slug = ?2 COLLATE NOCASE\n                OR (\n                    ?2 IS NULL\n                    AND is_default = 1\n                )\n            )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "chat_id",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "chat_id"
+          }
+        }
+      },
+      {
+        "name": "slug",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "description",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "name": "center_text",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "center_text"
+          }
+        }
+      },
+      {
+        "name": "state",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "name": "is_default: bool",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "is_default"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a0101408558e911edd78e5aaf31ceb72a3bb57d04cf56e1a271268b2bdeea559"
+}

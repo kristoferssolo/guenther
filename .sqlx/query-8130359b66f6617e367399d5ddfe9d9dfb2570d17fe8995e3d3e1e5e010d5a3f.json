@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            position,\n            text,\n            marked AS `marked: bool`,\n            is_free AS `is_free: bool`\n        FROM\n            bingo_card_cells\n        WHERE\n            card_id = ?\n        ORDER BY\n            position\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "position",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_card_cells",
+            "name": "position"
+          }
+        }
+      },
+      {
+        "name": "text",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_card_cells",
+            "name": "text"
+          }
+        }
+      },
+      {
+        "name": "marked: bool",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_card_cells",
+            "name": "marked"
+          }
+        }
+      },
+      {
+        "name": "is_free: bool",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_card_cells",
+            "name": "is_free"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8130359b66f6617e367399d5ddfe9d9dfb2570d17fe8995e3d3e1e5e010d5a3f"
+}

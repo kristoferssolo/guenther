@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE\n                    bingo_users\n                SET\n                    username = NULL\n                WHERE\n                    chat_id = ?\n                    AND username = ? COLLATE NOCASE\n                    AND user_id != ?\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "33c50451d0e0675a7726f38745597a78cdafe436cb7b1f16c53f72a5aeb8811a"
+}

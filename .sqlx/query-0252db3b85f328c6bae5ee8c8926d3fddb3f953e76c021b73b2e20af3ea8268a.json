@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            UPDATE\n                bingo_entries\n            SET\n                text = ?,\n                normalized_text = ?\n            WHERE\n                game_id = ?\n                AND number = ?\n                AND active = 1\n            RETURNING\n                id,\n                number,\n                game_id,\n                text\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "number",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "number"
+          }
+        }
+      },
+      {
+        "name": "game_id",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "game_id"
+          }
+        }
+      },
+      {
+        "name": "text",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_entries",
+            "name": "text"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0252db3b85f328c6bae5ee8c8926d3fddb3f953e76c021b73b2e20af3ea8268a"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO\n            bingo_card_cells (\n                card_id,\n                position,\n                entry_id,\n                text,\n                marked,\n                is_free\n            )\n        VALUES\n            (?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "a8fd5c6294955b55aff713e00c822fe55f5e17c57bb7829e1d23f9bfb16730ca"
+}

@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            c.user_id,\n            c.bingo_announced AS `bingo_announced: bool`,\n            g.state\n        FROM\n            bingo_cards c\n            JOIN bingo_games g ON g.id = c.game_id\n        WHERE\n            c.id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_cards",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "name": "bingo_announced: bool",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "bingo_cards",
+            "name": "bingo_announced"
+          }
+        }
+      },
+      {
+        "name": "state",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_games",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "38dce2ce816973e5dbf676c692e9c2c46e2638163db89533ae3afcc821296e34"
+}

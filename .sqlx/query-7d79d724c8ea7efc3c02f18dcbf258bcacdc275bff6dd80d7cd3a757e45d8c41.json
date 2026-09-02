@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                UPDATE\n                    bingo_games\n                SET\n                    is_default = 1\n                WHERE\n                    id = (\n                        SELECT\n                            id\n                        FROM\n                            bingo_games\n                        WHERE\n                            chat_id = ?\n                        ORDER BY\n                            id DESC\n                        LIMIT\n                            1\n                    )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "7d79d724c8ea7efc3c02f18dcbf258bcacdc275bff6dd80d7cd3a757e45d8c41"
+}

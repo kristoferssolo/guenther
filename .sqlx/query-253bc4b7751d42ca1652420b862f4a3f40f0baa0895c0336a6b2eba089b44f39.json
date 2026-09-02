@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                INSERT INTO\n                    media_cache (url, position, kind, file_id)\n                VALUES\n                    (?, ?, ?, ?)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "253bc4b7751d42ca1652420b862f4a3f40f0baa0895c0336a6b2eba089b44f39"
+}

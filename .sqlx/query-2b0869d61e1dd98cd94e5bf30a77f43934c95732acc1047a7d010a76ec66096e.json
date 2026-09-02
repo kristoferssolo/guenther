@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM\n                bingo_cards\n            WHERE\n                id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "2b0869d61e1dd98cd94e5bf30a77f43934c95732acc1047a7d010a76ec66096e"
+}

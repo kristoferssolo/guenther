@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO\n                bingo_users (chat_id, user_id, username, display_name)\n            VALUES\n                (?, ?, ?, ?) ON CONFLICT(chat_id, user_id) DO\n            UPDATE\n            SET\n                username = excluded.username,\n                display_name = excluded.display_name,\n                updated_at = CURRENT_TIMESTAMP\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "6e9ddd4fffbc2c29346818a98ea4362d3283e907b88f307e120f99af9d521ec0"
+}

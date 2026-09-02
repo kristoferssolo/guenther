@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                kind,\n                file_id\n            FROM\n                media_cache\n            WHERE\n                url = ?\n            ORDER BY\n                position\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "kind",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_cache",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "name": "file_id",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_cache",
+            "name": "file_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "8c36d2e95a3c903a070ed84843c33c24b9f453cca6913d3f0e2a3e7784631db8"
+}
