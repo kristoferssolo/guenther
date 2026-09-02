@@ -1,4 +1,7 @@
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    utils::truncate_with_ellipsis,
+};
 use rand::{rng, seq::IndexedRandom};
 use std::{fmt::Display, path::Path, sync::OnceLock};
 use tokio::fs::read_to_string;
@@ -70,17 +73,7 @@ impl Comments {
 
     /// Build a caption by picking a random comment and truncating if necessary.
     pub fn build_caption(&self) -> String {
-        let mut caption = self.pick().to_string();
-
-        // Truncate if too long for Telegram
-        if caption.chars().count() > TELEGRAM_CAPTION_LIMIT {
-            let truncated = caption
-                .chars()
-                .take(TELEGRAM_CAPTION_LIMIT.saturating_sub(3))
-                .collect::<String>();
-            caption = format!("{truncated}...");
-        }
-        caption
+        truncate_with_ellipsis(self.pick(), TELEGRAM_CAPTION_LIMIT)
     }
 
     /// Get a reference to the underlying lines for debugging or testing.

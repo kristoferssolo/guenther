@@ -5,7 +5,7 @@ use tracing::warn;
 pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp"];
 pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];
 
-/// Simple media kind enum shared by handlers.
+/// Media type supported by the Telegram handler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaKind {
     Video,
@@ -23,12 +23,10 @@ impl MediaKind {
     }
 }
 
-/// Check if extension matches any in the given list (case-insensitive).
 fn ext_matches(ext: &str, extensions: &[&str]) -> bool {
     extensions.iter().any(|e| e.eq_ignore_ascii_case(ext))
 }
 
-/// Detect media kind from file extension.
 fn detect_from_extension(path: &Path) -> Option<MediaKind> {
     let ext = path.extension().and_then(OsStr::to_str)?;
     if ext_matches(ext, VIDEO_EXTENSIONS) {
@@ -40,7 +38,6 @@ fn detect_from_extension(path: &Path) -> Option<MediaKind> {
     None
 }
 
-/// Detect media kind from MIME type string.
 fn detect_from_mime(mime_type: &str) -> MediaKind {
     match mime_type.split('/').next() {
         Some("video") => MediaKind::Video,
@@ -49,13 +46,12 @@ fn detect_from_mime(mime_type: &str) -> MediaKind {
     }
 }
 
-/// Detect media kind first by extension, then by content/magic (sync).
+/// Detect media kind from a path, using its extension before file contents.
 pub fn detect_media_kind(path: &Path) -> MediaKind {
     if let Some(kind) = detect_from_extension(path) {
         return kind;
     }
 
-    // Fallback to MIME type detection
     if let Ok(Some(kind)) = infer::get_from_path(path) {
         return detect_from_mime(kind.mime_type());
     }
@@ -63,14 +59,12 @@ pub fn detect_media_kind(path: &Path) -> MediaKind {
     MediaKind::Unknown
 }
 
-/// Async/non-blocking detection: check extension first, otherwise read a small
-/// sample asynchronously and run `infer::get` on the buffer.
+/// Detect media kind without blocking on file I/O.
 pub async fn detect_media_kind_async(path: &Path) -> MediaKind {
     if let Some(kind) = detect_from_extension(path) {
         return kind;
     }
 
-    // Read a small prefix (8 KiB) asynchronously and probe
     let Ok(mut file) = File::open(path).await else {
         warn!(path = ?path.display(), "Failed to open file for media detection");
         return MediaKind::Unknown;
@@ -87,6 +81,22 @@ pub async fn detect_media_kind_async(path: &Path) -> MediaKind {
     }
 
     MediaKind::Unknown
+}
+
+/// Truncate text by Unicode scalar values and append `...` when needed.
+pub fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_owned();
+    }
+    if max_chars <= 3 {
+        return ".".repeat(max_chars);
+    }
+
+    let truncated = text
+        .chars()
+        .take(max_chars.saturating_sub(3))
+        .collect::<String>();
+    format!("{truncated}...")
 }
 
 impl AsRef<str> for MediaKind {
@@ -123,5 +133,12 @@ mod tests {
     fn media_kind_case_insensitive() {
         assert_eq!(detect_media_kind(Path::new("VIDEO.MP4")), MediaKind::Video);
         assert_eq!(detect_media_kind(Path::new("IMAGE.JPG")), MediaKind::Image);
+    }
+
+    #[test]
+    fn truncates_without_splitting_utf8_text() {
+        assert_eq!(truncate_with_ellipsis("éclair", 5), "éc...");
+        assert_eq!(truncate_with_ellipsis("abcdef", 3), "...");
+        assert_eq!(truncate_with_ellipsis("abcdef", 2), "..");
     }
 }

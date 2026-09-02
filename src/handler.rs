@@ -5,7 +5,7 @@ use guenther::{
     config::{Platform, PlatformConfig},
     download::{DownloadResult, collect_supported_media},
     error::{Error, Result},
-    utils::MediaKind,
+    utils::{MediaKind, truncate_with_ellipsis},
 };
 use regex::{Error as RegexError, Regex};
 use std::{path::PathBuf, pin::Pin, result::Result as StdResult, sync::Arc, time::Instant};
@@ -366,21 +366,6 @@ fn compose_caption(quote: &str, source_text: Option<&str>) -> String {
     let available = TELEGRAM_CAPTION_LIMIT.saturating_sub(reserved);
     let truncated = truncate_with_ellipsis(source_text, available);
     format!("{quote}\n\n{truncated}")
-}
-
-fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
-    if text.chars().count() <= max_chars {
-        return text.to_owned();
-    }
-    if max_chars <= 3 {
-        return ".".repeat(max_chars);
-    }
-
-    let truncated = text
-        .chars()
-        .take(max_chars.saturating_sub(3))
-        .collect::<String>();
-    format!("{truncated}...")
 }
 
 #[cfg(test)]
