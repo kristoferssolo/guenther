@@ -1,8 +1,9 @@
+use crate::media_link::{MediaLink, normalize_cache_key};
 use guenther::{
     cache::{CachedMedia, MediaCache},
     comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
     config::{Platform, PlatformConfig},
-    download::{DownloadResult, collect_supported_media, platform::instagram},
+    download::{DownloadResult, collect_supported_media},
     error::{Error, Result},
     utils::MediaKind,
 };
@@ -45,6 +46,7 @@ impl Handler {
         self.platform
     }
 
+    #[cfg(test)]
     pub fn try_extract<'a>(&self, text: &'a str) -> Option<&'a str> {
         self.regex
             .captures(text)
@@ -52,18 +54,36 @@ impl Handler {
             .map(|matched| matched.as_str())
     }
 
+    pub fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
+        self.regex
+            .captures_iter(text)
+            .filter_map(|captures| {
+                let matched = captures.name("url").or_else(|| captures.get(0))?;
+                let original_url = matched.as_str().to_owned();
+                let cache_key = normalize_cache_key(self.platform, &original_url);
+                Some(MediaLink {
+                    platform: self.platform,
+                    original_url,
+                    cache_key,
+                    source_position: source_offset.saturating_add(matched.start()),
+                })
+            })
+            .collect()
+    }
+
     pub async fn handle(
         &self,
         bot: &Bot,
         chat_id: ChatId,
-        url: &str,
+        link: &MediaLink,
         cache: &MediaCache,
     ) -> Result<()> {
         let started_at = Instant::now();
         info!(platform = %self.platform, "Handling media URL");
-        let cache_key = self.cache_key(url);
-
-        match self.try_send_cached(bot, chat_id, &cache_key, cache).await {
+        match self
+            .try_send_cached(bot, chat_id, link.cache_key.as_str(), cache)
+            .await
+        {
             Ok(true) => {
                 info!(
                     platform = %self.platform,
@@ -80,13 +100,13 @@ impl Handler {
                     %err,
                     "Cached media send failed; invalidating entry and falling back to download"
                 );
-                if let Err(err) = cache.invalidate(&cache_key).await {
+                if let Err(err) = cache.invalidate(&link.cache_key).await {
                     warn!(platform = %self.platform, %err, "Failed to invalidate the cache entry");
                 }
             }
         }
 
-        let mut dr = (self.func)(url.to_owned()).await?;
+        let mut dr = (self.func)(link.original_url.clone()).await?;
         let source_text = dr.source_text.take();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
         let media_count = media_items.len();
@@ -112,7 +132,7 @@ impl Handler {
             .map(|(path, kind)| (InputFile::file(path), kind))
             .collect::<Vec<_>>();
         let cached = send_media(bot, chat_id, inputs, &caption).await?;
-        if let Err(err) = cache.put(&cache_key, &cached).await {
+        if let Err(err) = cache.put(&link.cache_key, &cached).await {
             warn!(platform = %self.platform, %err, "Failed to persist media file_ids");
         }
 
@@ -126,26 +146,19 @@ impl Handler {
         Ok(())
     }
 
-    fn cache_key(&self, url: &str) -> String {
-        match self.platform {
-            Platform::Instagram => instagram::normalized_cache_key(url),
-            _ => url.to_owned(),
-        }
-    }
-
-    /// Send the URL's media from cached Telegram `file_id`s.
+    /// Send media from cached Telegram `file_id`s for a cache key.
     ///
-    /// Returns `Ok(false)` when the URL has no cache entry or the lookup
+    /// Returns `Ok(false)` when the key has no cache entry or the lookup
     /// fails; send failures propagate so the caller can invalidate the entry
     /// and fall back to a fresh download.
     async fn try_send_cached(
         &self,
         bot: &Bot,
         chat_id: ChatId,
-        url: &str,
+        cache_key: &str,
         cache: &MediaCache,
     ) -> Result<bool> {
-        let cached = match cache.get(url).await {
+        let cached = match cache.get(cache_key).await {
             Ok(cached) => cached,
             Err(err) => {
                 warn!(platform = %self.platform, %err, "Media cache lookup failed");
@@ -430,7 +443,11 @@ mod tests {
         );
         let url = "https://www.tiktok.com/@apple/video/7673917526358641950?is_from_webapp=1&sender_device=pc";
 
-        assert_eq!(handler.try_extract(url), Some(url));
+        let links = handler.try_extract_all(url, 0);
+        assert_eq!(
+            links.first().map(|link| link.original_url.as_str()),
+            Some(url)
+        );
     }
     #[test]
     fn extracts_instagram_posts_on_supported_hosts() {
@@ -458,17 +475,18 @@ mod tests {
     }
     #[test]
     fn instagram_cache_key_is_stable_for_equivalent_post_urls() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
-        let handler = instagram_handler(&handlers);
         let clean_url = "https://www.instagram.com/p/ABC123";
         let decorated_url = "https://www.instagram.com/p/ABC123/?utm_source=share#carousel";
         let profile_url = "https://www.instagram.com/f1/p/ABC123/";
 
         assert_eq!(
-            handler.cache_key(clean_url),
-            handler.cache_key(decorated_url)
+            normalize_cache_key(Platform::Instagram, clean_url),
+            normalize_cache_key(Platform::Instagram, decorated_url)
         );
-        assert_eq!(handler.cache_key(clean_url), handler.cache_key(profile_url));
+        assert_eq!(
+            normalize_cache_key(Platform::Instagram, clean_url),
+            normalize_cache_key(Platform::Instagram, profile_url)
+        );
     }
     #[test]
     fn existing_instagram_reel_and_tv_urls_still_match() {

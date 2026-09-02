@@ -23,7 +23,7 @@ pub struct CachedMedia {
     pub file_id: String,
 }
 
-/// Persistent store of Telegram `file_id`s keyed by the exact source URL.
+/// Persistent store of Telegram `file_id`s keyed by a normalized media key.
 ///
 /// Rows are ordered by upload position; captions are never cached.
 #[derive(Debug, Clone)]
@@ -36,15 +36,15 @@ impl MediaCache {
         Self { pool }
     }
 
-    /// Return the cached media for `url`, ordered by upload position.
+    /// Return the cached media for `cache_key`, ordered by upload position.
     ///
-    /// Unknown URLs (and entries stored with no items) map to `None`.
+    /// Unknown keys (and entries stored with no items) map to `None`.
     ///
     /// # Errors
     ///
     /// Returns an error when the database query fails or a stored row has an
     /// invalid `kind`.
-    pub async fn get(&self, url: &str) -> Result<Option<Vec<CachedMedia>>> {
+    pub async fn get(&self, cache_key: &str) -> Result<Option<Vec<CachedMedia>>> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -57,7 +57,7 @@ impl MediaCache {
             ORDER BY
                 position
             "#,
-            url
+            cache_key
         )
         .fetch_all(&self.pool)
         .await?;
@@ -73,7 +73,7 @@ impl MediaCache {
         Ok((!items.is_empty()).then_some(items))
     }
 
-    /// Replace the cached media for `url` with `items`, positionally ordered.
+    /// Replace the cached media for `cache_key` with `items`, positionally ordered.
     ///
     /// Empty item lists are ignored: an album that produced nothing is not a
     /// cache hit.
@@ -82,7 +82,7 @@ impl MediaCache {
     ///
     /// Returns an error when the transaction fails or an item is not a
     /// storable `video`/`image` kind.
-    pub async fn put(&self, url: &str, items: &[CachedMedia]) -> Result<()> {
+    pub async fn put(&self, cache_key: &str, items: &[CachedMedia]) -> Result<()> {
         if items.is_empty() {
             return Ok(());
         }
@@ -94,7 +94,7 @@ impl MediaCache {
             WHERE
                 url = ?
             "#,
-            url
+            cache_key
         )
         .execute(&mut *transaction)
         .await?;
@@ -117,7 +117,7 @@ impl MediaCache {
                 VALUES
                     (?, ?, ?, ?)
                 "#,
-                url,
+                cache_key,
                 position,
                 kind,
                 item.file_id
@@ -129,12 +129,12 @@ impl MediaCache {
         Ok(())
     }
 
-    /// Remove the cached media for `url`, if any.
+    /// Remove the cached media for `cache_key`, if any.
     ///
     /// # Errors
     ///
     /// Returns an error when the database query fails.
-    pub async fn invalidate(&self, url: &str) -> Result<()> {
+    pub async fn invalidate(&self, cache_key: &str) -> Result<()> {
         sqlx::query!(
             r#"
             DELETE FROM
@@ -142,7 +142,7 @@ impl MediaCache {
             WHERE
                 url = ?
     "#,
-            url
+            cache_key
         )
         .execute(&self.pool)
         .await?;
