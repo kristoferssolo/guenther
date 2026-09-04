@@ -72,7 +72,7 @@ async fn main() -> color_eyre::Result<()> {
         .collect::<Vec<_>>();
     info!(?enabled_platforms, "platform handlers configured");
 
-    let pool = db::connect_from_env().await?;
+    let pool = db::connect(&config.database_url).await?;
     let media_cache = MediaCache::new(pool.clone());
     info!("database initialized");
 

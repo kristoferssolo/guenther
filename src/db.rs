@@ -2,7 +2,7 @@ use sqlx::{
     SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
-use std::{env, path::Path, str::FromStr, time::Duration};
+use std::{path::Path, str::FromStr, time::Duration};
 use thiserror::Error;
 
 pub const DEFAULT_DATABASE_URL: &str = "sqlite://data/bingo.sqlite3";
@@ -48,16 +48,6 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool> {
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(pool)
-}
-
-/// Connect using `DATABASE_URL`, falling back to the default location.
-///
-/// # Errors
-///
-/// Returns an error when the database cannot be opened or migrated.
-pub async fn connect_from_env() -> Result<SqlitePool> {
-    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| DEFAULT_DATABASE_URL.to_owned());
-    connect(&database_url).await
 }
 
 async fn create_database_parent(database_url: &str) -> Result<()> {

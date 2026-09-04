@@ -10,6 +10,7 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("COBALT_API_KEY", None),
             ("ENABLED_PLATFORMS", None),
             ("F1_UTC_OFFSET", None),
+            ("DATABASE_URL", None),
         ],
         f,
     )
@@ -67,6 +68,16 @@ fn from_env_uses_default_cobalt_configuration() {
         let cfg = Config::from_env();
         assert_eq!(cfg.cobalt.api_url, "http://127.0.0.1:9000/");
         assert_none!(cfg.cobalt.api_key);
+    });
+}
+
+#[test]
+fn from_env_sets_database_url() {
+    with_clean_config_env(|| {
+        with_vars([("DATABASE_URL", Some("sqlite://custom.sqlite3"))], || {
+            let cfg = Config::from_env();
+            assert_eq!(cfg.database_url, "sqlite://custom.sqlite3");
+        });
     });
 }
 
