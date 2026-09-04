@@ -35,6 +35,21 @@ pub enum Command {
     Bingo(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RouteAction {
+    HandleCommand(Command),
+    HandleMessage,
+    Ignore,
+}
+
+pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
+    let Some(text) = text else {
+        return RouteAction::Ignore;
+    };
+    Command::parse(text, bot_name)
+        .map_or_else(|_| RouteAction::HandleMessage, RouteAction::HandleCommand)
+}
+
 impl Command {
     pub const fn name(&self) -> &'static str {
         match self {
@@ -115,4 +130,23 @@ async fn send_f1_standings(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResul
         .unwrap_or_else(|e| format!("Failed to load F1 standings: {e}"));
 
     bot.send_message(chat_id, message).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::assert_matches;
+
+    #[test]
+    fn routes_commands_plain_messages_and_missing_text() {
+        assert_matches!(
+            route_message(Some("/help"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Help)
+        );
+        assert_eq!(
+            route_message(Some("hello"), "guenther_bot"),
+            RouteAction::HandleMessage
+        );
+        assert_eq!(route_message(None, "guenther_bot"), RouteAction::Ignore);
+    }
 }

@@ -3,14 +3,12 @@ mod bingo;
 mod commands;
 mod handler;
 mod inline;
-mod router;
 mod voice_lines;
 
 use crate::{
-    commands::answer,
+    commands::{RouteAction, answer, route_message},
     handler::{MediaHandlers, MediaLink},
     inline::answer_inline_query,
-    router::{RouteAction, decide_route},
     voice_lines::VoiceLines,
 };
 use dotenv::dotenv;
@@ -148,7 +146,7 @@ async fn message_handler(
         warn!(%err, "Failed to remember Telegram user for bingo");
     }
 
-    match decide_route(text.as_deref(), &state.bot_name) {
+    match route_message(text.as_deref(), &state.bot_name) {
         RouteAction::HandleCommand(cmd) => {
             span.record("route", "command");
             span.record("command", cmd.name());
