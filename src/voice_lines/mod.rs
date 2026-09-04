@@ -2,11 +2,14 @@ use serde::{Deserialize, Serialize};
 use std::{
     env, io,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use tokio::fs;
 
 const MAX_INLINE_RESULTS: usize = 25;
 const DEFAULT_VOICE_LINES_PATH: &str = "voice_lines.toml";
+#[cfg(feature = "voice-line-capture")]
+const DEFAULT_FFMPEG_BIN: &str = "ffmpeg";
 
 #[cfg(feature = "voice-line-capture")]
 mod capture;
@@ -32,37 +35,41 @@ struct VoiceLinesFile {
     voice_lines: Vec<VoiceLine>,
 }
 
-#[cfg(feature = "voice-line-capture")]
-pub use capture::capture_incoming_voice_line;
-
-pub async fn search_voice_lines(query: &str) -> color_eyre::Result<Vec<VoiceLine>> {
-    let voice_lines = load_voice_lines().await?;
-    let needle = normalize(query);
-
-    let lines = voice_lines
-        .into_iter()
-        .filter(|line| needle.is_empty() || matches_query(line, &needle))
-        .take(MAX_INLINE_RESULTS)
-        .collect();
-
-    Ok(lines)
+/// Searches and optionally captures voice lines using startup-bound paths.
+#[derive(Debug, Clone)]
+pub struct VoiceLines {
+    path: Arc<Path>,
+    #[cfg(feature = "voice-line-capture")]
+    ffmpeg: Arc<Path>,
 }
 
-#[cfg(not(feature = "voice-line-capture"))]
-pub async fn capture_incoming_voice_line(
-    _bot: &teloxide::Bot,
-    _msg: &teloxide::types::Message,
-) -> color_eyre::Result<()> {
-    Ok(())
+impl VoiceLines {
+    pub fn from_env() -> Self {
+        Self {
+            path: env_path("VOICE_LINES_PATH", DEFAULT_VOICE_LINES_PATH),
+            #[cfg(feature = "voice-line-capture")]
+            ffmpeg: env_path("FFMPEG_BIN", DEFAULT_FFMPEG_BIN),
+        }
+    }
+
+    pub async fn search(&self, query: &str) -> color_eyre::Result<Vec<VoiceLine>> {
+        let voice_lines = load_voice_lines_file(&self.path).await?.voice_lines;
+        let needle = normalize(query);
+
+        let lines = voice_lines
+            .into_iter()
+            .filter(|line| needle.is_empty() || matches_query(line, &needle))
+            .take(MAX_INLINE_RESULTS)
+            .collect();
+
+        Ok(lines)
+    }
 }
 
-fn voice_lines_path() -> PathBuf {
-    env::var("VOICE_LINES_PATH").map_or_else(|_| DEFAULT_VOICE_LINES_PATH.into(), Into::into)
-}
-
-async fn load_voice_lines() -> color_eyre::Result<Vec<VoiceLine>> {
-    let file = load_voice_lines_file(&voice_lines_path()).await?;
-    Ok(file.voice_lines)
+fn env_path(key: &str, default: &str) -> Arc<Path> {
+    env::var_os(key)
+        .map_or_else(|| PathBuf::from(default), PathBuf::from)
+        .into()
 }
 
 async fn load_voice_lines_file(path: &Path) -> color_eyre::Result<VoiceLinesFile> {
@@ -114,6 +121,14 @@ mod tests {
     use super::*;
     use claims::assert_ok;
 
+    fn voice_lines_at(path: PathBuf) -> VoiceLines {
+        VoiceLines {
+            path: path.into(),
+            #[cfg(feature = "voice-line-capture")]
+            ffmpeg: PathBuf::from(DEFAULT_FFMPEG_BIN).into(),
+        }
+    }
+
     fn sample_line(id: &str, title: &str, tags: &[&str]) -> VoiceLine {
         VoiceLine {
             id: id.to_owned(),
@@ -152,5 +167,30 @@ kind = "voice"
         ));
 
         assert_eq!(parsed.id, "line_1");
+    }
+
+    #[tokio::test]
+    async fn search_reads_from_the_bound_path() {
+        let directory = assert_ok!(tempfile::tempdir());
+        let path = directory.path().join("custom.toml");
+        assert_ok!(std::fs::write(
+            &path,
+            r#"
+[[voice_lines]]
+id = "box_box"
+title = "Box box"
+file_id = "telegram-file"
+tags = ["pit"]
+"#,
+        ));
+        let voice_lines = voice_lines_at(path);
+
+        let matches = assert_ok!(voice_lines.search("pit").await);
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches.first().map(|line| line.id.as_str()),
+            Some("box_box")
+        );
     }
 }

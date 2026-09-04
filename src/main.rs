@@ -13,7 +13,7 @@ use crate::{
     inline::answer_inline_query,
     media_link::MediaLink,
     router::{RouteAction, decide_route},
-    voice_lines::capture_incoming_voice_line,
+    voice_lines::VoiceLines,
 };
 use dotenv::dotenv;
 use guenther::{
@@ -38,6 +38,7 @@ struct AppState {
     comments: Arc<Comments>,
     f1: F1Config,
     admin_chat_id: Option<ChatId>,
+    voice_lines: VoiceLines,
 }
 
 #[tokio::main]
@@ -56,6 +57,7 @@ async fn main() -> color_eyre::Result<()> {
     );
 
     let config = Config::from_env();
+    let voice_lines = VoiceLines::from_env();
 
     let bot = Bot::from_env();
     let bot_name: Arc<str> = bot.get_me().await?.username().into();
@@ -81,18 +83,19 @@ async fn main() -> color_eyre::Result<()> {
     let schema = dptree::entry()
         .branch(Update::filter_message().endpoint(message_handler))
         .branch(Update::filter_callback_query().endpoint(bingo_callback_handler))
-        .branch(Update::filter_inline_query().endpoint(answer_inline_query));
+        .branch(Update::filter_inline_query().endpoint(inline_query_handler));
 
     #[cfg(not(feature = "bingo"))]
     let schema = dptree::entry()
         .branch(Update::filter_message().endpoint(message_handler))
-        .branch(Update::filter_inline_query().endpoint(answer_inline_query));
+        .branch(Update::filter_inline_query().endpoint(inline_query_handler));
 
     let state = AppState {
         bot_name,
         comments,
         f1: config.f1,
         admin_chat_id: config.chat_id.map(ChatId),
+        voice_lines,
     };
 
     #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
@@ -133,7 +136,8 @@ async fn message_handler(
     #[cfg(feature = "bingo")] admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
     let span = Span::current();
-    if let Err(err) = capture_incoming_voice_line(&bot, &msg).await {
+    #[cfg(feature = "voice-line-capture")]
+    if let Err(err) = state.voice_lines.capture(&bot, &msg).await {
         warn!(%err, "Failed to capture incoming voice line metadata");
     }
 
@@ -174,6 +178,14 @@ async fn message_handler(
     }
 
     Ok(())
+}
+
+async fn inline_query_handler(
+    bot: Bot,
+    query: teloxide::types::InlineQuery,
+    state: AppState,
+) -> color_eyre::Result<()> {
+    answer_inline_query(bot, query, &state.voice_lines).await
 }
 
 #[cfg(feature = "bingo")]
