@@ -47,7 +47,7 @@ pub fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
     };
 
     let stable_key = match platform {
-        Platform::Instagram => instagram_post_key(&url),
+        Platform::Instagram => instagram_media_key(&url),
         Platform::Tiktok => tiktok_video_key(&url),
         Platform::Twitter => twitter_status_key(&url),
         Platform::Youtube => youtube_video_key(&url),
@@ -55,10 +55,10 @@ pub fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
     stable_key.unwrap_or_else(|| format!("{platform}:url:{}", canonical_url(&url)))
 }
 
-fn instagram_post_key(url: &Url) -> Option<String> {
+fn instagram_media_key(url: &Url) -> Option<String> {
     let mut segments = path_segments(url);
     while let Some(segment) = segments.next() {
-        if matches!(segment, "reel" | "tv" | "p")
+        if matches!(segment, "reel" | "tv")
             && let Some(identifier) = segments.next()
         {
             return Some(format!("instagram:post:{identifier}"));
@@ -223,6 +223,17 @@ mod tests {
                 "https://www.youtube.com/shorts/video-123?si=tracking#comments"
             ),
             "youtube:shorts:video-123"
+        );
+        assert_eq!(
+            normalize_cache_key(
+                Platform::Instagram,
+                "https://www.instagram.com/reel/reel-123?utm_source=share#comments"
+            ),
+            "instagram:post:reel-123"
+        );
+        assert_ne!(
+            normalize_cache_key(Platform::Instagram, "https://www.instagram.com/p/post-123"),
+            "instagram:post:post-123"
         );
     }
 

@@ -191,7 +191,7 @@ pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, 
     let handlers = [
         handler!(
             Platform::Instagram,
-            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|(?:[A-Za-z0-9._]+/)?p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
+            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
             guenther::download::platform::instagram::download_instagram
         ),
         handler!(
@@ -435,58 +435,33 @@ mod tests {
         );
     }
     #[test]
-    fn extracts_instagram_posts_on_supported_hosts() {
+    fn ignores_instagram_post_urls() {
         let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
         let handler = instagram_handler(&handlers);
         let urls = [
             "https://instagram.com/p/ABC123",
-            "https://www.instagram.com/p/ABC123/",
-            "https://www.instagram.com/f1/p/DcyZobPjRyI/",
             "https://instagr.am/p/ABC123",
-            "http://www.instagr.am/p/ABC123",
+            "https://www.instagram.com/f1/p/DcyZobPjRyI/",
         ];
 
         for url in urls {
-            assert_eq!(handler.try_extract(url), Some(url));
+            assert_none!(handler.try_extract(url));
         }
     }
     #[test]
-    fn extracts_instagram_post_with_query_and_fragment() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
-        let handler = instagram_handler(&handlers);
-        let url = "https://www.instagram.com/p/ABC123/?utm_source=share#carousel";
-
-        assert_eq!(handler.try_extract(url), Some(url));
-    }
-    #[test]
-    fn instagram_cache_key_is_stable_for_equivalent_post_urls() {
-        let clean_url = "https://www.instagram.com/p/ABC123";
-        let decorated_url = "https://www.instagram.com/p/ABC123/?utm_source=share#carousel";
-        let profile_url = "https://www.instagram.com/f1/p/ABC123/";
-
-        assert_eq!(
-            normalize_cache_key(Platform::Instagram, clean_url),
-            normalize_cache_key(Platform::Instagram, decorated_url)
-        );
-        assert_eq!(
-            normalize_cache_key(Platform::Instagram, clean_url),
-            normalize_cache_key(Platform::Instagram, profile_url)
-        );
-    }
-    #[test]
-    fn existing_instagram_reel_and_tv_urls_still_match() {
+    fn existing_instagram_reel_and_tv_urls_still_match_with_query_and_fragment() {
         let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
         let handler = instagram_handler(&handlers);
 
         for url in [
-            "https://www.instagram.com/reel/ABC123",
-            "https://instagr.am/tv/ABC123",
+            "https://www.instagram.com/reel/ABC123/?utm_source=share#carousel",
+            "https://instagr.am/tv/ABC123?utm_source=share#tv",
         ] {
             assert_eq!(handler.try_extract(url), Some(url));
         }
     }
     #[test]
-    fn rejects_non_post_instagram_paths_and_malformed_posts() {
+    fn rejects_non_instagram_paths_and_malformed_urls() {
         let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
         let handler = instagram_handler(&handlers);
 
@@ -494,8 +469,8 @@ mod tests {
             "https://www.instagram.com/photographer",
             "https://www.instagram.com/stories/photographer/123",
             "https://www.instagram.com/accounts/login",
-            "https://www.instagram.com/p/",
-            "https://www.instagram.com/p/ABC123/extra",
+            "https://www.instagram.com/reel/",
+            "https://www.instagram.com/tv/ABC123/extra",
         ] {
             assert_none!(handler.try_extract(url));
         }
