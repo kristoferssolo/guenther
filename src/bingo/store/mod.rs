@@ -1,5 +1,4 @@
 mod card;
-mod connection;
 mod entry;
 mod game;
 mod id;
