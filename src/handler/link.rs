@@ -1,4 +1,4 @@
-use crate::handler::Handler;
+use super::Handler;
 use guenther::config::Platform;
 use std::collections::HashSet;
 use url::Url;
@@ -47,7 +47,7 @@ pub fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
     };
 
     let stable_key = match platform {
-        Platform::Instagram => instagram_post_key(&url),
+        Platform::Instagram => instagram_media_key(&url),
         Platform::Tiktok => tiktok_video_key(&url),
         Platform::Twitter => twitter_status_key(&url),
         Platform::Youtube => youtube_video_key(&url),
@@ -55,10 +55,10 @@ pub fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
     stable_key.unwrap_or_else(|| format!("{platform}:url:{}", canonical_url(&url)))
 }
 
-fn instagram_post_key(url: &Url) -> Option<String> {
+fn instagram_media_key(url: &Url) -> Option<String> {
     let mut segments = path_segments(url);
     while let Some(segment) = segments.next() {
-        if matches!(segment, "reel" | "tv" | "p")
+        if matches!(segment, "reel" | "tv")
             && let Some(identifier) = segments.next()
         {
             return Some(format!("instagram:post:{identifier}"));
@@ -130,13 +130,25 @@ fn canonical_url(url: &Url) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::create_handlers;
+    use crate::handler::MediaHandlers;
     use claims::assert_ok;
-    use guenther::config::PlatformConfig;
+    use guenther::{
+        config::{CobaltConfig, PlatformConfig},
+        download::platform::Downloader,
+    };
+
+    fn handlers() -> MediaHandlers {
+        let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
+        assert_ok!(MediaHandlers::new(
+            &PlatformConfig::default(),
+            downloader,
+            std::sync::Arc::new(guenther::comments::Comments::default()),
+        ))
+    }
 
     #[test]
     fn extracts_several_supported_urls_from_one_message() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
         let text = concat!(
             "https://instagram.com/reel/instagram-123 ",
             "https://www.youtube.com/shorts/youtube_456 ",
@@ -144,7 +156,7 @@ mod tests {
             "https://www.tiktok.com/@driver/video/987654321"
         );
 
-        let links = extract_media_links(Some(text), None, &handlers);
+        let links = handlers.extract(Some(text), None);
 
         assert_eq!(links.len(), 4);
         assert_eq!(
@@ -160,13 +172,13 @@ mod tests {
 
     #[test]
     fn preserves_textual_order_across_platforms() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
         let text = concat!(
             "https://x.com/driver/status/123 before ",
             "https://instagram.com/reel/abc123 after"
         );
 
-        let links = extract_media_links(Some(text), None, &handlers);
+        let links = handlers.extract(Some(text), None);
 
         assert_eq!(
             links.iter().map(|link| link.platform).collect::<Vec<_>>(),
@@ -176,13 +188,13 @@ mod tests {
 
     #[test]
     fn deduplicates_tracking_variants_by_cache_key() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
         let text = concat!(
             "https://www.youtube.com/shorts/video-123?si=first ",
             "https://youtube.com/shorts/video-123?feature=share#comments"
         );
 
-        let links = extract_media_links(Some(text), None, &handlers);
+        let links = handlers.extract(Some(text), None);
 
         assert_eq!(links.len(), 1);
         assert_eq!(
@@ -193,13 +205,9 @@ mod tests {
 
     #[test]
     fn extracts_links_from_captions() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
 
-        let links = extract_media_links(
-            None,
-            Some("A caption with https://x.com/driver/status/123"),
-            &handlers,
-        );
+        let links = handlers.extract(None, Some("A caption with https://x.com/driver/status/123"));
 
         assert_eq!(links.len(), 1);
         assert_eq!(
@@ -224,16 +232,26 @@ mod tests {
             ),
             "youtube:shorts:video-123"
         );
+        assert_eq!(
+            normalize_cache_key(
+                Platform::Instagram,
+                "https://www.instagram.com/reel/reel-123?utm_source=share#comments"
+            ),
+            "instagram:post:reel-123"
+        );
+        assert_ne!(
+            normalize_cache_key(Platform::Instagram, "https://www.instagram.com/p/post-123"),
+            "instagram:post:post-123"
+        );
     }
 
     #[test]
     fn ignores_messages_without_supported_urls() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
 
-        let links = extract_media_links(
+        let links = handlers.extract(
             Some("No media here"),
             Some("https://example.com/not-supported"),
-            &handlers,
         );
 
         assert!(links.is_empty());

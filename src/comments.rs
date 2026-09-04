@@ -3,10 +3,8 @@ use crate::{
     utils::truncate_with_ellipsis,
 };
 use rand::{rng, seq::IndexedRandom};
-use std::{fmt::Display, path::Path, sync::OnceLock};
+use std::{fmt::Display, path::Path};
 use tokio::fs::read_to_string;
-
-static GLOBAL_COMMENTS: OnceLock<Comments> = OnceLock::new();
 
 pub const TELEGRAM_CAPTION_LIMIT: usize = 4096;
 const FALLBACK_COMMENTS: &[&str] = &[
@@ -81,17 +79,6 @@ impl Comments {
     pub fn lines(&self) -> &[String] {
         &self.lines
     }
-
-    /// Initialize the global comments (call once at startup).
-    ///
-    /// # Errors
-    ///
-    /// Returns `Error::Other` when the global is already initialized.
-    pub fn init(self) -> Result<()> {
-        GLOBAL_COMMENTS
-            .set(self)
-            .map_err(|_| Error::other("Comments are already initialized"))
-    }
 }
 
 impl Default for Comments {
@@ -100,11 +87,6 @@ impl Default for Comments {
             lines: FALLBACK_COMMENTS.iter().map(ToString::to_string).collect(),
         }
     }
-}
-
-/// Get global comments, lazily using built-in fallbacks when not explicitly initialized.
-pub fn global_comments() -> &'static Comments {
-    GLOBAL_COMMENTS.get_or_init(Comments::default)
 }
 
 /// Pick a random built-in response for a failed media download.

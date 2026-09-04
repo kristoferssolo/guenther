@@ -5,6 +5,7 @@ use crate::error::{Error, Result};
 use chrono::{FixedOffset, Utc};
 use format::{format_duration, format_start};
 use race::{JolpicaResponse, Race, SessionKind, next_session};
+use reqwest::Client;
 
 const NEXT_RACE_URL: &str = "https://api.jolpi.ca/ergast/f1/current/next.json";
 
@@ -35,8 +36,12 @@ impl ScheduleView {
 ///
 /// Returns an error if the API request fails, no race is available, or the API returns invalid
 /// session date/time data.
-pub async fn next_race_message(view: ScheduleView, offset: FixedOffset) -> Result<String> {
-    let race = next_race().await?;
+pub(super) async fn next_race_message(
+    client: &Client,
+    view: ScheduleView,
+    offset: FixedOffset,
+) -> Result<String> {
+    let race = next_race(client).await?;
 
     let lines: Vec<String> = race
         .sessions()?
@@ -65,8 +70,8 @@ pub async fn next_race_message(view: ScheduleView, offset: FixedOffset) -> Resul
 ///
 /// Returns an error if the API request fails, no race is available, the API returns invalid
 /// session date/time data, or every session of the weekend has already started.
-pub async fn countdown_message(offset: FixedOffset) -> Result<String> {
-    let race = next_race().await?;
+pub(super) async fn countdown_message(client: &Client, offset: FixedOffset) -> Result<String> {
+    let race = next_race(client).await?;
     let now = Utc::now();
 
     let sessions = race.sessions()?;
@@ -84,8 +89,10 @@ pub async fn countdown_message(offset: FixedOffset) -> Result<String> {
     ))
 }
 
-async fn next_race() -> Result<Race> {
-    let response = reqwest::get(NEXT_RACE_URL)
+async fn next_race(client: &Client) -> Result<Race> {
+    let response = client
+        .get(NEXT_RACE_URL)
+        .send()
         .await
         .map_err(Error::FetchF1Schedule)?
         .error_for_status()

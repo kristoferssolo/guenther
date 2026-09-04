@@ -1,9 +1,8 @@
 #[cfg(feature = "bingo")]
 use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 use guenther::{
-    comments::global_comments,
-    config::global_config,
-    f1::{ScheduleView, countdown_message, next_race_message, standings_message},
+    comments::Comments,
+    f1::{F1, ScheduleView},
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 
@@ -36,6 +35,21 @@ pub enum Command {
     Bingo(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RouteAction {
+    HandleCommand(Command),
+    HandleMessage,
+    Ignore,
+}
+
+pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
+    let Some(text) = text else {
+        return RouteAction::Ignore;
+    };
+    Command::parse(text, bot_name)
+        .map_or_else(|_| RouteAction::HandleMessage, RouteAction::HandleCommand)
+}
+
 impl Command {
     pub const fn name(&self) -> &'static str {
         match self {
@@ -56,6 +70,8 @@ pub async fn answer(
     bot: &Bot,
     message: &Message,
     cmd: Command,
+    comments: &Comments,
+    f1: &F1,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
 ) -> color_eyre::Result<()> {
@@ -66,14 +82,14 @@ pub async fn answer(
                 .await?
         }
         Command::Curse => {
-            let comment = global_comments().build_caption();
+            let comment = comments.build_caption();
             bot.send_message(chat_id, comment).await?
         }
-        Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend).await?,
-        Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying).await?,
-        Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race).await?,
-        Command::Countdown => send_f1_countdown(bot, chat_id).await?,
-        Command::Standings => send_f1_standings(bot, chat_id).await?,
+        Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend, f1).await?,
+        Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying, f1).await?,
+        Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race, f1).await?,
+        Command::Countdown => send_f1_countdown(bot, chat_id, f1).await?,
+        Command::Standings => send_f1_standings(bot, chat_id, f1).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
             answer_bingo(bot, message, bingo_store, admin_cache, &input).await?;
@@ -88,28 +104,49 @@ async fn send_f1_schedule(
     bot: &Bot,
     chat_id: ChatId,
     view: ScheduleView,
+    f1: &F1,
 ) -> ResponseResult<Message> {
-    let offset = global_config().f1.utc_offset;
-    let message = next_race_message(view, offset)
+    let message = f1
+        .schedule(view)
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 
     bot.send_message(chat_id, message).await
 }
 
-async fn send_f1_countdown(bot: &Bot, chat_id: ChatId) -> ResponseResult<Message> {
-    let offset = global_config().f1.utc_offset;
-    let message = countdown_message(offset)
+async fn send_f1_countdown(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResult<Message> {
+    let message = f1
+        .countdown()
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 
     bot.send_message(chat_id, message).await
 }
 
-async fn send_f1_standings(bot: &Bot, chat_id: ChatId) -> ResponseResult<Message> {
-    let message = standings_message()
+async fn send_f1_standings(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResult<Message> {
+    let message = f1
+        .standings()
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 standings: {e}"));
 
     bot.send_message(chat_id, message).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::assert_matches;
+
+    #[test]
+    fn routes_commands_plain_messages_and_missing_text() {
+        assert_matches!(
+            route_message(Some("/help"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Help)
+        );
+        assert_eq!(
+            route_message(Some("hello"), "guenther_bot"),
+            RouteAction::HandleMessage
+        );
+        assert_eq!(route_message(None, "guenther_bot"), RouteAction::Ignore);
+    }
 }

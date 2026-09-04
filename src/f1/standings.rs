@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use reqwest::Client;
 use serde::Deserialize;
 
 const DRIVER_STANDINGS_URL: &str =
@@ -71,9 +72,11 @@ struct Constructor {
 /// # Errors
 ///
 /// Returns an error if either API request fails or no standings are available.
-pub async fn standings_message() -> Result<String> {
-    let drivers = fetch_standings::<DriverStanding>(DRIVER_STANDINGS_URL).await?;
-    let constructors = fetch_standings::<ConstructorStanding>(CONSTRUCTOR_STANDINGS_URL).await?;
+pub(super) async fn standings_message(client: &Client) -> Result<String> {
+    let (drivers, constructors) = tokio::try_join!(
+        fetch_standings::<DriverStanding>(client, DRIVER_STANDINGS_URL),
+        fetch_standings::<ConstructorStanding>(client, CONSTRUCTOR_STANDINGS_URL),
+    )?;
 
     if drivers.standings.is_empty() || constructors.standings.is_empty() {
         return Err(Error::MissingF1Standings);
@@ -86,11 +89,13 @@ pub async fn standings_message() -> Result<String> {
     ))
 }
 
-async fn fetch_standings<T>(url: &str) -> Result<StandingsList<T>>
+async fn fetch_standings<T>(client: &Client, url: &str) -> Result<StandingsList<T>>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let response = reqwest::get(url)
+    let response = client
+        .get(url)
+        .send()
         .await
         .map_err(Error::FetchF1Standings)?
         .error_for_status()

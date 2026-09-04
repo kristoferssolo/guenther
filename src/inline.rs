@@ -1,9 +1,14 @@
-use crate::voice_lines::{VoiceLine, search_voice_lines};
+use crate::voice_lines::{VoiceLine, VoiceLines};
 use serde::{Deserialize, Serialize};
 use teloxide::{prelude::*, types::InlineQuery};
 
-pub async fn answer_inline_query(bot: Bot, query: InlineQuery) -> color_eyre::Result<()> {
-    let results = search_voice_lines(&query.query)
+pub async fn answer_inline_query(
+    bot: Bot,
+    query: InlineQuery,
+    voice_lines: &VoiceLines,
+) -> color_eyre::Result<()> {
+    let results = voice_lines
+        .search(&query.query)
         .await?
         .into_iter()
         .map(build_inline_result)

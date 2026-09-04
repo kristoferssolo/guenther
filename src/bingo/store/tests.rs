@@ -21,7 +21,8 @@ fn position(index: usize) -> Position {
 }
 
 async fn store() -> BingoStore {
-    assert_ok!(BingoStore::connect("sqlite::memory:").await)
+    let pool = assert_ok!(guenther::db::connect("sqlite::memory:").await);
+    BingoStore::new(pool)
 }
 
 async fn setup_card(store: &BingoStore, owner: &KnownUser) -> Card {

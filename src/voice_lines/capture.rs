@@ -1,8 +1,6 @@
-use super::{
-    VoiceLine, VoiceLinesFile, load_voice_lines_file, save_voice_lines_file, voice_lines_path,
-};
+use super::{VoiceLine, VoiceLines, VoiceLinesFile, load_voice_lines_file, save_voice_lines_file};
 use color_eyre::eyre::{Context, eyre};
-use std::{env, path::Path};
+use std::path::Path;
 use teloxide::{
     net::Download,
     prelude::*,
@@ -11,50 +9,49 @@ use teloxide::{
 use tempfile::tempdir;
 use tokio::{fs, process::Command};
 
-const DEFAULT_FFMPEG_BIN: &str = "ffmpeg";
+impl VoiceLines {
+    pub async fn capture(&self, bot: &Bot, msg: &Message) -> color_eyre::Result<()> {
+        let Some(capture) = capture_candidate(msg) else {
+            return Ok(());
+        };
 
-pub async fn capture_incoming_voice_line(bot: &Bot, msg: &Message) -> color_eyre::Result<()> {
-    let Some(capture) = capture_candidate(msg) else {
-        return Ok(());
-    };
+        let mut file = load_voice_lines_file(&self.path).await?;
 
-    let path = voice_lines_path();
-    let mut file = load_voice_lines_file(&path).await?;
-
-    let line = match capture {
-        CapturedLine::Voice(line) => {
-            if contains_line(&file, &line) {
-                return Ok(());
+        let line = match capture {
+            CapturedLine::Voice(line) => {
+                if contains_line(&file, &line) {
+                    return Ok(());
+                }
+                line
             }
-            line
-        }
-        CapturedLine::Audio(audio) => {
-            if contains_audio_source(&file, &audio) {
-                return Ok(());
+            CapturedLine::Audio(audio) => {
+                if contains_audio_source(&file, &audio) {
+                    return Ok(());
+                }
+
+                let line = convert_audio_to_voice_line(bot, msg.chat.id, audio, &self.ffmpeg)
+                    .await
+                    .wrap_err("convert incoming audio to a reusable voice message")?;
+
+                if contains_line(&file, &line) {
+                    return Ok(());
+                }
+
+                line
             }
+        };
 
-            let line = convert_audio_to_voice_line(bot, msg.chat.id, audio)
-                .await
-                .wrap_err("convert incoming audio to a reusable voice message")?;
+        tracing::info!(
+            file_id = %line.file_id,
+            unique_file_id = %line.unique_file_id,
+            source_unique_file_id = %line.source_unique_file_id,
+            path = %self.path.display(),
+            "capturing incoming voice line metadata"
+        );
 
-            if contains_line(&file, &line) {
-                return Ok(());
-            }
-
-            line
-        }
-    };
-
-    tracing::info!(
-        file_id = %line.file_id,
-        unique_file_id = %line.unique_file_id,
-        source_unique_file_id = %line.source_unique_file_id,
-        path = %path.display(),
-        "capturing incoming voice line metadata"
-    );
-
-    file.voice_lines.push(line);
-    save_voice_lines_file(&path, &file).await
+        file.voice_lines.push(line);
+        save_voice_lines_file(&self.path, &file).await
+    }
 }
 
 enum CapturedLine {
@@ -133,6 +130,7 @@ async fn convert_audio_to_voice_line(
     bot: &Bot,
     chat_id: ChatId,
     audio: AudioCapture,
+    ffmpeg: &Path,
 ) -> color_eyre::Result<VoiceLine> {
     let source_file = bot
         .get_file(audio.file_id.clone())
@@ -151,7 +149,7 @@ async fn convert_audio_to_voice_line(
         .wrap_err("download incoming audio from Telegram")?;
     drop(input_file);
 
-    transcode_audio_to_voice(&input_path, &output_path).await?;
+    transcode_audio_to_voice(ffmpeg, &input_path, &output_path).await?;
 
     let sent_message = bot
         .send_voice(chat_id, InputFile::file(output_path))
@@ -175,8 +173,11 @@ async fn convert_audio_to_voice_line(
     })
 }
 
-async fn transcode_audio_to_voice(input_path: &Path, output_path: &Path) -> color_eyre::Result<()> {
-    let ffmpeg = env::var("FFMPEG_BIN").unwrap_or_else(|_| DEFAULT_FFMPEG_BIN.to_owned());
+async fn transcode_audio_to_voice(
+    ffmpeg: &Path,
+    input_path: &Path,
+    output_path: &Path,
+) -> color_eyre::Result<()> {
     let output = Command::new(ffmpeg)
         .arg("-y")
         .arg("-i")
