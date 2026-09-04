@@ -2,15 +2,12 @@ mod cobalt;
 mod f1;
 mod platform;
 
-use crate::error::{Error, Result};
-use std::{env, sync::OnceLock};
+use std::env;
 use tracing::warn;
 
 pub use cobalt::CobaltConfig;
 pub use f1::F1Config;
 pub use platform::{ParsePlatformError, Platform, PlatformConfig};
-
-static GLOBAL_CONFIG: OnceLock<Config> = OnceLock::new();
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
@@ -44,22 +41,6 @@ impl Config {
             f1: F1Config::from_env(),
         }
     }
-
-    /// Initialize the global config (call once at startup).
-    ///
-    /// # Errors
-    ///
-    /// Returns error if config is already initialized.
-    pub fn init(self) -> Result<()> {
-        GLOBAL_CONFIG
-            .set(self)
-            .map_err(|_| Error::other("Configuration is already initialized"))
-    }
-}
-
-/// Get global config, lazily using defaults when not explicitly initialized.
-pub fn global_config() -> &'static Config {
-    GLOBAL_CONFIG.get_or_init(Config::default)
 }
 
 fn get_string_from_env(env_key: &str) -> Option<String> {

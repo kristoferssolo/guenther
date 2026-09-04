@@ -1,8 +1,8 @@
 #[cfg(feature = "bingo")]
 use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 use guenther::{
-    comments::global_comments,
-    config::global_config,
+    comments::Comments,
+    config::F1Config,
     f1::{ScheduleView, countdown_message, next_race_message, standings_message},
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
@@ -56,6 +56,8 @@ pub async fn answer(
     bot: &Bot,
     message: &Message,
     cmd: Command,
+    comments: &Comments,
+    f1: F1Config,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
 ) -> color_eyre::Result<()> {
@@ -66,13 +68,13 @@ pub async fn answer(
                 .await?
         }
         Command::Curse => {
-            let comment = global_comments().build_caption();
+            let comment = comments.build_caption();
             bot.send_message(chat_id, comment).await?
         }
-        Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend).await?,
-        Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying).await?,
-        Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race).await?,
-        Command::Countdown => send_f1_countdown(bot, chat_id).await?,
+        Command::Weekend => send_f1_schedule(bot, chat_id, ScheduleView::Weekend, f1).await?,
+        Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying, f1).await?,
+        Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race, f1).await?,
+        Command::Countdown => send_f1_countdown(bot, chat_id, f1).await?,
         Command::Standings => send_f1_standings(bot, chat_id).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
@@ -88,18 +90,17 @@ async fn send_f1_schedule(
     bot: &Bot,
     chat_id: ChatId,
     view: ScheduleView,
+    f1: F1Config,
 ) -> ResponseResult<Message> {
-    let offset = global_config().f1.utc_offset;
-    let message = next_race_message(view, offset)
+    let message = next_race_message(view, f1.utc_offset)
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 
     bot.send_message(chat_id, message).await
 }
 
-async fn send_f1_countdown(bot: &Bot, chat_id: ChatId) -> ResponseResult<Message> {
-    let offset = global_config().f1.utc_offset;
-    let message = countdown_message(offset)
+async fn send_f1_countdown(bot: &Bot, chat_id: ChatId, f1: F1Config) -> ResponseResult<Message> {
+    let message = countdown_message(f1.utc_offset)
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 

@@ -19,7 +19,7 @@ use dotenv::dotenv;
 use guenther::{
     cache::MediaCache,
     comments::{Comments, failure_comment},
-    config::{Config, global_config},
+    config::{Config, F1Config},
     db,
     download::platform::Downloader,
     error::{Error, Result as MediaResult},
@@ -32,29 +32,38 @@ use tracing::{Span, error, info, warn};
 #[cfg(feature = "bingo")]
 use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
 
+#[derive(Clone)]
+struct AppState {
+    bot_name: Arc<str>,
+    comments: Arc<Comments>,
+    f1: F1Config,
+    admin_chat_id: Option<ChatId>,
+}
+
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     dotenv().ok();
     color_eyre::install()?;
     setup_logger();
 
-    Comments::load_from_file("comments.txt")
-        .await
-        .unwrap_or_else(|e| {
-            warn!("Failed to load comments.txt: {e}; using fallback comments");
-            Comments::default()
-        })
-        .init()?;
+    let comments = Arc::new(
+        Comments::load_from_file("comments.txt")
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Failed to load comments.txt: {e}; using fallback comments");
+                Comments::default()
+            }),
+    );
 
-    Config::from_env().init()?;
+    let config = Config::from_env();
 
     let bot = Bot::from_env();
     let bot_name: Arc<str> = bot.get_me().await?.username().into();
 
     info!(name = %bot_name, "bot starting");
 
-    let downloader = Downloader::new(global_config().cobalt.clone())?;
-    let handlers = MediaHandlers::new(&global_config().platforms, downloader)?;
+    let downloader = Downloader::new(config.cobalt.clone())?;
+    let handlers = MediaHandlers::new(&config.platforms, downloader, comments.clone())?;
     let enabled_platforms = handlers
         .enabled_platforms()
         .map(|platform| platform.to_string())
@@ -79,8 +88,15 @@ async fn main() -> color_eyre::Result<()> {
         .branch(Update::filter_message().endpoint(message_handler))
         .branch(Update::filter_inline_query().endpoint(answer_inline_query));
 
+    let state = AppState {
+        bot_name,
+        comments,
+        f1: config.f1,
+        admin_chat_id: config.chat_id.map(ChatId),
+    };
+
     #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
-    let mut deps = dptree::deps![handlers, bot_name, media_cache];
+    let mut deps = dptree::deps![handlers, state, media_cache];
     #[cfg(feature = "bingo")]
     deps.insert(bingo_store);
     #[cfg(feature = "bingo")]
@@ -111,7 +127,7 @@ async fn message_handler(
     bot: Bot,
     msg: Message,
     handlers: MediaHandlers,
-    bot_name: Arc<str>,
+    state: AppState,
     cache: MediaCache,
     #[cfg(feature = "bingo")] bingo_store: BingoStore,
     #[cfg(feature = "bingo")] admin_cache: AdminCache,
@@ -128,7 +144,7 @@ async fn message_handler(
         warn!(%err, "Failed to remember Telegram user for bingo");
     }
 
-    match decide_route(text.as_deref(), &bot_name) {
+    match decide_route(text.as_deref(), &state.bot_name) {
         RouteAction::HandleCommand(cmd) => {
             span.record("route", "command");
             span.record("command", cmd.name());
@@ -136,6 +152,8 @@ async fn message_handler(
                 &bot,
                 &msg,
                 cmd,
+                &state.comments,
+                state.f1,
                 #[cfg(feature = "bingo")]
                 &bingo_store,
                 #[cfg(feature = "bingo")]
@@ -148,7 +166,7 @@ async fn message_handler(
         }
         RouteAction::HandleMessage => {
             span.record("route", "message");
-            process_message(&bot, &msg, &handlers, &cache).await;
+            process_message(&bot, &msg, &handlers, &cache, state.admin_chat_id).await;
         }
         RouteAction::Ignore => {
             span.record("route", "ignored");
@@ -181,12 +199,20 @@ async fn bingo_callback_handler(
     Ok(())
 }
 
-async fn process_message(bot: &Bot, msg: &Message, handlers: &MediaHandlers, cache: &MediaCache) {
+async fn process_message(
+    bot: &Bot,
+    msg: &Message,
+    handlers: &MediaHandlers,
+    cache: &MediaCache,
+    admin_chat_id: Option<ChatId>,
+) {
     let links = handlers.extract(msg.text(), msg.caption());
     process_links(
         links,
         |link| async move { handlers.handle(bot, msg.chat.id, &link, cache).await },
-        |link, err| async move { report_media_failure(bot, msg.chat.id, &link, &err).await },
+        |link, err| async move {
+            report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err).await;
+        },
     )
     .await;
 }
@@ -205,13 +231,17 @@ where
     }
 }
 
-async fn report_media_failure(bot: &Bot, chat_id: ChatId, link: &MediaLink, err: &Error) {
+async fn report_media_failure(
+    bot: &Bot,
+    chat_id: ChatId,
+    admin_chat_id: Option<ChatId>,
+    link: &MediaLink,
+    err: &Error,
+) {
     error!(platform = %link.platform, %err, "Media handler failed");
     let _ = bot.send_message(chat_id, failure_comment()).await;
-    if let Some(admin_chat_id) = global_config().chat_id {
-        let _ = bot
-            .send_message(ChatId(admin_chat_id), err.to_string())
-            .await;
+    if let Some(admin_chat_id) = admin_chat_id {
+        let _ = bot.send_message(admin_chat_id, err.to_string()).await;
     }
 }
 
@@ -227,6 +257,7 @@ mod tests {
         let handlers = assert_ok!(MediaHandlers::new(
             &guenther::config::PlatformConfig::default(),
             downloader,
+            Arc::new(Comments::default()),
         ));
         let links = handlers.extract(
             Some("https://x.com/driver/status/111 https://www.youtube.com/shorts/after-222"),

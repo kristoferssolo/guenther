@@ -1,7 +1,7 @@
 use crate::media_link::{MediaLink, normalize_cache_key};
 use guenther::{
     cache::{CachedMedia, MediaCache},
-    comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
+    comments::{Comments, TELEGRAM_CAPTION_LIMIT},
     config::{Platform, PlatformConfig},
     download::{collect_supported_media, platform::Downloader},
     error::{Error, Result},
@@ -30,14 +30,20 @@ pub struct Handler {
 pub struct MediaHandlers {
     handlers: Arc<[Handler]>,
     downloader: Downloader,
+    comments: Arc<Comments>,
 }
 
 impl MediaHandlers {
-    pub fn new(platforms: &PlatformConfig, downloader: Downloader) -> StdResult<Self, RegexError> {
+    pub fn new(
+        platforms: &PlatformConfig,
+        downloader: Downloader,
+        comments: Arc<Comments>,
+    ) -> StdResult<Self, RegexError> {
         let handlers = create_handlers(platforms)?;
         Ok(Self {
             handlers,
             downloader,
+            comments,
         })
     }
 
@@ -64,7 +70,7 @@ impl MediaHandlers {
             return Ok(());
         };
         handler
-            .handle(bot, chat_id, link, cache, &self.downloader)
+            .handle(bot, chat_id, link, cache, &self.downloader, &self.comments)
             .await
     }
 }
@@ -111,11 +117,12 @@ impl Handler {
         link: &MediaLink,
         cache: &MediaCache,
         downloader: &Downloader,
+        comments: &Comments,
     ) -> Result<()> {
         let started_at = Instant::now();
         info!(platform = %self.platform, "Handling media URL");
         match self
-            .try_send_cached(bot, chat_id, link.cache_key.as_str(), cache)
+            .try_send_cached(bot, chat_id, link.cache_key.as_str(), cache, comments)
             .await
         {
             Ok(true) => {
@@ -146,7 +153,7 @@ impl Handler {
         let source_text = dr.source_text.take();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
         let media_count = media_items.len();
-        let base_caption = global_comments().build_caption();
+        let base_caption = comments.build_caption();
         let include_source_text =
             should_include_source_text(self.platform(), &media_items, source_text.as_deref());
 
@@ -193,6 +200,7 @@ impl Handler {
         chat_id: ChatId,
         cache_key: &str,
         cache: &MediaCache,
+        comments: &Comments,
     ) -> Result<bool> {
         let cached = match cache.get(cache_key).await {
             Ok(cached) => cached,
@@ -210,7 +218,7 @@ impl Handler {
             .into_iter()
             .map(|item| (InputFile::file_id(FileId(item.file_id)), item.kind))
             .collect::<Vec<_>>();
-        let caption = global_comments().build_caption();
+        let caption = comments.build_caption();
         send_media(bot, chat_id, inputs, &caption).await?;
         debug!(platform = %self.platform, media_count, "Sent cached media");
         Ok(true)
@@ -402,7 +410,11 @@ mod tests {
 
     fn all_handlers() -> MediaHandlers {
         let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
-        assert_ok!(MediaHandlers::new(&PlatformConfig::default(), downloader))
+        assert_ok!(MediaHandlers::new(
+            &PlatformConfig::default(),
+            downloader,
+            Arc::new(Comments::default()),
+        ))
     }
 
     fn instagram_handler(handlers: &MediaHandlers) -> &Handler {

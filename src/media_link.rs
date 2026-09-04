@@ -139,7 +139,11 @@ mod tests {
 
     fn handlers() -> MediaHandlers {
         let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
-        assert_ok!(MediaHandlers::new(&PlatformConfig::default(), downloader))
+        assert_ok!(MediaHandlers::new(
+            &PlatformConfig::default(),
+            downloader,
+            std::sync::Arc::new(guenther::comments::Comments::default()),
+        ))
     }
 
     #[test]
