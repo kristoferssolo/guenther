@@ -3,15 +3,13 @@ mod bingo;
 mod commands;
 mod handler;
 mod inline;
-mod media_link;
 mod router;
 mod voice_lines;
 
 use crate::{
     commands::answer,
-    handler::MediaHandlers,
+    handler::{MediaHandlers, MediaLink},
     inline::answer_inline_query,
-    media_link::MediaLink,
     router::{RouteAction, decide_route},
     voice_lines::VoiceLines,
 };

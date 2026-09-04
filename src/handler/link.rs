@@ -1,4 +1,4 @@
-use crate::handler::Handler;
+use super::Handler;
 use guenther::config::Platform;
 use std::collections::HashSet;
 use url::Url;

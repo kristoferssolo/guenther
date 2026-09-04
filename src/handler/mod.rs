@@ -1,7 +1,8 @@
 mod delivery;
+mod link;
 
 use self::delivery::{compose_caption, send_media, should_include_source_text};
-use crate::media_link::{MediaLink, normalize_cache_key};
+use self::link::{extract_media_links, normalize_cache_key};
 use guenther::{
     cache::MediaCache,
     comments::Comments,
@@ -16,6 +17,8 @@ use teloxide::{
     types::{ChatId, FileId, InputFile},
 };
 use tracing::{debug, info, warn};
+
+pub use self::link::MediaLink;
 
 #[derive(Debug, Clone)]
 pub struct Handler {
@@ -50,7 +53,7 @@ impl MediaHandlers {
     }
 
     pub fn extract(&self, text: Option<&str>, caption: Option<&str>) -> Vec<MediaLink> {
-        crate::media_link::extract_media_links(text, caption, &self.handlers)
+        extract_media_links(text, caption, &self.handlers)
     }
 
     pub async fn handle(
