@@ -130,13 +130,21 @@ fn canonical_url(url: &Url) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::create_handlers;
+    use crate::handler::MediaHandlers;
     use claims::assert_ok;
-    use guenther::config::PlatformConfig;
+    use guenther::{
+        config::{CobaltConfig, PlatformConfig},
+        download::platform::Downloader,
+    };
+
+    fn handlers() -> MediaHandlers {
+        let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
+        assert_ok!(MediaHandlers::new(&PlatformConfig::default(), downloader))
+    }
 
     #[test]
     fn extracts_several_supported_urls_from_one_message() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
         let text = concat!(
             "https://instagram.com/reel/instagram-123 ",
             "https://www.youtube.com/shorts/youtube_456 ",
@@ -144,7 +152,7 @@ mod tests {
             "https://www.tiktok.com/@driver/video/987654321"
         );
 
-        let links = extract_media_links(Some(text), None, &handlers);
+        let links = handlers.extract(Some(text), None);
 
         assert_eq!(links.len(), 4);
         assert_eq!(
@@ -160,13 +168,13 @@ mod tests {
 
     #[test]
     fn preserves_textual_order_across_platforms() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
         let text = concat!(
             "https://x.com/driver/status/123 before ",
             "https://instagram.com/reel/abc123 after"
         );
 
-        let links = extract_media_links(Some(text), None, &handlers);
+        let links = handlers.extract(Some(text), None);
 
         assert_eq!(
             links.iter().map(|link| link.platform).collect::<Vec<_>>(),
@@ -176,13 +184,13 @@ mod tests {
 
     #[test]
     fn deduplicates_tracking_variants_by_cache_key() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
         let text = concat!(
             "https://www.youtube.com/shorts/video-123?si=first ",
             "https://youtube.com/shorts/video-123?feature=share#comments"
         );
 
-        let links = extract_media_links(Some(text), None, &handlers);
+        let links = handlers.extract(Some(text), None);
 
         assert_eq!(links.len(), 1);
         assert_eq!(
@@ -193,13 +201,9 @@ mod tests {
 
     #[test]
     fn extracts_links_from_captions() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
 
-        let links = extract_media_links(
-            None,
-            Some("A caption with https://x.com/driver/status/123"),
-            &handlers,
-        );
+        let links = handlers.extract(None, Some("A caption with https://x.com/driver/status/123"));
 
         assert_eq!(links.len(), 1);
         assert_eq!(
@@ -239,12 +243,11 @@ mod tests {
 
     #[test]
     fn ignores_messages_without_supported_urls() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = handlers();
 
-        let links = extract_media_links(
+        let links = handlers.extract(
             Some("No media here"),
             Some("https://example.com/not-supported"),
-            &handlers,
         );
 
         assert!(links.is_empty());

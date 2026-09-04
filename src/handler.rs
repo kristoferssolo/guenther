@@ -3,20 +3,18 @@ use guenther::{
     cache::{CachedMedia, MediaCache},
     comments::{TELEGRAM_CAPTION_LIMIT, global_comments},
     config::{Platform, PlatformConfig},
-    download::{DownloadResult, collect_supported_media},
+    download::{collect_supported_media, platform::Downloader},
     error::{Error, Result},
     utils::{MediaKind, truncate_with_ellipsis},
 };
 use regex::{Error as RegexError, Regex};
-use std::{path::PathBuf, pin::Pin, result::Result as StdResult, sync::Arc, time::Instant};
+use std::{path::PathBuf, result::Result as StdResult, sync::Arc, time::Instant};
 use teloxide::{
     Bot,
     prelude::*,
     types::{ChatId, FileId, InputFile, InputMedia, InputMediaPhoto, InputMediaVideo},
 };
 use tracing::{debug, info, warn};
-
-type DownloadFn = fn(String) -> Pin<Box<dyn Future<Output = Result<DownloadResult>> + Send>>;
 
 /// Maximum number of items Telegram accepts in a single media group.
 const MEDIA_GROUP_LIMIT: usize = 10;
@@ -25,21 +23,56 @@ const MEDIA_GROUP_LIMIT: usize = 10;
 pub struct Handler {
     platform: Platform,
     regex: Regex,
-    func: DownloadFn,
+}
+
+/// Matches supported URLs and dispatches them to the configured downloader.
+#[derive(Debug, Clone)]
+pub struct MediaHandlers {
+    handlers: Arc<[Handler]>,
+    downloader: Downloader,
+}
+
+impl MediaHandlers {
+    pub fn new(platforms: &PlatformConfig, downloader: Downloader) -> StdResult<Self, RegexError> {
+        let handlers = create_handlers(platforms)?;
+        Ok(Self {
+            handlers,
+            downloader,
+        })
+    }
+
+    pub fn enabled_platforms(&self) -> impl Iterator<Item = Platform> + '_ {
+        self.handlers.iter().map(Handler::platform)
+    }
+
+    pub fn extract(&self, text: Option<&str>, caption: Option<&str>) -> Vec<MediaLink> {
+        crate::media_link::extract_media_links(text, caption, &self.handlers)
+    }
+
+    pub async fn handle(
+        &self,
+        bot: &Bot,
+        chat_id: ChatId,
+        link: &MediaLink,
+        cache: &MediaCache,
+    ) -> Result<()> {
+        let Some(handler) = self
+            .handlers
+            .iter()
+            .find(|handler| handler.platform() == link.platform)
+        else {
+            return Ok(());
+        };
+        handler
+            .handle(bot, chat_id, link, cache, &self.downloader)
+            .await
+    }
 }
 
 impl Handler {
-    pub fn new(
-        platform: Platform,
-        regex_pattern: &str,
-        func: DownloadFn,
-    ) -> StdResult<Self, RegexError> {
+    pub fn new(platform: Platform, regex_pattern: &str) -> StdResult<Self, RegexError> {
         let regex = Regex::new(regex_pattern)?;
-        Ok(Self {
-            platform,
-            regex,
-            func,
-        })
+        Ok(Self { platform, regex })
     }
 
     pub const fn platform(&self) -> Platform {
@@ -77,6 +110,7 @@ impl Handler {
         chat_id: ChatId,
         link: &MediaLink,
         cache: &MediaCache,
+        downloader: &Downloader,
     ) -> Result<()> {
         let started_at = Instant::now();
         info!(platform = %self.platform, "Handling media URL");
@@ -106,7 +140,9 @@ impl Handler {
             }
         }
 
-        let mut dr = (self.func)(link.original_url.clone()).await?;
+        let mut dr = downloader
+            .download(self.platform, &link.original_url)
+            .await?;
         let source_text = dr.source_text.take();
         let (_tempdir, media_items) = collect_supported_media(dr).await?;
         let media_count = media_items.len();
@@ -181,33 +217,23 @@ impl Handler {
     }
 }
 
-macro_rules! handler {
-    ($platform:expr, $regex:expr, $download_fn:path) => {
-        Handler::new($platform, $regex, |url: String| Box::pin($download_fn(url)))
-    };
-}
-
-pub fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, RegexError> {
+fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, RegexError> {
     let handlers = [
-        handler!(
+        Handler::new(
             Platform::Instagram,
             r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
-            guenther::download::platform::instagram::download_instagram
         ),
-        handler!(
+        Handler::new(
             Platform::Youtube,
             r"https?://(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
-            guenther::download::platform::youtube::download_youtube
         ),
-        handler!(
+        Handler::new(
             Platform::Twitter,
             r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
-            guenther::download::platform::twitter::download_twitter
         ),
-        handler!(
+        Handler::new(
             Platform::Tiktok,
             r"https?://(?:(?:www\.)?tiktok\.com/@[A-Za-z0-9._-]+/video/\d+(?:\?[^\s]*)?|(?:vm|vt|tt|tik)\.tiktok\.com/[A-Za-z0-9_-]+[/?#]?)",
-            guenther::download::platform::tiktok::download_tiktok
         ),
     ]
     .into_iter()
@@ -372,10 +398,17 @@ fn compose_caption(quote: &str, source_text: Option<&str>) -> String {
 mod tests {
     use super::*;
     use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
+    use guenther::config::CobaltConfig;
 
-    fn instagram_handler(handlers: &[Handler]) -> &Handler {
+    fn all_handlers() -> MediaHandlers {
+        let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
+        assert_ok!(MediaHandlers::new(&PlatformConfig::default(), downloader))
+    }
+
+    fn instagram_handler(handlers: &MediaHandlers) -> &Handler {
         assert_some!(
             handlers
+                .handlers
                 .iter()
                 .find(|handler| handler.platform() == Platform::Instagram)
         )
@@ -420,9 +453,10 @@ mod tests {
 
     #[test]
     fn extracts_tiktok_profile_video_url_with_query() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = all_handlers();
         let handler = assert_some!(
             handlers
+                .handlers
                 .iter()
                 .find(|handler| handler.platform() == Platform::Tiktok)
         );
@@ -436,7 +470,7 @@ mod tests {
     }
     #[test]
     fn ignores_instagram_post_urls() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = all_handlers();
         let handler = instagram_handler(&handlers);
         let urls = [
             "https://instagram.com/p/ABC123",
@@ -450,7 +484,7 @@ mod tests {
     }
     #[test]
     fn existing_instagram_reel_and_tv_urls_still_match_with_query_and_fragment() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = all_handlers();
         let handler = instagram_handler(&handlers);
 
         for url in [
@@ -462,7 +496,7 @@ mod tests {
     }
     #[test]
     fn rejects_non_instagram_paths_and_malformed_urls() {
-        let handlers = assert_ok!(create_handlers(&PlatformConfig::default()));
+        let handlers = all_handlers();
         let handler = instagram_handler(&handlers);
 
         for url in [

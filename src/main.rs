@@ -9,9 +9,9 @@ mod voice_lines;
 
 use crate::{
     commands::answer,
-    handler::{Handler, create_handlers},
+    handler::MediaHandlers,
     inline::answer_inline_query,
-    media_link::{MediaLink, extract_media_links},
+    media_link::MediaLink,
     router::{RouteAction, decide_route},
     voice_lines::capture_incoming_voice_line,
 };
@@ -21,6 +21,7 @@ use guenther::{
     comments::{Comments, failure_comment},
     config::{Config, global_config},
     db,
+    download::platform::Downloader,
     error::{Error, Result as MediaResult},
     telemetry::setup_logger,
 };
@@ -52,10 +53,11 @@ async fn main() -> color_eyre::Result<()> {
 
     info!(name = %bot_name, "bot starting");
 
-    let handlers = create_handlers(&global_config().platforms)?;
+    let downloader = Downloader::new(global_config().cobalt.clone())?;
+    let handlers = MediaHandlers::new(&global_config().platforms, downloader)?;
     let enabled_platforms = handlers
-        .iter()
-        .map(|handler| handler.platform().to_string())
+        .enabled_platforms()
+        .map(|platform| platform.to_string())
         .collect::<Vec<_>>();
     info!(?enabled_platforms, "platform handlers configured");
 
@@ -108,7 +110,7 @@ async fn main() -> color_eyre::Result<()> {
 async fn message_handler(
     bot: Bot,
     msg: Message,
-    handlers: Arc<[Handler]>,
+    handlers: MediaHandlers,
     bot_name: Arc<str>,
     cache: MediaCache,
     #[cfg(feature = "bingo")] bingo_store: BingoStore,
@@ -179,38 +181,25 @@ async fn bingo_callback_handler(
     Ok(())
 }
 
-async fn process_message(bot: &Bot, msg: &Message, handlers: &[Handler], cache: &MediaCache) {
-    let links = extract_media_links(msg.text(), msg.caption(), handlers);
+async fn process_message(bot: &Bot, msg: &Message, handlers: &MediaHandlers, cache: &MediaCache) {
+    let links = handlers.extract(msg.text(), msg.caption());
     process_links(
         links,
-        handlers,
-        |handler, link| async move { handler.handle(bot, msg.chat.id, &link, cache).await },
+        |link| async move { handlers.handle(bot, msg.chat.id, &link, cache).await },
         |link, err| async move { report_media_failure(bot, msg.chat.id, &link, &err).await },
     )
     .await;
 }
 
-async fn process_links<F, Fut, E, Eut>(
-    links: Vec<MediaLink>,
-    handlers: &[Handler],
-    mut handle: F,
-    mut on_error: E,
-) where
-    F: FnMut(Handler, MediaLink) -> Fut,
+async fn process_links<F, Fut, E, Eut>(links: Vec<MediaLink>, mut handle: F, mut on_error: E)
+where
+    F: FnMut(MediaLink) -> Fut,
     Fut: Future<Output = MediaResult<()>>,
     E: FnMut(MediaLink, Error) -> Eut,
     Eut: Future<Output = ()>,
 {
     for link in links {
-        let Some(handler) = handlers
-            .iter()
-            .find(|handler| handler.platform() == link.platform)
-            .cloned()
-        else {
-            continue;
-        };
-
-        if let Err(err) = handle(handler, link.clone()).await {
+        if let Err(err) = handle(link.clone()).await {
             on_error(link, err).await;
         }
     }
@@ -234,19 +223,21 @@ mod tests {
 
     #[tokio::test]
     async fn failed_link_does_not_stop_later_links() {
-        let handlers = assert_ok!(create_handlers(&guenther::config::PlatformConfig::default()));
-        let links = extract_media_links(
+        let downloader = assert_ok!(Downloader::new(guenther::config::CobaltConfig::default()));
+        let handlers = assert_ok!(MediaHandlers::new(
+            &guenther::config::PlatformConfig::default(),
+            downloader,
+        ));
+        let links = handlers.extract(
             Some("https://x.com/driver/status/111 https://www.youtube.com/shorts/after-222"),
             None,
-            &handlers,
         );
         let mut attempted = Vec::new();
         let mut failures = Vec::new();
 
         process_links(
             links,
-            &handlers,
-            |_, link| {
+            |link| {
                 let url = link.original_url.clone();
                 let failed = link.platform == Platform::Twitter;
                 attempted.push(url);
