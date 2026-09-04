@@ -2,8 +2,7 @@
 use crate::bingo::{AdminCache, BingoStore, answer_bingo};
 use guenther::{
     comments::Comments,
-    config::F1Config,
-    f1::{ScheduleView, countdown_message, next_race_message, standings_message},
+    f1::{F1, ScheduleView},
 };
 use teloxide::{prelude::*, utils::command::BotCommands};
 
@@ -57,7 +56,7 @@ pub async fn answer(
     message: &Message,
     cmd: Command,
     comments: &Comments,
-    f1: F1Config,
+    f1: &F1,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
 ) -> color_eyre::Result<()> {
@@ -75,7 +74,7 @@ pub async fn answer(
         Command::Quali => send_f1_schedule(bot, chat_id, ScheduleView::Qualifying, f1).await?,
         Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race, f1).await?,
         Command::Countdown => send_f1_countdown(bot, chat_id, f1).await?,
-        Command::Standings => send_f1_standings(bot, chat_id).await?,
+        Command::Standings => send_f1_standings(bot, chat_id, f1).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
             answer_bingo(bot, message, bingo_store, admin_cache, &input).await?;
@@ -90,25 +89,28 @@ async fn send_f1_schedule(
     bot: &Bot,
     chat_id: ChatId,
     view: ScheduleView,
-    f1: F1Config,
+    f1: &F1,
 ) -> ResponseResult<Message> {
-    let message = next_race_message(view, f1.utc_offset)
+    let message = f1
+        .schedule(view)
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 
     bot.send_message(chat_id, message).await
 }
 
-async fn send_f1_countdown(bot: &Bot, chat_id: ChatId, f1: F1Config) -> ResponseResult<Message> {
-    let message = countdown_message(f1.utc_offset)
+async fn send_f1_countdown(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResult<Message> {
+    let message = f1
+        .countdown()
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 schedule: {e}"));
 
     bot.send_message(chat_id, message).await
 }
 
-async fn send_f1_standings(bot: &Bot, chat_id: ChatId) -> ResponseResult<Message> {
-    let message = standings_message()
+async fn send_f1_standings(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResult<Message> {
+    let message = f1
+        .standings()
         .await
         .unwrap_or_else(|e| format!("Failed to load F1 standings: {e}"));
 

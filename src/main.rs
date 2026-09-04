@@ -19,10 +19,11 @@ use dotenv::dotenv;
 use guenther::{
     cache::MediaCache,
     comments::{Comments, failure_comment},
-    config::{Config, F1Config},
+    config::Config,
     db,
     download::platform::Downloader,
     error::{Error, Result as MediaResult},
+    f1::F1,
     telemetry::setup_logger,
 };
 use std::{future::Future, sync::Arc};
@@ -36,7 +37,7 @@ use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_user
 struct AppState {
     bot_name: Arc<str>,
     comments: Arc<Comments>,
-    f1: F1Config,
+    f1: F1,
     admin_chat_id: Option<ChatId>,
     voice_lines: VoiceLines,
 }
@@ -58,6 +59,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let config = Config::from_env();
     let voice_lines = VoiceLines::from_env();
+    let f1 = F1::new(config.f1)?;
 
     let bot = Bot::from_env();
     let bot_name: Arc<str> = bot.get_me().await?.username().into();
@@ -93,7 +95,7 @@ async fn main() -> color_eyre::Result<()> {
     let state = AppState {
         bot_name,
         comments,
-        f1: config.f1,
+        f1,
         admin_chat_id: config.chat_id.map(ChatId),
         voice_lines,
     };
@@ -157,7 +159,7 @@ async fn message_handler(
                 &msg,
                 cmd,
                 &state.comments,
-                state.f1,
+                &state.f1,
                 #[cfg(feature = "bingo")]
                 &bingo_store,
                 #[cfg(feature = "bingo")]
