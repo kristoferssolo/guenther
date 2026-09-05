@@ -35,6 +35,11 @@ check: clippy docs test
 run:
     bacon run-long
 
+# Run with voice line capture enabled
+[group("run")]
+run-capture:
+    cargo run --no-default-features --features voice-line-capture --release
+
 # Format code
 [group("dev")]
 fmt:

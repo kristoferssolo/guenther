@@ -619,3 +619,21 @@ unique_file_id = "AgADlhsAAtbUQVI"
 tags = ["max", "verstappen", "scream"]
 source_file_id = "CQACAgQAAxkBAAIBaWnIDC9g6LPdf93GekSZghl6agw_AAKKGwAC1tRBUgUTThJM-24FOgQ"
 source_unique_file_id = "AgADihsAAtbUQVI"
+
+[[voice_lines]]
+id = "AgADNicAAlm-4VA"
+title = "Pierre Gasly.mp3"
+file_id = "AwACAgQAAxkDAAICK2qcNzFLG32DbLLCGtXia8BINDWdAAI2JwACWb7hUHeZPQIaqwckPQQ"
+unique_file_id = "AgADNicAAlm-4VA"
+tags = ["daniel", "ricciardo"]
+source_file_id = "CQACAgQAAxkBAAICKWqcNjNFMVHKJryktQNi0IGKmtGbAAIsJwACWb7hUOAcYqiCnLZEPQQ"
+source_unique_file_id = "AgADLCcAAlm-4VA"
+
+[[voice_lines]]
+id = "AgADPCcAAlm-4VA"
+title = "Just an Inchident.mp3"
+file_id = "AwACAgQAAxkDAAICL2qcN1Ytd-jqpaXjWhU0f0p_-HGzAAI8JwACWb7hUGNb3M5DxY-ZPQQ"
+unique_file_id = "AgADPCcAAlm-4VA"
+tags = ["charles", "leclerc", "incident"]
+source_file_id = "CQACAgQAAxkBAAICLmqcN1XFEb6qoSwGEVJswzKSgc7IAAI7JwACWb7hUAezDZdgftmKPQQ"
+source_unique_file_id = "AgADOycAAlm-4VA"
