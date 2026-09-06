@@ -1,0 +1,8 @@
+{
+    "instagram": [
+        "mid=<replace>; ig_did=<with>; csrftoken=<your>; ds_user_id=<own>; sessionid=<cookies>"
+    ],
+    "instagram_bearer": [
+        "token=<IGT:2:...>"
+    ]
+}

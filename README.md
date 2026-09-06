@@ -18,7 +18,7 @@ It currently supports:
 - Uses random caption lines from `comments.txt`
 - Extracts post text from image-only X/Twitter posts when available
 - Uses a private Cobalt instance for media from every supported platform
-- Downloads public media without social account cookies
+- Reads Cobalt account cookies from `cobalt-cookies.json`, which Instagram now requires for reel video
 - Can answer inline queries with saved voice lines
 - Can optionally capture incoming voice and audio messages into `voice_lines.toml`
 - Can show the next F1 weekend, qualifying, sprint, and race times
@@ -130,8 +130,22 @@ RUST_FEATURES=--features=bingo docker compose up --build
 ```
 
 The Compose setup starts a private Cobalt sidecar that is reachable only from
-Guenther's Docker network. It does not expose Cobalt on a host port or provide
-social account cookies.
+Guenther's Docker network. It does not expose Cobalt on a host port.
+
+Cobalt reads account cookies from `cobalt-cookies.json`, mounted at
+`/cookies.json`. Copy the template and fill in the services you need:
+
+```bash
+cp cobalt-cookies.example.json cobalt-cookies.json
+```
+
+The file must exist before `docker compose up`, or Docker creates a directory
+in its place. Cobalt rewrites refreshed cookies in place, so it is mounted
+read-write and its contents will change over time.
+
+Instagram no longer serves video URLs to anonymous clients. Without a logged-in
+`sessionid` (or an `instagram_bearer` token), Cobalt falls back to the post's
+cover image, and reels arrive as a single JPEG instead of a video.
 
 If YouTube rejects the VPS IP with `error.api.youtube.login`, configure an
 HTTP(S) proxy with a different network exit in `.env` and recreate Cobalt:
@@ -145,7 +159,7 @@ docker compose up -d --force-recreate cobalt bot
 ```
 
 The proxy is used only for Cobalt's outbound requests. It does not receive the
-Telegram bot token, and no YouTube account or cookies are required.
+Telegram bot token, and no YouTube account is required.
 
 The bot reads `.env` and mounts:
 
@@ -316,7 +330,12 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 
 ## Notes
 
-- All social media downloads use Cobalt without account cookies and support public media only.
+- All social media downloads go through Cobalt and support public media only.
+  Instagram additionally requires account cookies in `cobalt-cookies.json`; see
+  [Docker](#docker).
+- Cached entries record what was downloaded at the time. If Cobalt returned
+  cover images for reels, purge them so the next request re-downloads:
+  `DELETE FROM media_cache WHERE url LIKE 'instagram:%'`.
 - Media sent for a previously seen link is reused from Telegram's servers via
   cached `file_id`s; captions are still generated per request. If a cached send
   fails, the entry is invalidated and the media is downloaded again.
