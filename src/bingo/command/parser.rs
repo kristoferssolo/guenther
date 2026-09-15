@@ -164,6 +164,9 @@ fn parse_card_target(input: &str, replace: bool) -> Result<BingoCommand> {
 }
 
 fn parse_get(input: &str) -> Result<BingoCommand> {
+    if input.eq_ignore_ascii_case("all") {
+        return Ok(BingoCommand::GetAll);
+    }
     let (slug, target) = parse_slug_and_target(input, "get [game] [@user]")?;
     Ok(BingoCommand::Get { slug, target })
 }

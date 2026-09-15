@@ -71,6 +71,79 @@ async fn generates_persistent_card_with_free_center() {
 }
 
 #[tokio::test]
+async fn lists_cards_for_the_default_active_game_only() {
+    let store = store().await;
+    let first_owner = user(10, "first");
+    let second_owner = user(20, "second");
+    assert_ok!(store.observe_user(CHAT_ID, &first_owner).await);
+    assert_ok!(store.observe_user(CHAT_ID, &second_owner).await);
+    assert_ok!(
+        store
+            .create_game(CHAT_ID, "season", "Season", first_owner.user_id)
+            .await
+    );
+    assert_ok!(
+        store
+            .set_game_state(CHAT_ID, "season", GameState::Active)
+            .await
+    );
+    for index in 0..REQUIRED_ENTRIES {
+        assert_ok!(
+            store
+                .add_entry(CHAT_ID, Some("season"), &format!("Season entry {index}"))
+                .await
+        );
+    }
+    let first_card = assert_ok!(
+        store
+            .generate_card(CHAT_ID, Some("season"), &first_owner, false)
+            .await
+    );
+
+    assert_ok!(
+        store
+            .create_game(CHAT_ID, "sprint", "Sprint", first_owner.user_id)
+            .await
+    );
+    assert_ok!(
+        store
+            .set_game_state(CHAT_ID, "sprint", GameState::Active)
+            .await
+    );
+    for index in 0..REQUIRED_ENTRIES {
+        assert_ok!(
+            store
+                .add_entry(CHAT_ID, Some("sprint"), &format!("Sprint entry {index}"))
+                .await
+        );
+    }
+    let second_card = assert_ok!(
+        store
+            .generate_card(CHAT_ID, Some("sprint"), &second_owner, false)
+            .await
+    );
+    assert_ok!(store.set_default_game(CHAT_ID, "season").await);
+
+    let cards = assert_ok!(store.cards(CHAT_ID).await);
+    assert_eq!(cards.len(), 1);
+    assert_eq!(assert_some!(cards.first()).id, first_card.id);
+    assert_ne!(assert_some!(cards.first()).id, second_card.id);
+}
+
+#[tokio::test]
+async fn listing_cards_requires_an_active_default_game() {
+    let store = store().await;
+    let owner = user(10, "driver");
+    assert_ok!(store.observe_user(CHAT_ID, &owner).await);
+    assert_ok!(
+        store
+            .create_game(CHAT_ID, "season", "Season", owner.user_id)
+            .await
+    );
+    assert_err!(store.cards(CHAT_ID).await);
+}
+
+#[tokio::test]
 async fn imports_entry_files_atomically_and_deduplicates_entries() {
     let store = store().await;
     assert_ok!(

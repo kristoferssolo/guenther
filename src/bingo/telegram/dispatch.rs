@@ -7,7 +7,7 @@ use crate::bingo::{
         admin::{AdminCache, is_chat_admin},
         document::read_entry_file,
         known_user, observe_message_users,
-        render::{HELP, send_card, send_entries, send_games, send_text},
+        render::{HELP, send_card, send_cards, send_entries, send_games, send_text},
     },
 };
 use teloxide::{
@@ -49,6 +49,10 @@ pub async fn execute_bingo(
             let owner = resolve_target(store, message, target.as_deref(), true).await?;
             let card = store.card(chat_id, slug.as_deref(), owner.user_id).await?;
             send_card(bot, message.chat.id, &card).await
+        }
+        BingoCommand::GetAll => {
+            let cards = store.cards(chat_id).await?;
+            send_cards(bot, message.chat.id, &cards).await
         }
         BingoCommand::Add { slug, text } => {
             let entry = store.add_entry(chat_id, slug.as_deref(), &text).await?;

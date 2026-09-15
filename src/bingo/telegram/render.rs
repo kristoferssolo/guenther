@@ -17,6 +17,7 @@ Everyone:
 /bingo games
 /bingo entries [game]
 /bingo get [game] [@user]
+/bingo get all
 /bingo add <entry>
 /bingo add <game> | <entry>
 /bingo generate [game]
@@ -89,6 +90,21 @@ pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
     if let Err(error) = text_result {
         let _ = bot.delete_message(chat_id, photo.id).await;
         return Err(error.into());
+    }
+    Ok(())
+}
+
+pub async fn send_cards(bot: &Bot, chat_id: ChatId, cards: &[Card]) -> Result<()> {
+    if cards.is_empty() {
+        return send_text(
+            bot,
+            chat_id,
+            "No bingo cards have been created for the active game.",
+        )
+        .await;
+    }
+    for card in cards {
+        send_card(bot, chat_id, card).await?;
     }
     Ok(())
 }

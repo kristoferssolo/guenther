@@ -109,7 +109,7 @@ callback-query handler.
 
 ## Docker
 
-The repository includes a multi-stage `Dockerfile` and a `docker-compose.yml`.
+The repository includes a multi-stage `Dockerfile` and a `compose.yml`.
 
 Build and start:
 
@@ -169,6 +169,23 @@ The bot reads `.env` and mounts:
 
 The runtime image installs `ffmpeg` for optional voice-line capture.
 
+### Build caching in Dokploy
+
+The Dockerfile caches Cargo downloads, compiled dependencies, and incremental
+build state with BuildKit cache mounts. Source changes can reuse dependencies
+as long as subsequent deployments use the same Docker builder and retain its
+cache. The first build after cache deletion compiles all dependencies again.
+
+Dokploy's **Daily Docker Cleanup** runs `docker builder prune --all --force`,
+which deletes these caches. Disable it in the instance's Docker settings to
+retain build caches between days. This setting affects all applications on the
+instance. Also leave Compose cache cleanup disabled.
+
+Check disk and cache usage with `docker system df`. When reclaiming build cache,
+prefer an age limit, for example `docker builder prune --filter 'until=168h'`,
+to preserve cache used within the last week. Avoid unfiltered builder or system
+pruning when investigating slow rebuilds.
+
 ## Commands
 
 The bot currently exposes:
@@ -191,7 +208,7 @@ entries and a pre-marked F1-themed center cell. `LIGHTS OUT!` is the default
 center text and chat administrators can customize it per game. Games can also
 have an introductory description, which is shown on every card.
 
-Anyone in the chat can list games and entries, add entries, or retrieve a card:
+Anyone in the chat can list games and entries, add entries, or retrieve cards:
 
 ```text
 /bingo games
@@ -200,8 +217,11 @@ Anyone in the chat can list games and entries, add entries, or retrieve a card:
 /bingo add <game> | <entry>
 /bingo generate [game]
 /bingo get
+/bingo get all
 /bingo get [game] @username
 ```
+
+`/bingo get all` retrieves every card in the chat's default active game.
 
 Only Telegram chat administrators can manage games, bulk-import entries, edit
 or delete entries, and manage other users' cards:
@@ -315,10 +335,11 @@ The database schema is applied automatically at startup through embedded SQLx
 migrations. For local runs, back up `data/bingo.sqlite3`; Compose deployments
 should back up the `bingo-data` volume.
 
-Bingo queries use SQLx's compile-time checked macros. Builds validate them
-online against the migrated SQLite database configured by `DATABASE_URL`.
-The container build creates a temporary database for this purpose; `.sqlx` is
-ignored because offline mode is not used.
+Bingo queries use SQLx's compile-time checked macros. Docker and CI builds use
+`SQLX_OFFLINE=true` with the checked-in `.sqlx` metadata, without starting a
+database or installing `sqlx-cli`. After changing queries, regenerate the
+metadata with `cargo sqlx prepare` against a migrated SQLite database configured
+by `DATABASE_URL` and commit the updated `.sqlx` files.
 
 ## Inline Voice Lines
 

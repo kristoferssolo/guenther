@@ -137,6 +137,32 @@ impl BingoStore {
         fetch_card(&self.pool, card_id).await
     }
 
+    pub async fn cards(&self, chat_id: ChatId) -> Result<Vec<Card>> {
+        let game = self.game(chat_id, None).await?;
+        ensure_active(&game)?;
+        let card_ids = sqlx::query_scalar!(
+            r#"
+            SELECT
+                id
+            FROM
+                bingo_cards
+            WHERE
+                game_id = ?
+            ORDER BY
+                id
+            "#,
+            game.id.get(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut cards = Vec::with_capacity(card_ids.len());
+        for card_id in card_ids {
+            cards.push(fetch_card(&self.pool, card_id.into()).await?);
+        }
+        Ok(cards)
+    }
+
     pub async fn set_card_cell(
         &self,
         chat_id: ChatId,

@@ -17,6 +17,7 @@ pub enum BingoCommand {
         slug: Option<String>,
         target: Option<String>,
     },
+    GetAll,
     Add {
         slug: Option<String>,
         text: String,
@@ -88,6 +89,7 @@ impl BingoCommand {
             Self::Games => "games",
             Self::Entries { .. } => "entries.list",
             Self::Get { .. } => "card.get",
+            Self::GetAll => "card.get_all",
             Self::Add { .. } => "entry.add",
             Self::Game(command) => command.name(),
             Self::Entry(command) => command.name(),
@@ -101,6 +103,7 @@ impl BingoCommand {
             | Self::Games
             | Self::Entries { .. }
             | Self::Get { .. }
+            | Self::GetAll
             | Self::Add { .. }
             | Self::Card(CardAdmin::Generate { replace: false, .. }) => false,
             Self::Game(_) | Self::Entry(_) | Self::Card(_) => true,
@@ -210,6 +213,14 @@ mod tests {
                 target: Some("@driver".to_owned()),
             }
         );
+    }
+
+    #[test]
+    fn parses_get_all_without_admin_privileges() {
+        let command = assert_ok!(BingoCommand::parse("get all"));
+        assert_eq!(command, BingoCommand::GetAll);
+        assert!(!command.requires_admin());
+        assert_err!(BingoCommand::parse("get all extra"));
     }
 
     #[test]
