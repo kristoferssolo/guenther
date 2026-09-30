@@ -637,3 +637,21 @@ unique_file_id = "AgADPCcAAlm-4VA"
 tags = ["charles", "leclerc", "incident"]
 source_file_id = "CQACAgQAAxkBAAICLmqcN1XFEb6qoSwGEVJswzKSgc7IAAI7JwACWb7hUAezDZdgftmKPQQ"
 source_unique_file_id = "AgADOycAAlm-4VA"
+
+[[voice_lines]]
+id = "AgADRCUAAsVR6FE"
+title = "Man, I love being taken out by a teammate.mp3"
+file_id = "AwACAgQAAxkDAAICRmq89oXYf_PW1nnL7ETNysLixCgwAAJEJQACxVHoURrI9Vsi2BbOPQQ"
+unique_file_id = "AgADRCUAAsVR6FE"
+tags = ["liam", "lawson", "crash"]
+source_file_id = "CQACAgQAAxkBAAICRWq89oRwCXxXJiClSjuiuOJEQKpUAAJDJQACxVHoUTEO41G6wH6-PQQ"
+source_unique_file_id = "AgADQyUAAsVR6FE"
+
+[[voice_lines]]
+id = "AgADRiUAAsVR6FE"
+title = "That's pretty sick.mp3"
+file_id = "AwACAgQAAxkDAAICSGq89oisDvHWR7WgYIRpH7WCseyxAAJGJQACxVHoUaFO2mXQZluOPQQ"
+unique_file_id = "AgADRiUAAsVR6FE"
+tags = ["liam", "lawson"]
+source_file_id = "CQACAgQAAxkBAAICR2q89oj2ZFuSVbtCWx_a-pp44NzDAAJFJQACxVHoUZlVp-cxiRZwPQQ"
+source_unique_file_id = "AgADRSUAAsVR6FE"
