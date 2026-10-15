@@ -1,5 +1,6 @@
 use claims::{assert_err, assert_none, assert_ok_eq, assert_some};
 use guenther::config::{Config, Platform};
+use strum::VariantArray;
 use temp_env::with_vars;
 
 fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
@@ -95,7 +96,7 @@ fn from_env_ignores_empty_cobalt_api_key() {
 fn from_env_enables_all_platforms_by_default() {
     with_clean_config_env(|| {
         let platforms = Config::from_env().platforms;
-        for platform in Platform::ALL {
+        for &platform in Platform::VARIANTS {
             assert!(platforms.is_enabled(platform));
         }
     });
@@ -116,7 +117,7 @@ fn from_env_enables_selected_platforms() {
 
 #[test]
 fn platforms_parse_and_display_with_standard_traits() {
-    assert_ok_eq!(" Instagram ".parse::<Platform>(), Platform::Instagram);
+    assert_ok_eq!("Instagram".parse::<Platform>(), Platform::Instagram);
     assert_ok_eq!("x".parse::<Platform>(), Platform::Twitter);
     assert_err!("mastodon".parse::<Platform>());
     assert_eq!(Platform::Youtube.to_string(), "youtube");
@@ -127,7 +128,7 @@ fn from_env_disables_all_platforms_when_empty() {
     with_clean_config_env(|| {
         with_vars([("ENABLED_PLATFORMS", Some(""))], || {
             let platforms = Config::from_env().platforms;
-            for platform in Platform::ALL {
+            for &platform in Platform::VARIANTS {
                 assert!(!platforms.is_enabled(platform));
             }
         });

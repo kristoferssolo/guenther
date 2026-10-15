@@ -1,9 +1,5 @@
-use std::{
-    collections::HashSet,
-    env,
-    fmt::{self, Display},
-    str::FromStr,
-};
+use std::{collections::HashSet, env};
+use strum::{Display, EnumString, VariantArray};
 use thiserror::Error;
 use tracing::warn;
 
@@ -12,10 +8,17 @@ pub struct PlatformConfig {
     enabled: HashSet<Platform>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString, VariantArray)]
+#[strum(
+    serialize_all = "lowercase",
+    ascii_case_insensitive,
+    parse_err_ty = ParsePlatformError,
+    parse_err_fn = ParsePlatformError::new
+)]
 pub enum Platform {
     Instagram,
     Tiktok,
+    #[strum(to_string = "twitter", serialize = "x")]
     Twitter,
     Youtube,
 }
@@ -23,6 +26,12 @@ pub enum Platform {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("Unknown platform `{0}`")]
 pub struct ParsePlatformError(String);
+
+impl ParsePlatformError {
+    fn new(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
 
 impl PlatformConfig {
     pub(super) fn from_env() -> Self {
@@ -71,36 +80,7 @@ impl PlatformConfig {
 impl Default for PlatformConfig {
     fn default() -> Self {
         Self {
-            enabled: Platform::ALL.into_iter().collect(),
+            enabled: Platform::VARIANTS.iter().copied().collect(),
         }
-    }
-}
-
-impl Platform {
-    pub const ALL: [Self; 4] = [Self::Instagram, Self::Tiktok, Self::Twitter, Self::Youtube];
-}
-
-impl FromStr for Platform {
-    type Err = ParsePlatformError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "instagram" => Ok(Self::Instagram),
-            "tiktok" => Ok(Self::Tiktok),
-            "twitter" | "x" => Ok(Self::Twitter),
-            "youtube" => Ok(Self::Youtube),
-            _ => Err(ParsePlatformError(value.to_owned())),
-        }
-    }
-}
-
-impl Display for Platform {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::Instagram => "instagram",
-            Self::Tiktok => "tiktok",
-            Self::Twitter => "twitter",
-            Self::Youtube => "youtube",
-        })
     }
 }

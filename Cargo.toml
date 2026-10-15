@@ -45,6 +45,7 @@ sqlx = { version = "0.9", default-features = false, features = [
   "runtime-tokio",
   "sqlite",
 ] }
+strum = { version = "0.28", features = ["derive"] }
 teloxide = { version = "0.17", default-features = false, features = [
   "ctrlc_handler",
   "macros",
