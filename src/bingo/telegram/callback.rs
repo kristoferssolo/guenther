@@ -1,6 +1,6 @@
 use crate::bingo::{
     card_image::render_card_png,
-    error::Result,
+    error::{BingoError, Result},
     model::{CardId, Position, ToggleResult},
     store::BingoStore,
     telegram::{
@@ -12,7 +12,9 @@ use teloxide::{
     ApiError, RequestError,
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
     prelude::{Bot, Requester},
-    types::{CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, MessageId},
+    types::{
+        CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, Message, MessageId, UserId,
+    },
 };
 use tracing::{debug, info, warn};
 
@@ -40,30 +42,13 @@ pub async fn answer_callback(
         bot.answer_callback_query(query.id.clone()).await?;
         return Ok(());
     };
-    let chat_id = message.chat.id;
-    let can_edit_any_card = is_user_chat_admin(
-        bot,
-        chat_id,
-        query.from.id,
-        message.chat.is_private(),
-        admin_cache,
-    )
-    .await?;
     debug!(
         card_id = %callback.card_id,
         %callback.position,
-        can_edit_any_card,
         "Toggling bingo card cell"
     );
-    let result = store
-        .toggle_cell(
-            chat_id,
-            callback.card_id,
-            query.from.id,
-            callback.position,
-            can_edit_any_card,
-        )
-        .await;
+    let result =
+        toggle_as_owner_or_admin(bot, store, admin_cache, message, query.from.id, callback).await;
     match result {
         Ok(toggle) => finish_toggle(bot, query, toggle, callback.image_message_id).await,
         Err(error) if error.is_user_facing() => {
@@ -85,6 +70,45 @@ pub async fn answer_callback(
             Err(error)
         }
     }
+}
+
+/// Toggles as the card owner first, so chat administrators are only looked up when someone taps
+/// another user's card. Retrying is safe because ownership is checked before any write.
+async fn toggle_as_owner_or_admin(
+    bot: &Bot,
+    store: &BingoStore,
+    admin_cache: &AdminCache,
+    message: &Message,
+    user_id: UserId,
+    callback: CardCallback,
+) -> Result<ToggleResult> {
+    let chat_id = message.chat.id;
+    let toggle = move |can_edit_any_card| {
+        store.toggle_cell(
+            chat_id,
+            callback.card_id,
+            user_id,
+            callback.position,
+            can_edit_any_card,
+        )
+    };
+    match toggle(false).await {
+        Err(BingoError::NotCardOwner) => {}
+        result => return result,
+    }
+    let is_admin = is_user_chat_admin(
+        bot,
+        chat_id,
+        user_id,
+        message.chat.is_private(),
+        admin_cache,
+    )
+    .await?;
+    if !is_admin {
+        return Err(BingoError::NotCardOwner);
+    }
+    debug!("Toggling another user's bingo card as a chat administrator");
+    toggle(true).await
 }
 
 async fn finish_toggle(
