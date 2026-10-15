@@ -4,6 +4,7 @@ use crate::{
 };
 use reqwest::Client;
 use serde_json::Value;
+use std::collections::HashSet;
 use tempfile::tempdir;
 use tokio::fs;
 use tracing::debug;
@@ -116,10 +117,11 @@ fn extract_photo_urls(payload: &Value) -> Vec<String> {
                 .map(str::to_owned)
         });
 
-    let mut urls = photos.chain(media_details).collect::<Vec<_>>();
-    urls.sort();
-    urls.dedup();
-    urls
+    let mut seen = HashSet::new();
+    photos
+        .chain(media_details)
+        .filter(|url| seen.insert(url.clone()))
+        .collect()
 }
 
 fn image_extension(url: &str) -> String {
@@ -148,6 +150,27 @@ mod tests {
         assert_eq!(
             extract_tweet_id("https://x.com/i/status/2037463638215462967").as_deref(),
             Some("2037463638215462967")
+        );
+    }
+
+    #[test]
+    fn extracts_photo_urls_in_tweet_order_without_duplicates() {
+        let payload = json!({
+            "photos": [
+                { "url": "https://pbs.twimg.com/media/b.jpg" },
+                { "url": "https://pbs.twimg.com/media/a.jpg" }
+            ],
+            "mediaDetails": [
+                { "type": "photo", "media_url_https": "https://pbs.twimg.com/media/b.jpg" }
+            ]
+        });
+
+        assert_eq!(
+            extract_photo_urls(&payload),
+            vec![
+                "https://pbs.twimg.com/media/b.jpg".to_owned(),
+                "https://pbs.twimg.com/media/a.jpg".to_owned()
+            ]
         );
     }
 
