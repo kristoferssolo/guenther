@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    utils::{MediaKind, detect_media_kind_async},
+    utils::{MediaKind, detect_media_kind},
 };
 use futures::{StreamExt, stream};
 use std::{cmp::min, path::PathBuf};
@@ -38,11 +38,7 @@ pub async fn collect_supported_media(
             return None;
         }
 
-        let kind = detect_media_kind_async(&path).await;
-        match kind {
-            MediaKind::Unknown => None,
-            k => Some((path, k)),
-        }
+        detect_media_kind(&path).await.map(|kind| (path, kind))
     }))
     .buffered(concurrency)
     .collect::<Vec<_>>()

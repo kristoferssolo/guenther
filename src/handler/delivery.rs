@@ -2,7 +2,7 @@ use guenther::{
     cache::CachedMedia,
     comments::TELEGRAM_CAPTION_LIMIT,
     config::Platform,
-    error::{Error, Result},
+    error::Result,
     utils::{MediaKind, truncate_with_ellipsis},
 };
 use std::path::PathBuf;
@@ -45,7 +45,7 @@ pub(super) async fn send_media(
                 let caption = (index == 0).then(|| caption.to_owned());
                 into_input_media(input.clone(), *kind, caption)
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Vec<_>>();
 
         let messages = bot.send_media_group(chat_id, group).await?;
         info!(media_count = messages.len(), "Album sent");
@@ -60,11 +60,7 @@ pub(super) async fn send_media(
     Ok(cached)
 }
 
-fn into_input_media(
-    input: InputFile,
-    kind: MediaKind,
-    caption: Option<String>,
-) -> Result<InputMedia> {
+fn into_input_media(input: InputFile, kind: MediaKind, caption: Option<String>) -> InputMedia {
     macro_rules! with_caption {
         ($media:expr) => {
             match caption {
@@ -75,13 +71,8 @@ fn into_input_media(
     }
 
     match kind {
-        MediaKind::Video => Ok(InputMedia::Video(with_caption!(InputMediaVideo::new(
-            input
-        )))),
-        MediaKind::Image => Ok(InputMedia::Photo(with_caption!(InputMediaPhoto::new(
-            input
-        )))),
-        MediaKind::Unknown => Err(Error::UnknownMediaKind),
+        MediaKind::Video => InputMedia::Video(with_caption!(InputMediaVideo::new(input))),
+        MediaKind::Image => InputMedia::Photo(with_caption!(InputMediaPhoto::new(input))),
     }
 }
 
@@ -103,7 +94,6 @@ fn extract_cached_media(message: &Message, kind: MediaKind) -> Option<CachedMedi
                 file_id: photo.file.id.0.clone(),
             })
         }
-        MediaKind::Unknown => None,
     }
 }
 
@@ -125,11 +115,6 @@ async fn send_single(
     match kind {
         MediaKind::Video => Ok(send_msg!(bot.send_video(chat_id, input))),
         MediaKind::Image => Ok(send_msg!(bot.send_photo(chat_id, input))),
-        MediaKind::Unknown => {
-            bot.send_message(chat_id, "No supported media found")
-                .await?;
-            Err(Error::UnknownMediaKind)
-        }
     }
 }
 
@@ -168,7 +153,7 @@ pub(super) fn compose_caption(quote: &str, source_text: Option<&str>) -> String 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
+    use claims::{assert_none, assert_some, assert_some_eq};
 
     #[test]
     fn compose_caption_appends_source_text() {
@@ -183,7 +168,7 @@ mod tests {
             MediaKind::Image,
             Some("caption".to_owned()),
         );
-        let photo = assert_some!(match assert_ok!(photo) {
+        let photo = assert_some!(match photo {
             InputMedia::Photo(photo) => Some(photo),
             _ => None,
         });
@@ -194,7 +179,7 @@ mod tests {
             MediaKind::Video,
             None,
         );
-        let video = assert_some!(match assert_ok!(video) {
+        let video = assert_some!(match video {
             InputMedia::Video(video) => Some(video),
             _ => None,
         });

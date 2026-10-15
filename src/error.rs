@@ -20,9 +20,6 @@ pub enum Error {
     #[error("No media found")]
     NoMediaFound,
 
-    #[error("Unknown media kind")]
-    UnknownMediaKind,
-
     #[error("Failed to fetch the F1 schedule: {0}")]
     FetchF1Schedule(#[source] reqwest::Error),
 

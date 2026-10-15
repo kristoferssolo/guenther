@@ -10,15 +10,13 @@ pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bm
 pub enum MediaKind {
     Video,
     Image,
-    Unknown,
 }
 
 impl MediaKind {
-    pub const fn to_str(&self) -> &str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Video => "video",
             Self::Image => "image",
-            Self::Unknown => "unknown",
         }
     }
 }
@@ -38,23 +36,24 @@ fn detect_from_extension(path: &Path) -> Option<MediaKind> {
     None
 }
 
-fn detect_from_mime(mime_type: &str) -> MediaKind {
+fn detect_from_mime(mime_type: &str) -> Option<MediaKind> {
     match mime_type.split('/').next() {
-        Some("video") => MediaKind::Video,
-        Some("image") => MediaKind::Image,
-        _ => MediaKind::Unknown,
+        Some("video") => Some(MediaKind::Video),
+        Some("image") => Some(MediaKind::Image),
+        _ => None,
     }
 }
 
-/// Detect media kind without blocking on file I/O.
-pub async fn detect_media_kind_async(path: &Path) -> MediaKind {
+/// Detect media kind without blocking on file I/O, or `None` when the file is
+/// neither a video nor an image.
+pub async fn detect_media_kind(path: &Path) -> Option<MediaKind> {
     if let Some(kind) = detect_from_extension(path) {
-        return kind;
+        return Some(kind);
     }
 
     let Ok(mut file) = File::open(path).await else {
         warn!(path = ?path.display(), "Failed to open file for media detection");
-        return MediaKind::Unknown;
+        return None;
     };
 
     let mut buffer = vec![0u8; 8192];
@@ -67,7 +66,7 @@ pub async fn detect_media_kind_async(path: &Path) -> MediaKind {
         }
     }
 
-    MediaKind::Unknown
+    None
 }
 
 /// Truncate text by Unicode scalar values and append `...` when needed.
@@ -86,19 +85,9 @@ pub fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
     format!("{truncated}...")
 }
 
-impl AsRef<str> for MediaKind {
-    fn as_ref(&self) -> &str {
-        self.to_str()
-    }
-}
-
 impl Display for MediaKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Video => "Video",
-            Self::Image => "Image",
-            Self::Unknown => "Unknown",
-        })
+        f.write_str(self.as_str())
     }
 }
 
@@ -106,6 +95,15 @@ impl Display for MediaKind {
 mod tests {
     use super::*;
     use claims::{assert_none, assert_some_eq};
+    use rstest::rstest;
+
+    #[rstest]
+    #[case("video/mp4", Some(MediaKind::Video))]
+    #[case("image/png", Some(MediaKind::Image))]
+    #[case("text/plain", None)]
+    fn detect_media_kind_by_mime(#[case] mime_type: &str, #[case] expected: Option<MediaKind>) {
+        assert_eq!(detect_from_mime(mime_type), expected);
+    }
 
     #[test]
     fn detect_media_kind_by_extension() {

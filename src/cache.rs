@@ -80,8 +80,7 @@ impl MediaCache {
     ///
     /// # Errors
     ///
-    /// Returns an error when the transaction fails or an item is not a
-    /// storable `video`/`image` kind.
+    /// Returns an error when the transaction fails.
     pub async fn put(&self, cache_key: &str, items: &[CachedMedia]) -> Result<()> {
         if items.is_empty() {
             return Ok(());
@@ -101,15 +100,7 @@ impl MediaCache {
         for (index, item) in items.iter().enumerate() {
             let position =
                 i64::try_from(index).map_err(|_| CacheError::PositionOutOfRange(index))?;
-            let kind = match item.kind {
-                MediaKind::Video => "video",
-                MediaKind::Image => "image",
-                MediaKind::Unknown => {
-                    return Err(CacheError::InvalidMediaKind(
-                        MediaKind::Unknown.to_str().to_owned(),
-                    ));
-                }
-            };
+            let kind = item.kind.as_str();
             sqlx::query!(
                 r#"
                 INSERT INTO
