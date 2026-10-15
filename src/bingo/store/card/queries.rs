@@ -111,7 +111,8 @@ pub async fn fetch_card(connection: &mut SqliteConnection, card_id: CardId) -> R
         FROM
             bingo_cards c
             JOIN bingo_games g ON g.id = c.game_id
-            LEFT JOIN bingo_users u ON u.chat_id = g.chat_id AND u.user_id = c.user_id
+            LEFT JOIN bingo_users u ON u.chat_id = g.chat_id
+            AND u.user_id = c.user_id
         WHERE
             c.id = ?
         "#,
