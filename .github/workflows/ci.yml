@@ -31,9 +31,17 @@ jobs:
       - name: Run tests
         run: cargo nextest run --locked --workspace --all-features
   clippy:
-    name: Clippy
+    name: Clippy (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: all features
+            features: --all-features
+          - name: no default features
+            features: --no-default-features
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -44,7 +52,7 @@ jobs:
       - name: Populate target directory from cache
         uses: Swatinem/rust-cache@v2
       - name: Run clippy lints
-        run: cargo clippy --locked --workspace --all-features --all-targets -- --deny warnings
+        run: cargo clippy --locked --workspace ${{ matrix.features }} --all-targets -- --deny warnings
   format:
     name: Format
     runs-on: ubuntu-latest
