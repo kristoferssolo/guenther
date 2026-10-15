@@ -48,6 +48,12 @@ pub enum BingoError {
 
     #[error("Database contains invalid bingo entry number {0}")]
     InvalidStoredEntryNumber(i64),
+
+    #[error("Database contains unknown game state `{0}`")]
+    InvalidStoredGameState(String),
+
+    #[error("Database contains invalid bingo cell position {0}")]
+    InvalidStoredCellPosition(i64),
 }
 
 impl BingoError {

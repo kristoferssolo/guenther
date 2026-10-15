@@ -474,9 +474,8 @@ pub async fn card_id_in(
 fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
     rows.into_iter()
         .map(|row| {
-            let position = Position::try_from(row.position).map_err(|_| {
-                BingoError::Conflict("Database contains an invalid cell position".to_owned())
-            })?;
+            let position = Position::try_from(row.position)
+                .map_err(|_| BingoError::InvalidStoredCellPosition(row.position))?;
             Ok(CardCell {
                 position,
                 text: row.text,
