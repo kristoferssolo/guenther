@@ -204,7 +204,6 @@ async fn bingo_callback_handler(
 ) -> color_eyre::Result<()> {
     if let Err(err) = answer_callback(&bot, &query, &bingo_store, &admin_cache).await {
         error!(%err, "Failed to answer bingo callback");
-        return Err(err.into());
     }
     Ok(())
 }
