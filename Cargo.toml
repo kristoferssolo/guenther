@@ -67,6 +67,7 @@ url = "2.5"
 
 [dev-dependencies]
 claims = "0.8"
+rstest = "0.27"
 temp-env = "0.3"
 
 [lints.clippy]
