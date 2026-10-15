@@ -18,18 +18,6 @@ pub struct Config {
     pub f1: F1Config,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            chat_id: None,
-            database_url: crate::db::DEFAULT_DATABASE_URL.to_owned(),
-            cobalt: CobaltConfig::default(),
-            platforms: PlatformConfig::default(),
-            f1: F1Config::default(),
-        }
-    }
-}
-
 impl Config {
     /// Load configuration from environment variables.
     pub fn from_env() -> Self {

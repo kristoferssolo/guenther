@@ -3,19 +3,19 @@ use crate::{
     utils::truncate_with_ellipsis,
 };
 use rand::{rng, seq::IndexedRandom};
-use std::{fmt::Display, path::Path};
+use std::path::Path;
 use tokio::fs::read_to_string;
 
 /// Telegram caps media captions at 1024 characters, below the 4096 allowed for
 /// text messages.
 pub const TELEGRAM_CAPTION_LIMIT: usize = 1024;
+const DEFAULT_COMMENT: &str = "Here you go. Judge for yourself.";
 const FALLBACK_COMMENTS: &[&str] = &[
     "Oh come on, that's brilliant – and slightly chaotic, like always.",
     "That is a proper bit of craftsmanship – then someone presses the red button.",
     "Nice shot – looks good on the trailer, not so good on the gearbox.",
-    "Here you go. Judge for yourself.",
+    DEFAULT_COMMENT,
 ];
-const DEFAULT_COMMENT: &str = "Here you go. Judge for yourself.";
 const FAILURE_COMMENTS: &[&str] = &[
     "Failed to fetch the media, you foking donkey.",
     "The link is there, the media is not. What a foking mess.",
@@ -75,12 +75,6 @@ impl Comments {
     pub fn build_caption(&self) -> String {
         truncate_with_ellipsis(self.pick(), TELEGRAM_CAPTION_LIMIT)
     }
-
-    /// Get a reference to the underlying lines for debugging or testing.
-    #[cfg(test)]
-    pub fn lines(&self) -> &[String] {
-        &self.lines
-    }
 }
 
 impl Default for Comments {
@@ -98,24 +92,6 @@ pub fn failure_comment() -> &'static str {
         .choose(&mut rng)
         .copied()
         .unwrap_or("Failed to fetch media.")
-}
-
-impl Display for Comments {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.build_caption())
-    }
-}
-
-impl From<Comments> for String {
-    fn from(value: Comments) -> Self {
-        value.to_string()
-    }
-}
-
-impl From<&Comments> for String {
-    fn from(value: &Comments) -> Self {
-        value.to_string()
-    }
 }
 
 #[cfg(test)]
