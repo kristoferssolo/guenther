@@ -1,7 +1,13 @@
-use claims::{assert_err, assert_none, assert_ok_eq, assert_some};
-use guenther::config::{Config, Platform};
+use claims::{assert_err, assert_ok_eq};
+use guenther::{
+    config::{Config, Platform},
+    db::DEFAULT_DATABASE_URL,
+};
+use rstest::rstest;
 use strum::VariantArray;
 use temp_env::with_vars;
+
+const DEFAULT_COBALT_API_URL: &str = "http://127.0.0.1:9000/";
 
 fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
     with_vars(
@@ -17,102 +23,61 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
     )
 }
 
-#[test]
-fn from_env_sets_chat_id_when_valid() {
-    with_clean_config_env(|| {
-        with_vars([("CHAT_ID", Some("12345"))], || {
-            let cfg = Config::from_env();
-            let chat_id = assert_some!(cfg.chat_id);
-            assert_eq!(chat_id, 12345);
-        });
-    });
+fn config_with(vars: &[(&str, Option<&str>)]) -> Config {
+    with_clean_config_env(|| with_vars(vars, Config::from_env))
 }
 
-#[test]
-fn from_env_uses_none_when_chat_id_invalid() {
-    with_clean_config_env(|| {
-        with_vars([("CHAT_ID", Some("invalid"))], || {
-            let cfg = Config::from_env();
-            assert_none!(cfg.chat_id);
-        });
-    });
+#[rstest]
+#[case::valid(Some("12345"), Some(12345))]
+#[case::padded(Some(" 123 "), Some(123))]
+#[case::invalid(Some("invalid"), None)]
+#[case::empty(Some(""), None)]
+#[case::missing(None, None)]
+fn chat_id(#[case] raw: Option<&str>, #[case] expected: Option<i64>) {
+    assert_eq!(config_with(&[("CHAT_ID", raw)]).chat_id, expected);
 }
 
-#[test]
-fn from_env_uses_none_when_chat_id_missing() {
-    with_clean_config_env(|| {
-        let cfg = Config::from_env();
-        assert_none!(cfg.chat_id);
-    });
+#[rstest]
+#[case::set(
+    Some("https://cobalt.example/"),
+    Some("secret-key"),
+    "https://cobalt.example/",
+    Some("secret-key")
+)]
+#[case::defaults(None, None, DEFAULT_COBALT_API_URL, None)]
+#[case::whitespace_key(None, Some("  "), DEFAULT_COBALT_API_URL, None)]
+fn cobalt(
+    #[case] url: Option<&str>,
+    #[case] key: Option<&str>,
+    #[case] expected_url: &str,
+    #[case] expected_key: Option<&str>,
+) {
+    let cobalt = config_with(&[("COBALT_API_URL", url), ("COBALT_API_KEY", key)]).cobalt;
+    assert_eq!(cobalt.api_url, expected_url);
+    assert_eq!(cobalt.api_key.as_deref(), expected_key);
 }
 
-#[test]
-fn from_env_sets_cobalt_configuration() {
-    with_clean_config_env(|| {
-        with_vars(
-            [
-                ("COBALT_API_URL", Some("https://cobalt.example/")),
-                ("COBALT_API_KEY", Some("secret-key")),
-            ],
-            || {
-                let cfg = Config::from_env();
-                assert_eq!(cfg.cobalt.api_url, "https://cobalt.example/");
-                assert_eq!(cfg.cobalt.api_key.as_deref(), Some("secret-key"));
-            },
-        );
-    });
+#[rstest]
+#[case::set(Some("sqlite://custom.sqlite3"), "sqlite://custom.sqlite3")]
+#[case::default(None, DEFAULT_DATABASE_URL)]
+fn database_url(#[case] raw: Option<&str>, #[case] expected: &str) {
+    assert_eq!(config_with(&[("DATABASE_URL", raw)]).database_url, expected);
 }
 
-#[test]
-fn from_env_uses_default_cobalt_configuration() {
-    with_clean_config_env(|| {
-        let cfg = Config::from_env();
-        assert_eq!(cfg.cobalt.api_url, "http://127.0.0.1:9000/");
-        assert_none!(cfg.cobalt.api_key);
-    });
-}
-
-#[test]
-fn from_env_sets_database_url() {
-    with_clean_config_env(|| {
-        with_vars([("DATABASE_URL", Some("sqlite://custom.sqlite3"))], || {
-            let cfg = Config::from_env();
-            assert_eq!(cfg.database_url, "sqlite://custom.sqlite3");
-        });
-    });
-}
-
-#[test]
-fn from_env_ignores_empty_cobalt_api_key() {
-    with_clean_config_env(|| {
-        with_vars([("COBALT_API_KEY", Some("  "))], || {
-            let cfg = Config::from_env();
-            assert_none!(cfg.cobalt.api_key);
-        });
-    });
-}
-
-#[test]
-fn from_env_enables_all_platforms_by_default() {
-    with_clean_config_env(|| {
-        let platforms = Config::from_env().platforms;
-        for &platform in Platform::VARIANTS {
-            assert!(platforms.is_enabled(platform));
-        }
-    });
-}
-
-#[test]
-fn from_env_enables_selected_platforms() {
-    with_clean_config_env(|| {
-        with_vars([("ENABLED_PLATFORMS", Some(" Instagram, X "))], || {
-            let platforms = Config::from_env().platforms;
-            assert!(platforms.is_enabled(Platform::Instagram));
-            assert!(platforms.is_enabled(Platform::Twitter));
-            assert!(!platforms.is_enabled(Platform::Tiktok));
-            assert!(!platforms.is_enabled(Platform::Youtube));
-        });
-    });
+#[rstest]
+#[case::unset_enables_all(None, Platform::VARIANTS)]
+#[case::empty_disables_all(Some(""), &[])]
+#[case::selection(Some(" Instagram, X "), &[Platform::Instagram, Platform::Twitter])]
+#[case::all(Some("all"), Platform::VARIANTS)]
+#[case::unknown_skipped(Some("mastodon, tiktok"), &[Platform::Tiktok])]
+fn enabled_platforms(#[case] raw: Option<&str>, #[case] expected: &[Platform]) {
+    let platforms = config_with(&[("ENABLED_PLATFORMS", raw)]).platforms;
+    let enabled = Platform::VARIANTS
+        .iter()
+        .copied()
+        .filter(|&platform| platforms.is_enabled(platform))
+        .collect::<Vec<_>>();
+    assert_eq!(enabled, expected);
 }
 
 #[test]
@@ -123,34 +88,15 @@ fn platforms_parse_and_display_with_standard_traits() {
     assert_eq!(Platform::Youtube.to_string(), "youtube");
 }
 
-#[test]
-fn from_env_disables_all_platforms_when_empty() {
-    with_clean_config_env(|| {
-        with_vars([("ENABLED_PLATFORMS", Some(""))], || {
-            let platforms = Config::from_env().platforms;
-            for &platform in Platform::VARIANTS {
-                assert!(!platforms.is_enabled(platform));
-            }
-        });
-    });
-}
-
-#[test]
-fn from_env_sets_f1_utc_offset_when_valid() {
-    with_clean_config_env(|| {
-        with_vars([("F1_UTC_OFFSET", Some("+3"))], || {
-            let cfg = Config::from_env();
-            assert_eq!(cfg.f1.utc_offset.local_minus_utc(), 10_800);
-        });
-    });
-}
-
-#[test]
-fn from_env_uses_utc_when_f1_utc_offset_invalid() {
-    with_clean_config_env(|| {
-        with_vars([("F1_UTC_OFFSET", Some("wat"))], || {
-            let cfg = Config::from_env();
-            assert_eq!(cfg.f1.utc_offset.local_minus_utc(), 0);
-        });
-    });
+#[rstest]
+#[case::hours(Some("+3"), 10_800)]
+#[case::padded_hours(Some("+03"), 10_800)]
+#[case::hours_minutes(Some("+03:00"), 10_800)]
+#[case::negative_minutes(Some("-5:30"), -19_800)]
+#[case::invalid(Some("wat"), 0)]
+#[case::empty(Some(""), 0)]
+#[case::missing(None, 0)]
+fn f1_utc_offset(#[case] raw: Option<&str>, #[case] expected_seconds: i32) {
+    let offset = config_with(&[("F1_UTC_OFFSET", raw)]).f1.utc_offset;
+    assert_eq!(offset.local_minus_utc(), expected_seconds);
 }
