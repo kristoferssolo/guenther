@@ -6,7 +6,9 @@ use rand::{rng, seq::IndexedRandom};
 use std::{fmt::Display, path::Path};
 use tokio::fs::read_to_string;
 
-pub const TELEGRAM_CAPTION_LIMIT: usize = 4096;
+/// Telegram caps media captions at 1024 characters, below the 4096 allowed for
+/// text messages.
+pub const TELEGRAM_CAPTION_LIMIT: usize = 1024;
 const FALLBACK_COMMENTS: &[&str] = &[
     "Oh come on, that's brilliant – and slightly chaotic, like always.",
     "That is a proper bit of craftsmanship – then someone presses the red button.",
