@@ -3,7 +3,7 @@ use crate::bingo::{
     model::{Card, CardCell, CardId, EntryId, EntryNumber, Game, GameId, KnownUser, Position},
     store::id::{db_user_id, user_id_from_db},
 };
-use sqlx::{Sqlite, SqliteExecutor, SqlitePool, Transaction};
+use sqlx::{Sqlite, SqliteConnection, SqliteExecutor, Transaction};
 use teloxide::types::{ChatId, UserId};
 
 #[derive(Debug)]
@@ -20,13 +20,15 @@ struct CardRow {
     center_text: String,
     state: String,
     is_default: bool,
+    known_username: Option<String>,
+    known_display_name: Option<String>,
 }
 
 impl CardRow {
-    fn into_card(self, known_user: Option<KnownUserRow>, cells: Vec<CardCell>) -> Result<Card> {
-        let (username, display_name) = known_user.map_or_else(
+    fn into_card(self, cells: Vec<CardCell>) -> Result<Card> {
+        let (username, display_name) = self.known_display_name.map_or_else(
             || (None, self.owner_name),
-            |user| (user.username, user.display_name),
+            |display_name| (self.known_username, display_name),
         );
         let owner = KnownUser {
             user_id: user_id_from_db(self.user_id)?,
@@ -54,12 +56,6 @@ impl CardRow {
 }
 
 #[derive(Debug)]
-struct KnownUserRow {
-    username: Option<String>,
-    display_name: String,
-}
-
-#[derive(Debug)]
 struct CellRow {
     position: i64,
     text: String,
@@ -71,13 +67,6 @@ struct CellRow {
 pub struct ActiveEntry {
     pub id: EntryId,
     pub text: String,
-}
-
-#[derive(Debug)]
-pub struct ToggleContext {
-    pub user_id: i64,
-    pub bingo_announced: bool,
-    pub state: String,
 }
 
 pub struct NewCell<'a> {
@@ -100,7 +89,7 @@ impl<'a> NewCell<'a> {
     }
 }
 
-pub async fn fetch_card(pool: &SqlitePool, card_id: CardId) -> Result<Card> {
+pub async fn fetch_card(connection: &mut SqliteConnection, card_id: CardId) -> Result<Card> {
     let row = sqlx::query_as!(
         CardRow,
         r#"
@@ -116,37 +105,23 @@ pub async fn fetch_card(pool: &SqlitePool, card_id: CardId) -> Result<Card> {
             g.description,
             g.center_text,
             g.state,
-            g.is_default AS `is_default: bool`
+            g.is_default AS `is_default: bool`,
+            u.username AS `known_username?`,
+            u.display_name AS `known_display_name?`
         FROM
             bingo_cards c
             JOIN bingo_games g ON g.id = c.game_id
+            LEFT JOIN bingo_users u ON u.chat_id = g.chat_id AND u.user_id = c.user_id
         WHERE
             c.id = ?
         "#,
         card_id.get(),
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *connection)
     .await?
     .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
-    let known_user = sqlx::query_as!(
-        KnownUserRow,
-        r#"
-        SELECT
-            username,
-            display_name
-        FROM
-            bingo_users
-        WHERE
-            chat_id = ?
-            AND user_id = ?
-        "#,
-        row.chat_id,
-        row.user_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-    let cells = fetch_cells(pool, card_id).await?;
-    row.into_card(known_user, cells)
+    let cells = fetch_cells(connection, card_id).await?;
+    row.into_card(cells)
 }
 
 pub async fn delete_or_reject_existing(
@@ -360,41 +335,13 @@ pub async fn reset_card_state(
     Ok(())
 }
 
-pub async fn fetch_toggle_context(
-    transaction: &mut Transaction<'_, Sqlite>,
-    card_id: CardId,
-) -> Result<ToggleContext> {
-    let row = sqlx::query!(
-        r#"
-        SELECT
-            c.user_id,
-            c.bingo_announced AS `bingo_announced: bool`,
-            g.state
-        FROM
-            bingo_cards c
-            JOIN bingo_games g ON g.id = c.game_id
-        WHERE
-            c.id = ?
-        "#,
-        card_id.get(),
-    )
-    .fetch_optional(&mut **transaction)
-    .await?
-    .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
-    Ok(ToggleContext {
-        user_id: row.user_id,
-        bingo_announced: row.bingo_announced,
-        state: row.state,
-    })
-}
-
 pub async fn toggle_cell_mark(
     transaction: &mut Transaction<'_, Sqlite>,
     card_id: CardId,
     position: Position,
-) -> Result<u64> {
+) -> Result<()> {
     let position = i64::from(position);
-    Ok(sqlx::query!(
+    sqlx::query!(
         r#"
         UPDATE
             bingo_card_cells
@@ -409,8 +356,8 @@ pub async fn toggle_cell_mark(
         position,
     )
     .execute(&mut **transaction)
-    .await?
-    .rows_affected())
+    .await?;
+    Ok(())
 }
 
 pub async fn announce_bingo(
@@ -433,10 +380,7 @@ pub async fn announce_bingo(
     Ok(())
 }
 
-pub async fn fetch_cells<'e>(
-    executor: impl SqliteExecutor<'e>,
-    card_id: CardId,
-) -> Result<Vec<CardCell>> {
+async fn fetch_cells(connection: &mut SqliteConnection, card_id: CardId) -> Result<Vec<CardCell>> {
     let rows = sqlx::query_as!(
         CellRow,
         r#"
@@ -454,7 +398,7 @@ pub async fn fetch_cells<'e>(
         "#,
         card_id.get(),
     )
-    .fetch_all(executor)
+    .fetch_all(connection)
     .await?;
     convert_cells(rows)
 }

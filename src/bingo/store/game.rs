@@ -34,34 +34,29 @@ impl BingoStore {
         validate_nonempty(name, "game name", 100)?;
         let chat_id = chat_id.0;
         let created_by = db_user_id(created_by)?;
-        let mut transaction = self.pool.begin().await?;
-        let has_default = sqlx::query_scalar!(
-            r#"
-            SELECT
-                EXISTS(
-                    SELECT
-                        1
-                    FROM
-                        bingo_games
-                    WHERE
-                        chat_id = ?
-                        AND is_default = 1
-                ) AS `has_default!: bool`
-            "#,
-            chat_id,
-        )
-        .fetch_one(&mut *transaction)
-        .await?;
         let normalized_slug = slug.to_ascii_lowercase();
         let name = name.trim();
-        let is_default = !has_default;
         let row = sqlx::query_as!(
             GameRow,
             r#"
             INSERT INTO
                 bingo_games (chat_id, slug, name, is_default, created_by)
             VALUES
-                (?, ?, ?, ?, ?)
+                (
+                    ?1,
+                    ?2,
+                    ?3,
+                    NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            bingo_games
+                        WHERE
+                            chat_id = ?1
+                            AND is_default = 1
+                    ),
+                    ?4
+                )
             RETURNING
                 id,
                 chat_id,
@@ -75,15 +70,12 @@ impl BingoStore {
             chat_id,
             normalized_slug,
             name,
-            is_default,
             created_by,
         )
-        .fetch_one(&mut *transaction)
+        .fetch_one(&self.pool)
         .await
         .map_err(|error| map_unique(error, || format!("Game `{slug}` already exists")))?;
-        let game = row.try_into()?;
-        transaction.commit().await?;
-        Ok(game)
+        row.try_into()
     }
 
     pub async fn list_games(&self, chat_id: ChatId) -> Result<Vec<Game>> {
