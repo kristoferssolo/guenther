@@ -6,9 +6,9 @@ use url::Url;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaLink {
     pub platform: Platform,
-    pub(crate) original_url: String,
-    pub(crate) cache_key: String,
-    pub(crate) source_position: usize,
+    pub original_url: String,
+    pub cache_key: String,
+    pub source_position: usize,
 }
 
 pub fn extract_media_links(

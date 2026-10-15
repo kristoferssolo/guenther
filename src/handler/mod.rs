@@ -34,7 +34,7 @@ pub enum HandlerError {
 type Result<T> = StdResult<T, HandlerError>;
 
 #[derive(Debug, Clone)]
-pub(crate) struct Handler {
+struct Handler {
     platform: Platform,
     regex: Regex,
 }
@@ -190,16 +190,16 @@ impl MediaHandlers {
 }
 
 impl Handler {
-    pub(crate) fn new(platform: Platform, regex_pattern: &str) -> StdResult<Self, RegexError> {
+    fn new(platform: Platform, regex_pattern: &str) -> StdResult<Self, RegexError> {
         let regex = Regex::new(regex_pattern)?;
         Ok(Self { platform, regex })
     }
 
-    pub(crate) const fn platform(&self) -> Platform {
+    const fn platform(&self) -> Platform {
         self.platform
     }
 
-    pub(crate) fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
+    fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
         self.regex
             .captures_iter(text)
             .filter_map(|captures| {
