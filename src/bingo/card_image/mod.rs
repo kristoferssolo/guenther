@@ -2,15 +2,20 @@ mod draw;
 mod layout;
 mod text;
 
-use crate::bingo::{error::Result, model::Card};
-use draw::{draw_circle, draw_grid, draw_text_block};
-use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
-use layout::{
-    BLACK, CELL_PADDING, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH, MARKED_RED,
-    TITLE, WHITE, cell_rect,
+use crate::bingo::{
+    card_image::{
+        draw::{draw_circle, draw_grid, draw_text_block},
+        layout::{
+            BLACK, CELL_PADDING, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH,
+            MARKED_RED, TITLE, WHITE, cell_rect,
+        },
+        text::{Font, Size, Weight, fit_text},
+    },
+    error::Result,
+    model::Card,
 };
+use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use std::io::Cursor;
-use text::{Font, Size, Weight, fit_text};
 
 const TITLE_FONTS: [Font; 3] = [
     Font::new(Size::Large, Weight::Bold).scaled(2),

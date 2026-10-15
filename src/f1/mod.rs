@@ -5,8 +5,8 @@ mod standings;
 use crate::{config::F1Config, f1::error::Result};
 use reqwest::Client;
 
-pub use error::F1Error;
-pub use schedule::ScheduleView;
+pub use crate::f1::error::F1Error;
+pub use crate::f1::schedule::ScheduleView;
 
 /// Fetches and formats Formula 1 data using one reusable HTTP client.
 #[derive(Debug, Clone)]

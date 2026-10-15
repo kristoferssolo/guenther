@@ -1,10 +1,14 @@
 mod format;
 mod race;
 
-use crate::f1::error::{F1Error, Result};
+use crate::f1::{
+    error::{F1Error, Result},
+    schedule::{
+        format::{format_duration, format_start},
+        race::{JolpicaResponse, Race, SessionKind, next_session},
+    },
+};
 use chrono::{FixedOffset, Utc};
-use format::{format_duration, format_start};
-use race::{JolpicaResponse, Race, SessionKind, next_session};
 use reqwest::Client;
 
 const NEXT_RACE_URL: &str = "https://api.jolpi.ca/ergast/f1/current/next.json";

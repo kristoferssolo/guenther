@@ -1,13 +1,15 @@
 mod delivery;
 mod link;
 
-use self::delivery::{compose_caption, send_media, should_include_source_text};
-use self::link::{extract_media_links, normalize_cache_key};
 use crate::{
     cache::MediaCache,
     comments::Comments,
     config::{Platform, PlatformConfig},
     download::{DownloadError, platform::Downloader},
+    handler::{
+        delivery::{compose_caption, send_media, should_include_source_text},
+        link::{extract_media_links, normalize_cache_key},
+    },
 };
 use regex::{Error as RegexError, Regex};
 use std::{result::Result as StdResult, sync::Arc, time::Instant};
@@ -18,7 +20,7 @@ use teloxide::{
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
-pub use self::link::MediaLink;
+pub use crate::handler::link::MediaLink;
 
 #[derive(Debug, Error)]
 pub enum HandlerError {
