@@ -10,6 +10,7 @@ use teloxide::{
     prelude::{Bot, ChatId, Requester},
     types::{InlineKeyboardButton, InlineKeyboardMarkup, InputFile, MessageId},
 };
+use tracing::warn;
 
 pub const HELP: &str = r"F1 bingo commands
 
@@ -88,7 +89,9 @@ pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
         .reply_markup(card_keyboard(card, Some(photo.id)))
         .await;
     if let Err(error) = text_result {
-        let _ = bot.delete_message(chat_id, photo.id).await;
+        if let Err(error) = bot.delete_message(chat_id, photo.id).await {
+            warn!(%error, "Could not delete an orphaned bingo card image");
+        }
         return Err(error.into());
     }
     Ok(())

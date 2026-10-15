@@ -14,7 +14,7 @@ use teloxide::{
     prelude::{Bot, Requester},
     types::{CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, MessageId},
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CardCallback {
@@ -71,11 +71,14 @@ pub async fn answer_callback(
             Ok(())
         }
         Err(error) => {
-            let _ = bot
+            if let Err(error) = bot
                 .answer_callback_query(query.id.clone())
                 .text("Could not update the card")
                 .show_alert(true)
-                .await;
+                .await
+            {
+                warn!(%error, "Could not answer a failed bingo callback");
+            }
             Err(error)
         }
     }
