@@ -7,10 +7,13 @@ use std::{
 #[cfg(feature = "voice-line-capture")]
 use std::{fs::OpenOptions, io::Write};
 #[cfg(feature = "voice-line-capture")]
+use teloxide::{DownloadError, RequestError};
+#[cfg(feature = "voice-line-capture")]
 use tempfile::NamedTempFile;
+use thiserror::Error;
 use tokio::fs;
 #[cfg(feature = "voice-line-capture")]
-use tokio::task;
+use tokio::task::{self, JoinError};
 
 const MAX_INLINE_RESULTS: usize = 25;
 const DEFAULT_VOICE_LINES_PATH: &str = "voice_lines.toml";
@@ -19,6 +22,57 @@ const DEFAULT_FFMPEG_BIN: &str = "ffmpeg";
 
 #[cfg(feature = "voice-line-capture")]
 mod capture;
+
+#[derive(Debug, Error)]
+pub enum VoiceLinesError {
+    #[error("Failed to read the voice lines file: {0}")]
+    Read(#[source] io::Error),
+
+    #[error("Failed to parse the voice lines file: {0}")]
+    Parse(#[from] toml::de::Error),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to serialize the voice lines file: {0}")]
+    Serialize(#[from] toml::ser::Error),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to write the voice lines file: {0}")]
+    Write(#[source] io::Error),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Voice lines save task failed: {0}")]
+    SaveTask(#[from] JoinError),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to fetch Telegram file metadata for incoming audio: {0}")]
+    FetchAudioFile(#[source] RequestError),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to prepare a temporary file for audio conversion: {0}")]
+    PrepareAudio(#[source] io::Error),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to download incoming audio from Telegram: {0}")]
+    DownloadAudio(#[from] DownloadError),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to run ffmpeg to convert audio into Telegram voice format: {0}")]
+    RunFfmpeg(#[source] io::Error),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("ffmpeg failed to convert audio: {0}")]
+    Ffmpeg(String),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Failed to upload the converted voice message to Telegram: {0}")]
+    UploadVoice(#[source] RequestError),
+
+    #[cfg(feature = "voice-line-capture")]
+    #[error("Telegram did not return a voice message after send_voice")]
+    MissingVoice,
+}
+
+pub type Result<T> = std::result::Result<T, VoiceLinesError>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoiceLine {
@@ -58,7 +112,7 @@ impl VoiceLines {
         }
     }
 
-    pub async fn search(&self, query: &str) -> color_eyre::Result<Vec<VoiceLine>> {
+    pub async fn search(&self, query: &str) -> Result<Vec<VoiceLine>> {
         let voice_lines = load_voice_lines_file(&self.path).await?.voice_lines;
         let needle = query.trim();
 
@@ -78,27 +132,29 @@ fn env_path(key: &str, default: &str) -> Arc<Path> {
         .into()
 }
 
-async fn load_voice_lines_file(path: &Path) -> color_eyre::Result<VoiceLinesFile> {
+async fn load_voice_lines_file(path: &Path) -> Result<VoiceLinesFile> {
     match fs::read_to_string(path).await {
         Ok(content) => Ok(toml::from_str(&content)?),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(VoiceLinesFile::default()),
-        Err(err) => Err(err.into()),
+        Err(err) => Err(VoiceLinesError::Read(err)),
     }
 }
 
 /// Writes to a temp file and renames it over `path`, so a crash can't leave a truncated file.
 #[cfg(feature = "voice-line-capture")]
-async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre::Result<()> {
+async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> Result<()> {
     let content = toml::to_string_pretty(file)?;
     let directory = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."))
         .to_owned();
-    fs::create_dir_all(&directory).await?;
+    fs::create_dir_all(&directory)
+        .await
+        .map_err(VoiceLinesError::Write)?;
 
     let path = path.to_owned();
-    task::spawn_blocking(move || -> color_eyre::Result<()> {
+    task::spawn_blocking(move || -> io::Result<()> {
         let mut temp = NamedTempFile::new_in(&directory)?;
         temp.write_all(content.as_bytes())?;
         // The temp file starts as 0600. Copy the target's mode, creating the target first so a
@@ -111,6 +167,7 @@ async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre
         Ok(())
     })
     .await?
+    .map_err(VoiceLinesError::Write)
 }
 
 fn matches_query(line: &VoiceLine, needle: &str) -> bool {
