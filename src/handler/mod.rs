@@ -7,7 +7,7 @@ use guenther::{
     cache::MediaCache,
     comments::Comments,
     config::{Platform, PlatformConfig},
-    download::{collect_supported_media, platform::Downloader},
+    download::platform::Downloader,
     error::Result,
 };
 use regex::{Error as RegexError, Regex};
@@ -63,16 +63,106 @@ impl MediaHandlers {
         link: &MediaLink,
         cache: &MediaCache,
     ) -> Result<()> {
-        let Some(handler) = self
-            .handlers
-            .iter()
-            .find(|handler| handler.platform() == link.platform)
-        else {
-            return Ok(());
+        let started_at = Instant::now();
+        info!(platform = %link.platform, "Handling media URL");
+        match self.try_send_cached(bot, chat_id, link, cache).await {
+            Ok(true) => {
+                info!(
+                    platform = %link.platform,
+                    cache_hit = true,
+                    elapsed = ?started_at.elapsed(),
+                    "Handled media URL"
+                );
+                return Ok(());
+            }
+            Ok(false) => {}
+            Err(err) => {
+                warn!(
+                    platform = %link.platform,
+                    %err,
+                    "Cached media send failed; invalidating entry and falling back to download"
+                );
+                if let Err(err) = cache.invalidate(&link.cache_key).await {
+                    warn!(platform = %link.platform, %err, "Failed to invalidate the cache entry");
+                }
+            }
+        }
+
+        let download = self
+            .downloader
+            .download(link.platform, &link.original_url)
+            .await?;
+        let media_items = download.supported_media().await?;
+        let source_text = download.source_text.as_deref();
+        let media_count = media_items.len();
+        let base_caption = self.comments.build_caption();
+        let include_source_text =
+            should_include_source_text(link.platform, &media_items, source_text);
+
+        debug!(
+            platform = %link.platform,
+            media_count,
+            has_source_text = source_text.is_some(),
+            elapsed = ?started_at.elapsed(),
+            "Prepared downloaded media"
+        );
+
+        let caption = if include_source_text {
+            compose_caption(&base_caption, source_text)
+        } else {
+            base_caption
         };
-        handler
-            .handle(bot, chat_id, link, cache, &self.downloader, &self.comments)
-            .await
+        let inputs = media_items
+            .into_iter()
+            .map(|(path, kind)| (InputFile::file(path), kind))
+            .collect::<Vec<_>>();
+        let cached = send_media(bot, chat_id, inputs, &caption).await?;
+        if let Err(err) = cache.put(&link.cache_key, &cached).await {
+            warn!(platform = %link.platform, %err, "Failed to persist media file_ids");
+        }
+
+        info!(
+            platform = %link.platform,
+            media_count,
+            cache_hit = false,
+            elapsed = ?started_at.elapsed(),
+            "Handled media URL"
+        );
+        Ok(())
+    }
+
+    /// Send media from cached Telegram `file_id`s for a link's cache key.
+    ///
+    /// Returns `Ok(false)` when the key has no cache entry or the lookup
+    /// fails; send failures propagate so the caller can invalidate the entry
+    /// and fall back to a fresh download.
+    async fn try_send_cached(
+        &self,
+        bot: &Bot,
+        chat_id: ChatId,
+        link: &MediaLink,
+        cache: &MediaCache,
+    ) -> Result<bool> {
+        let cached = match cache.get(&link.cache_key).await {
+            Ok(cached) => cached,
+            Err(err) => {
+                warn!(platform = %link.platform, %err, "Media cache lookup failed");
+                return Ok(false);
+            }
+        };
+        let Some(cached) = cached else {
+            return Ok(false);
+        };
+
+        let media_count = cached.len();
+        let inputs = cached
+            .into_iter()
+            .map(|item| (InputFile::file_id(FileId(item.file_id)), item.kind))
+            .collect::<Vec<_>>();
+        let caption = self.comments.build_caption();
+        send_media(bot, chat_id, inputs, &caption).await?;
+        debug!(platform = %link.platform, media_count, "Sent cached media");
+        Ok(true)
     }
 }
 
@@ -101,120 +191,6 @@ impl Handler {
                 })
             })
             .collect()
-    }
-
-    pub async fn handle(
-        &self,
-        bot: &Bot,
-        chat_id: ChatId,
-        link: &MediaLink,
-        cache: &MediaCache,
-        downloader: &Downloader,
-        comments: &Comments,
-    ) -> Result<()> {
-        let started_at = Instant::now();
-        info!(platform = %self.platform, "Handling media URL");
-        match self
-            .try_send_cached(bot, chat_id, link.cache_key.as_str(), cache, comments)
-            .await
-        {
-            Ok(true) => {
-                info!(
-                    platform = %self.platform,
-                    cache_hit = true,
-                    elapsed = ?started_at.elapsed(),
-                    "Handled media URL"
-                );
-                return Ok(());
-            }
-            Ok(false) => {}
-            Err(err) => {
-                warn!(
-                    platform = %self.platform,
-                    %err,
-                    "Cached media send failed; invalidating entry and falling back to download"
-                );
-                if let Err(err) = cache.invalidate(&link.cache_key).await {
-                    warn!(platform = %self.platform, %err, "Failed to invalidate the cache entry");
-                }
-            }
-        }
-
-        let mut dr = downloader
-            .download(self.platform, &link.original_url)
-            .await?;
-        let source_text = dr.source_text.take();
-        let (_tempdir, media_items) = collect_supported_media(dr).await?;
-        let media_count = media_items.len();
-        let base_caption = comments.build_caption();
-        let include_source_text =
-            should_include_source_text(self.platform(), &media_items, source_text.as_deref());
-
-        debug!(
-            platform = %self.platform,
-            media_count,
-            has_source_text = source_text.is_some(),
-            elapsed = ?started_at.elapsed(),
-            "Prepared downloaded media"
-        );
-
-        let caption = if include_source_text {
-            compose_caption(&base_caption, source_text.as_deref())
-        } else {
-            base_caption
-        };
-        let inputs = media_items
-            .into_iter()
-            .map(|(path, kind)| (InputFile::file(path), kind))
-            .collect::<Vec<_>>();
-        let cached = send_media(bot, chat_id, inputs, &caption).await?;
-        if let Err(err) = cache.put(&link.cache_key, &cached).await {
-            warn!(platform = %self.platform, %err, "Failed to persist media file_ids");
-        }
-
-        info!(
-            platform = %self.platform,
-            media_count,
-            cache_hit = false,
-            elapsed = ?started_at.elapsed(),
-            "Handled media URL"
-        );
-        Ok(())
-    }
-
-    /// Send media from cached Telegram `file_id`s for a cache key.
-    ///
-    /// Returns `Ok(false)` when the key has no cache entry or the lookup
-    /// fails; send failures propagate so the caller can invalidate the entry
-    /// and fall back to a fresh download.
-    async fn try_send_cached(
-        &self,
-        bot: &Bot,
-        chat_id: ChatId,
-        cache_key: &str,
-        cache: &MediaCache,
-        comments: &Comments,
-    ) -> Result<bool> {
-        let cached = match cache.get(cache_key).await {
-            Ok(cached) => cached,
-            Err(err) => {
-                warn!(platform = %self.platform, %err, "Media cache lookup failed");
-                return Ok(false);
-            }
-        };
-        let Some(cached) = cached else {
-            return Ok(false);
-        };
-
-        let media_count = cached.len();
-        let inputs = cached
-            .into_iter()
-            .map(|item| (InputFile::file_id(FileId(item.file_id)), item.kind))
-            .collect::<Vec<_>>();
-        let caption = comments.build_caption();
-        send_media(bot, chat_id, inputs, &caption).await?;
-        debug!(platform = %self.platform, media_count, "Sent cached media");
-        Ok(true)
     }
 }
 
