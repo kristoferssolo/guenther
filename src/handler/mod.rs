@@ -7,18 +7,29 @@ use guenther::{
     cache::MediaCache,
     comments::Comments,
     config::{Platform, PlatformConfig},
-    download::platform::Downloader,
-    error::Result,
+    download::{DownloadError, platform::Downloader},
 };
 use regex::{Error as RegexError, Regex};
 use std::{result::Result as StdResult, sync::Arc, time::Instant};
 use teloxide::{
-    Bot,
+    Bot, RequestError,
     types::{ChatId, FileId, InputFile},
 };
+use thiserror::Error;
 use tracing::{debug, info, warn};
 
 pub use self::link::MediaLink;
+
+#[derive(Debug, Error)]
+pub enum HandlerError {
+    #[error(transparent)]
+    Download(#[from] DownloadError),
+
+    #[error("Telegram request failed: {0}")]
+    Telegram(#[from] RequestError),
+}
+
+type Result<T> = StdResult<T, HandlerError>;
 
 #[derive(Debug, Clone)]
 pub struct Handler {

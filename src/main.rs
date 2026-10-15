@@ -7,7 +7,7 @@ mod voice_lines;
 
 use crate::{
     commands::{RouteAction, answer, route_message},
-    handler::{MediaHandlers, MediaLink},
+    handler::{HandlerError, MediaHandlers, MediaLink},
     inline::answer_inline_query,
     voice_lines::VoiceLines,
 };
@@ -18,7 +18,6 @@ use guenther::{
     config::Config,
     db,
     download::platform::Downloader,
-    error::Error,
     f1::F1,
     telemetry::setup_logger,
 };
@@ -227,7 +226,7 @@ async fn report_media_failure(
     chat_id: ChatId,
     admin_chat_id: Option<ChatId>,
     link: &MediaLink,
-    err: &Error,
+    err: &HandlerError,
 ) {
     error!(platform = %link.platform, %err, "Media handler failed");
     if let Err(err) = bot.send_message(chat_id, failure_comment()).await {
