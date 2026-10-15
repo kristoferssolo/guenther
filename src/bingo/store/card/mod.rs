@@ -4,17 +4,16 @@ use crate::bingo::{
     error::{BingoError, Result},
     model::{
         CELL_COUNT, Card, CardId, EntryNumber, GameState, ImportedCell, KnownUser, Position,
-        REQUIRED_ENTRIES, ToggleResult, has_bingo,
+        REQUIRED_ENTRIES, ToggleResult,
     },
     store::{
         BingoStore,
         card::queries::{
             NewCell, announce_bingo, card_id_in, delete_or_reject_existing, fetch_active_entry,
-            fetch_card, fetch_cells, fetch_toggle_context, find_card_id, insert_card, insert_cell,
-            reset_card_state, toggle_cell_mark, update_cell,
+            fetch_card, find_card_id, insert_card, insert_cell, reset_card_state, toggle_cell_mark,
+            update_cell,
         },
-        id::db_user_id,
-        validation::{ensure_active, ensure_editable, require_changed},
+        validation::{ensure_active, ensure_editable},
     },
 };
 use rand::seq::SliceRandom;
@@ -65,7 +64,7 @@ impl BingoStore {
             .await?;
         }
         transaction.commit().await?;
-        fetch_card(&self.pool, card_id).await
+        fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
     /// Import a card while its game is draft or active.
@@ -121,7 +120,7 @@ impl BingoStore {
             .await?;
         }
         transaction.commit().await?;
-        fetch_card(&self.pool, card_id).await
+        fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
     pub async fn card(&self, chat_id: ChatId, slug: Option<&str>, user_id: UserId) -> Result<Card> {
@@ -134,7 +133,7 @@ impl BingoStore {
                     game.slug
                 ))
             })?;
-        fetch_card(&self.pool, card_id).await
+        fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
     pub async fn cards(&self, chat_id: ChatId) -> Result<Vec<Card>> {
@@ -156,9 +155,10 @@ impl BingoStore {
         .fetch_all(&self.pool)
         .await?;
 
+        let mut connection = self.pool.acquire().await?;
         let mut cards = Vec::with_capacity(card_ids.len());
         for card_id in card_ids {
-            cards.push(fetch_card(&self.pool, card_id.into()).await?);
+            cards.push(fetch_card(&mut connection, card_id.into()).await?);
         }
         Ok(cards)
     }
@@ -181,7 +181,7 @@ impl BingoStore {
         let entry = fetch_active_entry(&mut transaction, game.id, entry_number, slug).await?;
         update_cell(&mut transaction, card_id, position, entry).await?;
         transaction.commit().await?;
-        fetch_card(&self.pool, card_id).await
+        fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
     pub async fn reset_card(
@@ -196,7 +196,7 @@ impl BingoStore {
         let card_id = card_id_in(&mut transaction, game.id, user_id).await?;
         reset_card_state(&mut transaction, card_id).await?;
         transaction.commit().await?;
-        fetch_card(&self.pool, card_id).await
+        fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
     pub async fn toggle_cell(
@@ -210,22 +210,26 @@ impl BingoStore {
             return Err(BingoError::FreeCell);
         }
         let mut transaction = self.pool.begin().await?;
-        let context = fetch_toggle_context(&mut transaction, card_id).await?;
-        if context.user_id != db_user_id(user_id)? && !can_edit_any_card {
+        let mut card = fetch_card(&mut transaction, card_id).await?;
+        if card.owner.user_id != user_id && !can_edit_any_card {
             return Err(BingoError::NotCardOwner);
         }
-        if context.state.parse::<GameState>()? != GameState::Active {
+        if card.game.state != GameState::Active {
             return Err(BingoError::GameNotActive);
         }
-        let rows_affected = toggle_cell_mark(&mut transaction, card_id, position).await?;
-        require_changed(rows_affected, || "That card cell was not found".to_owned())?;
-        let cells = fetch_cells(&mut *transaction, card_id).await?;
-        let newly_completed = !context.bingo_announced && has_bingo(&cells);
+        let cell = card
+            .cells
+            .iter_mut()
+            .find(|cell| cell.position == position && !cell.is_free)
+            .ok_or_else(|| BingoError::NotFound("That card cell was not found".to_owned()))?;
+        toggle_cell_mark(&mut transaction, card_id, position).await?;
+        cell.marked = !cell.marked;
+        let newly_completed = !card.bingo_announced && card.has_bingo();
         if newly_completed {
             announce_bingo(&mut transaction, card_id).await?;
+            card.bingo_announced = true;
         }
         transaction.commit().await?;
-        let card = fetch_card(&self.pool, card_id).await?;
         Ok(ToggleResult {
             card,
             newly_completed,

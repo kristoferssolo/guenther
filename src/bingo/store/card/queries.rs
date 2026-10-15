@@ -3,7 +3,7 @@ use crate::bingo::{
     model::{Card, CardCell, CardId, EntryId, EntryNumber, Game, GameId, KnownUser, Position},
     store::id::{db_user_id, user_id_from_db},
 };
-use sqlx::{Sqlite, SqliteExecutor, SqlitePool, Transaction};
+use sqlx::{Sqlite, SqliteConnection, SqliteExecutor, Transaction};
 use teloxide::types::{ChatId, UserId};
 
 #[derive(Debug)]
@@ -69,13 +69,6 @@ pub struct ActiveEntry {
     pub text: String,
 }
 
-#[derive(Debug)]
-pub struct ToggleContext {
-    pub user_id: i64,
-    pub bingo_announced: bool,
-    pub state: String,
-}
-
 pub struct NewCell<'a> {
     pub position: Position,
     pub entry_id: Option<EntryId>,
@@ -96,7 +89,7 @@ impl<'a> NewCell<'a> {
     }
 }
 
-pub async fn fetch_card(pool: &SqlitePool, card_id: CardId) -> Result<Card> {
+pub async fn fetch_card(connection: &mut SqliteConnection, card_id: CardId) -> Result<Card> {
     let row = sqlx::query_as!(
         CardRow,
         r#"
@@ -124,10 +117,10 @@ pub async fn fetch_card(pool: &SqlitePool, card_id: CardId) -> Result<Card> {
         "#,
         card_id.get(),
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *connection)
     .await?
     .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
-    let cells = fetch_cells(pool, card_id).await?;
+    let cells = fetch_cells(connection, card_id).await?;
     row.into_card(cells)
 }
 
@@ -342,41 +335,13 @@ pub async fn reset_card_state(
     Ok(())
 }
 
-pub async fn fetch_toggle_context(
-    transaction: &mut Transaction<'_, Sqlite>,
-    card_id: CardId,
-) -> Result<ToggleContext> {
-    let row = sqlx::query!(
-        r#"
-        SELECT
-            c.user_id,
-            c.bingo_announced AS `bingo_announced: bool`,
-            g.state
-        FROM
-            bingo_cards c
-            JOIN bingo_games g ON g.id = c.game_id
-        WHERE
-            c.id = ?
-        "#,
-        card_id.get(),
-    )
-    .fetch_optional(&mut **transaction)
-    .await?
-    .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
-    Ok(ToggleContext {
-        user_id: row.user_id,
-        bingo_announced: row.bingo_announced,
-        state: row.state,
-    })
-}
-
 pub async fn toggle_cell_mark(
     transaction: &mut Transaction<'_, Sqlite>,
     card_id: CardId,
     position: Position,
-) -> Result<u64> {
+) -> Result<()> {
     let position = i64::from(position);
-    Ok(sqlx::query!(
+    sqlx::query!(
         r#"
         UPDATE
             bingo_card_cells
@@ -391,8 +356,8 @@ pub async fn toggle_cell_mark(
         position,
     )
     .execute(&mut **transaction)
-    .await?
-    .rows_affected())
+    .await?;
+    Ok(())
 }
 
 pub async fn announce_bingo(
@@ -415,10 +380,7 @@ pub async fn announce_bingo(
     Ok(())
 }
 
-pub async fn fetch_cells<'e>(
-    executor: impl SqliteExecutor<'e>,
-    card_id: CardId,
-) -> Result<Vec<CardCell>> {
+async fn fetch_cells(connection: &mut SqliteConnection, card_id: CardId) -> Result<Vec<CardCell>> {
     let rows = sqlx::query_as!(
         CellRow,
         r#"
@@ -436,7 +398,7 @@ pub async fn fetch_cells<'e>(
         "#,
         card_id.get(),
     )
-    .fetch_all(executor)
+    .fetch_all(connection)
     .await?;
     convert_cells(rows)
 }
