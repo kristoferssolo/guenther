@@ -123,7 +123,7 @@ mod tests {
     fn default_comments_use_fallbacks() {
         let comments = Comments::default();
         assert_eq!(comments.lines.len(), FALLBACK_COMMENTS.len());
-        assert!(!comments.lines.is_empty());
+        assert_ne!(comments.lines, Vec::<String>::new());
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn failure_comments_are_valid_telegram_messages() {
-        assert!(!FAILURE_COMMENTS.is_empty());
+        assert_ne!(FAILURE_COMMENTS, Vec::<&str>::new());
         assert!(FAILURE_COMMENTS.iter().all(|comment| {
             !comment.trim().is_empty() && comment.chars().count() <= TELEGRAM_CAPTION_LIMIT
         }));

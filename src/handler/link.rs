@@ -254,6 +254,6 @@ mod tests {
             Some("https://example.com/not-supported"),
         );
 
-        assert!(links.is_empty());
+        assert_eq!(links, Vec::<MediaLink>::new());
     }
 }

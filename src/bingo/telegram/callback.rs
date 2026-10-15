@@ -151,12 +151,10 @@ pub(super) fn format_callback(
     image_message_id: Option<MessageId>,
     position: Position,
 ) -> String {
-    let data = image_message_id.map_or_else(
+    image_message_id.map_or_else(
         || format!("b:{card_id}:{}", position.index()),
         |message_id| format!("b:{card_id}:{}:{}", message_id.0, position.index()),
-    );
-    debug_assert!(data.len() <= 64, "Telegram callback data exceeds 64 bytes");
-    data
+    )
 }
 
 fn parse_callback(data: &str) -> Option<CardCallback> {

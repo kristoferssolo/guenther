@@ -282,7 +282,7 @@ async fn stores_updates_and_clears_game_descriptions() {
             .await
     );
     let cleared = assert_ok!(store.set_game_description(CHAT_ID, "season", "").await);
-    assert!(cleared.description.is_empty());
+    assert_eq!(cleared.description, "");
 }
 
 #[tokio::test]

@@ -196,6 +196,6 @@ mod tests {
 
     #[test]
     fn syndication_token_is_not_empty() {
-        assert!(!syndication_token("2037463638215462967").is_empty());
+        assert_ne!(syndication_token("2037463638215462967"), "");
     }
 }

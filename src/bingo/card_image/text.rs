@@ -90,6 +90,7 @@ pub struct TextBlock {
 }
 
 impl TextBlock {
+    #[cfg(test)]
     pub fn width(&self) -> u32 {
         let columns = self
             .lines
@@ -282,7 +283,7 @@ mod tests {
         let block = fit_text("x", bounds, &[font]);
 
         assert!(block.truncated);
-        assert!(block.lines.is_empty());
+        assert_eq!(block.lines, Vec::<String>::new());
         assert!(block.width() <= bounds.width);
         assert!(block.height() <= bounds.height);
     }

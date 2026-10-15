@@ -41,8 +41,8 @@ pub fn has_bingo(cells: &[CardCell]) -> bool {
         return false;
     }
 
-    let (rows, remainder) = cells.as_chunks::<GRID_SIDE>();
-    debug_assert!(remainder.is_empty());
+    // CELL_COUNT is GRID_SIDE squared, so the length check guarantees complete rows.
+    let (rows, _) = cells.as_chunks::<GRID_SIDE>();
     rows.iter().any(|row| row.iter().all(|cell| cell.marked))
         || (0..GRID_SIDE).any(|column| {
             rows.iter()

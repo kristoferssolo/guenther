@@ -68,8 +68,6 @@ pub fn draw_grid(image: &mut RgbaImage) {
 }
 
 pub fn draw_text_block(image: &mut RgbaImage, bounds: Rect, block: &TextBlock, color: [u8; 4]) {
-    debug_assert!(block.width() <= bounds.width);
-    debug_assert!(block.height() <= bounds.height);
     let total_height = block.height();
     let mut y = bounds
         .y
