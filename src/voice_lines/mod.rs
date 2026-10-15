@@ -1,10 +1,16 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "voice-line-capture")]
+use std::io::Write;
 use std::{
     env, io,
     path::{Path, PathBuf},
     sync::Arc,
 };
+#[cfg(feature = "voice-line-capture")]
+use tempfile::NamedTempFile;
 use tokio::fs;
+#[cfg(feature = "voice-line-capture")]
+use tokio::task;
 
 const MAX_INLINE_RESULTS: usize = 25;
 const DEFAULT_VOICE_LINES_PATH: &str = "voice_lines.toml";
@@ -80,16 +86,26 @@ async fn load_voice_lines_file(path: &Path) -> color_eyre::Result<VoiceLinesFile
     }
 }
 
+/// Writes to a temp file and renames it over `path`, so a crash can't leave a truncated file.
 #[cfg(feature = "voice-line-capture")]
 async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre::Result<()> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent).await?;
-    }
+    let content = toml::to_string_pretty(file)?;
+    let directory = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
+        .to_owned();
+    fs::create_dir_all(&directory).await?;
 
-    fs::write(path, toml::to_string_pretty(file)?).await?;
-    Ok(())
+    let path = path.to_owned();
+    task::spawn_blocking(move || -> color_eyre::Result<()> {
+        let mut temp = NamedTempFile::new_in(&directory)?;
+        temp.write_all(content.as_bytes())?;
+        temp.as_file().sync_all()?;
+        temp.persist(&path)?;
+        Ok(())
+    })
+    .await?
 }
 
 fn matches_query(line: &VoiceLine, needle: &str) -> bool {
@@ -211,5 +227,26 @@ tags = ["pit"]
             matches.first().map(|line| line.id.as_str()),
             Some("box_box")
         );
+    }
+
+    #[cfg(feature = "voice-line-capture")]
+    #[tokio::test]
+    async fn save_round_trips_without_leaving_temp_files() {
+        let directory = assert_ok!(tempfile::tempdir());
+        let path = directory.path().join("voice_lines.toml");
+        let file = VoiceLinesFile {
+            voice_lines: vec![sample_line("box_box", "Box box", &["pit"])],
+        };
+
+        assert_ok!(save_voice_lines_file(&path, &file).await);
+        let loaded = assert_ok!(load_voice_lines_file(&path).await);
+
+        assert_eq!(loaded.voice_lines, file.voice_lines);
+        let entries = assert_ok!(
+            assert_ok!(std::fs::read_dir(directory.path()))
+                .map(|entry| entry.map(|entry| entry.path()))
+                .collect::<io::Result<Vec<_>>>()
+        );
+        assert_eq!(entries, [path]);
     }
 }
