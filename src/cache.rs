@@ -141,7 +141,7 @@ impl MediaCache {
                 media_cache
             WHERE
                 url = ?
-    "#,
+            "#,
             cache_key
         )
         .execute(&self.pool)
