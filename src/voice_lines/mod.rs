@@ -101,6 +101,10 @@ async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre
     task::spawn_blocking(move || -> color_eyre::Result<()> {
         let mut temp = NamedTempFile::new_in(&directory)?;
         temp.write_all(content.as_bytes())?;
+        // The temp file starts as 0600; keep the target's mode so other readers retain access.
+        if let Ok(metadata) = path.metadata() {
+            temp.as_file().set_permissions(metadata.permissions())?;
+        }
         temp.as_file().sync_all()?;
         temp.persist(&path)?;
         Ok(())
@@ -133,6 +137,8 @@ mod tests {
     use super::*;
     use claims::{assert_none, assert_ok};
     use rstest::rstest;
+    #[cfg(all(unix, feature = "voice-line-capture"))]
+    use std::os::unix::fs::PermissionsExt;
 
     fn voice_lines_at(path: PathBuf) -> VoiceLines {
         VoiceLines {
@@ -248,5 +254,22 @@ tags = ["pit"]
                 .collect::<io::Result<Vec<_>>>()
         );
         assert_eq!(entries, [path]);
+    }
+
+    #[cfg(all(unix, feature = "voice-line-capture"))]
+    #[tokio::test]
+    async fn save_keeps_existing_permissions() {
+        let directory = assert_ok!(tempfile::tempdir());
+        let path = directory.path().join("voice_lines.toml");
+        assert_ok!(std::fs::write(&path, ""));
+        assert_ok!(std::fs::set_permissions(
+            &path,
+            std::fs::Permissions::from_mode(0o644)
+        ));
+
+        assert_ok!(save_voice_lines_file(&path, &VoiceLinesFile::default()).await);
+
+        let mode = assert_ok!(path.metadata()).permissions().mode();
+        assert_eq!(mode & 0o777, 0o644);
     }
 }
