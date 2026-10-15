@@ -1,10 +1,19 @@
-use crate::{
-    error::{Error, Result},
-    utils::truncate_with_ellipsis,
-};
+use crate::utils::truncate_with_ellipsis;
 use rand::{rng, seq::IndexedRandom};
-use std::path::Path;
+use std::{io, path::Path};
+use thiserror::Error;
 use tokio::fs::read_to_string;
+
+#[derive(Debug, Error)]
+pub enum CommentsError {
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("Comments file contains no usable lines")]
+    Empty,
+}
+
+pub type Result<T> = std::result::Result<T, CommentsError>;
 
 /// Telegram caps media captions at 1024 characters, below the 4096 allowed for
 /// text messages.
@@ -44,8 +53,8 @@ impl Comments {
     ///
     /// # Errors
     ///
-    /// - Returns `Error::Io` if reading the file fails.
-    /// - Returns `Error::Other` if the file contains no usable lines.
+    /// - Returns [`CommentsError::Io`] if reading the file fails.
+    /// - Returns [`CommentsError::Empty`] if the file contains no usable lines.
     pub async fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = read_to_string(path).await?;
 
@@ -57,7 +66,7 @@ impl Comments {
             .collect::<Vec<_>>();
 
         if lines.is_empty() {
-            return Err(Error::other("Comments file contains no usable lines"));
+            return Err(CommentsError::Empty);
         }
 
         Ok(Self { lines })
