@@ -112,6 +112,11 @@ impl VoiceLines {
         }
     }
 
+    /// Find voice lines whose title, id or tags contain `query`, ignoring ASCII case.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the voice lines file cannot be read or parsed.
     pub async fn search(&self, query: &str) -> Result<Vec<VoiceLine>> {
         let voice_lines = load_voice_lines_file(&self.path).await?.voice_lines;
         let needle = query.trim();

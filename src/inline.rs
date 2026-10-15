@@ -1,4 +1,4 @@
-use crate::voice_lines::{VoiceLine, VoiceLines, VoiceLinesError};
+use guenther::voice_lines::{VoiceLine, VoiceLines, VoiceLinesError};
 use teloxide::{
     RequestError,
     prelude::*,

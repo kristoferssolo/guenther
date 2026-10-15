@@ -3,13 +3,11 @@ mod bingo;
 mod commands;
 mod handler;
 mod inline;
-mod voice_lines;
 
 use crate::{
     commands::{RouteAction, answer, route_message},
     handler::{HandlerError, MediaHandlers, MediaLink},
     inline::answer_inline_query,
-    voice_lines::VoiceLines,
 };
 use dotenvy::dotenv;
 use guenther::{
@@ -20,6 +18,7 @@ use guenther::{
     download::platform::Downloader,
     f1::F1,
     telemetry::setup_logger,
+    voice_lines::VoiceLines,
 };
 use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};

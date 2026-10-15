@@ -6,3 +6,4 @@ pub mod download;
 pub mod f1;
 pub mod telemetry;
 pub mod utils;
+pub mod voice_lines;
