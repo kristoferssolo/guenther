@@ -19,14 +19,14 @@ pub struct VoiceLine {
     pub id: String,
     pub title: String,
     pub file_id: String,
-    #[serde(default)]
-    pub unique_file_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unique_file_id: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(default)]
-    pub source_file_id: String,
-    #[serde(default)]
-    pub source_unique_file_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_file_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_unique_file_id: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -119,7 +119,7 @@ fn normalize(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_ok;
+    use claims::{assert_none, assert_ok};
 
     fn voice_lines_at(path: PathBuf) -> VoiceLines {
         VoiceLines {
@@ -134,10 +134,10 @@ mod tests {
             id: id.to_owned(),
             title: title.to_owned(),
             file_id: format!("file-{id}"),
-            unique_file_id: format!("unique-{id}"),
+            unique_file_id: Some(format!("unique-{id}")),
             tags: tags.iter().map(ToString::to_string).collect(),
-            source_file_id: String::new(),
-            source_unique_file_id: String::new(),
+            source_file_id: None,
+            source_unique_file_id: None,
         }
     }
 
@@ -167,6 +167,25 @@ kind = "voice"
         ));
 
         assert_eq!(parsed.id, "line_1");
+    }
+
+    #[test]
+    fn missing_file_ids_load_as_none_and_are_not_serialized() {
+        let parsed = assert_ok!(toml::from_str::<VoiceLine>(
+            r#"
+id = "line_1"
+title = "Sample"
+file_id = "file-1"
+"#,
+        ));
+
+        assert_none!(&parsed.unique_file_id);
+        assert_none!(&parsed.source_file_id);
+        assert_none!(&parsed.source_unique_file_id);
+
+        let serialized = assert_ok!(toml::to_string(&parsed));
+        assert!(!serialized.contains("unique_file_id"));
+        assert!(!serialized.contains("source_file_id"));
     }
 
     #[tokio::test]
