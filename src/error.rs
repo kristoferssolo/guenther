@@ -23,15 +23,6 @@ pub enum Error {
     #[error("Unknown media kind")]
     UnknownMediaKind,
 
-    #[error("Validation failed: {0}")]
-    ValidationFailed(String),
-
-    #[error("Task join failed: {0}")]
-    Join(#[from] tokio::task::JoinError),
-
-    #[error("Environment variable `{0}` was not found")]
-    EnvNotFound(String),
-
     #[error("Failed to fetch the F1 schedule: {0}")]
     FetchF1Schedule(#[source] reqwest::Error),
 
@@ -85,14 +76,6 @@ pub enum Error {
 impl Error {
     pub fn other(text: impl Into<String>) -> Self {
         Self::Other(text.into())
-    }
-
-    pub fn validation_failed(text: impl Into<String>) -> Self {
-        Self::ValidationFailed(text.into())
-    }
-
-    pub fn env(text: impl Into<String>) -> Self {
-        Self::EnvNotFound(text.into())
     }
 }
 

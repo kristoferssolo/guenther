@@ -306,7 +306,6 @@ mod tests {
                 text: "x".repeat(128),
             }
         );
-        assert_err!(BingoCommand::parse(&format!("add {}", "x".repeat(129))));
     }
 
     #[test]

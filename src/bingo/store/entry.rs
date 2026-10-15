@@ -81,11 +81,6 @@ impl BingoStore {
         slug: &str,
         entries: &[String],
     ) -> Result<usize> {
-        if entries.is_empty() {
-            return Err(BingoError::InvalidCommand(
-                "The entry file does not contain any entries".to_owned(),
-            ));
-        }
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;

@@ -86,14 +86,6 @@ impl Handler {
         self.platform
     }
 
-    #[cfg(test)]
-    pub fn try_extract<'a>(&self, text: &'a str) -> Option<&'a str> {
-        self.regex
-            .captures(text)
-            .and_then(|captures| captures.name("url").or_else(|| captures.get(0)))
-            .map(|matched| matched.as_str())
-    }
-
     pub fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
         self.regex
             .captures_iter(text)
@@ -257,7 +249,7 @@ fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, Rege
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_none, assert_ok, assert_some};
+    use claims::{assert_ok, assert_some};
     use guenther::config::CobaltConfig;
 
     fn all_handlers() -> MediaHandlers {
@@ -276,6 +268,14 @@ mod tests {
                 .iter()
                 .find(|handler| handler.platform() == Platform::Instagram)
         )
+    }
+
+    fn original_urls(handler: &Handler, text: &str) -> Vec<String> {
+        handler
+            .try_extract_all(text, 0)
+            .into_iter()
+            .map(|link| link.original_url)
+            .collect()
     }
 
     #[test]
@@ -306,7 +306,7 @@ mod tests {
         ];
 
         for url in urls {
-            assert_none!(handler.try_extract(url));
+            assert_eq!(original_urls(handler, url), Vec::<String>::new());
         }
     }
     #[test]
@@ -318,7 +318,7 @@ mod tests {
             "https://www.instagram.com/reel/ABC123/?utm_source=share#carousel",
             "https://instagr.am/tv/ABC123?utm_source=share#tv",
         ] {
-            assert_eq!(handler.try_extract(url), Some(url));
+            assert_eq!(original_urls(handler, url), [url]);
         }
     }
     #[test]
@@ -333,7 +333,7 @@ mod tests {
             "https://www.instagram.com/reel/",
             "https://www.instagram.com/tv/ABC123/extra",
         ] {
-            assert_none!(handler.try_extract(url));
+            assert_eq!(original_urls(handler, url), Vec::<String>::new());
         }
     }
 }
