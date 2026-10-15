@@ -1,12 +1,8 @@
 #[cfg(feature = "bingo")]
 mod bingo;
 mod commands;
-mod handler;
 
-use crate::{
-    commands::{RouteAction, answer, route_message},
-    handler::{HandlerError, MediaHandlers, MediaLink},
-};
+use crate::commands::{RouteAction, answer, route_message};
 use dotenvy::dotenv;
 use guenther::{
     cache::MediaCache,
@@ -15,6 +11,7 @@ use guenther::{
     db,
     download::platform::Downloader,
     f1::F1,
+    handler::{HandlerError, MediaHandlers, MediaLink},
     inline::answer_inline_query,
     telemetry::setup_logger,
     voice_lines::VoiceLines,

@@ -1,5 +1,5 @@
 use crate::handler::Result;
-use guenther::{
+use crate::{
     cache::CachedMedia,
     comments::TELEGRAM_CAPTION_LIMIT,
     config::Platform,
