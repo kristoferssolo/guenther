@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n            INSERT INTO\n                bingo_games (chat_id, slug, name, is_default, created_by)\n            VALUES\n                (?, ?, ?, ?, ?)\n            RETURNING\n                id,\n                chat_id,\n                slug,\n                name,\n                description,\n                center_text,\n                state,\n                is_default AS `is_default: bool`\n            ",
+  "query": "\n            INSERT INTO\n                bingo_games (chat_id, slug, name, is_default, created_by)\n            VALUES\n                (\n                    ?1,\n                    ?2,\n                    ?3,\n                    NOT EXISTS (\n                        SELECT\n                            1\n                        FROM\n                            bingo_games\n                        WHERE\n                            chat_id = ?1\n                            AND is_default = 1\n                    ),\n                    ?4\n                )\n            RETURNING\n                id,\n                chat_id,\n                slug,\n                name,\n                description,\n                center_text,\n                state,\n                is_default AS `is_default: bool`\n            ",
   "describe": {
     "columns": [
       {
@@ -93,7 +93,7 @@
       }
     ],
     "parameters": {
-      "Right": 5
+      "Right": 4
     },
     "nullable": [
       false,
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "e513668f95130e9084e00610600ec8e1e1694f5b12070d846f0162bcfde701ea"
+  "hash": "6d1d7d4d7fcce3197735cc41abaf26b1f0818ded2ebf07574705e93b4d3cb629"
 }
