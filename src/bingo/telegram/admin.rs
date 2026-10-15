@@ -1,14 +1,13 @@
 use crate::bingo::error::Result;
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex, PoisonError},
     time::{Duration, Instant},
 };
 use teloxide::{
     prelude::{Bot, ChatId, Requester},
     types::{Message, UserId},
 };
-use tokio::sync::Mutex;
 
 const ADMIN_CACHE_TTL: Duration = Duration::from_mins(1);
 
@@ -34,8 +33,8 @@ impl Default for AdminCache {
 }
 
 impl AdminCache {
-    async fn status(&self, chat_id: ChatId, user_id: UserId) -> Option<bool> {
-        let mut entries = self.entries.lock().await;
+    fn status(&self, chat_id: ChatId, user_id: UserId) -> Option<bool> {
+        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
         if entries
             .get(&chat_id)
             .is_some_and(|entry| entry.expires_at <= Instant::now())
@@ -48,8 +47,9 @@ impl AdminCache {
             .map(|entry| entry.user_ids.contains(&user_id))
     }
 
-    async fn insert(&self, chat_id: ChatId, user_ids: HashSet<UserId>) {
-        self.entries.lock().await.insert(
+    fn insert(&self, chat_id: ChatId, user_ids: HashSet<UserId>) {
+        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        entries.insert(
             chat_id,
             CachedAdministrators {
                 expires_at: Instant::now()
@@ -93,7 +93,7 @@ pub async fn is_user_chat_admin(
     if is_private_chat {
         return Ok(true);
     }
-    if let Some(is_admin) = cache.status(chat_id, user_id).await {
+    if let Some(is_admin) = cache.status(chat_id, user_id) {
         return Ok(is_admin);
     }
     let administrators = bot.get_chat_administrators(chat_id).await?;
@@ -102,7 +102,7 @@ pub async fn is_user_chat_admin(
         .map(|member| member.user.id)
         .collect::<HashSet<_>>();
     let is_admin = user_ids.contains(&user_id);
-    cache.insert(chat_id, user_ids).await;
+    cache.insert(chat_id, user_ids);
     Ok(is_admin)
 }
 
@@ -111,17 +111,17 @@ mod tests {
     use super::*;
     use claims::{assert_none, assert_some_eq};
 
-    #[tokio::test]
-    async fn administrator_cache_respects_expiration() {
+    #[test]
+    fn administrator_cache_respects_expiration() {
         let chat_id = ChatId(1);
         let user_id = UserId(2);
         let cache = AdminCache::with_ttl(Duration::from_mins(1));
-        cache.insert(chat_id, HashSet::from([user_id])).await;
-        assert_some_eq!(cache.status(chat_id, user_id).await, true);
-        assert_some_eq!(cache.status(chat_id, UserId(3)).await, false);
+        cache.insert(chat_id, HashSet::from([user_id]));
+        assert_some_eq!(cache.status(chat_id, user_id), true);
+        assert_some_eq!(cache.status(chat_id, UserId(3)), false);
 
         let expired = AdminCache::with_ttl(Duration::ZERO);
-        expired.insert(chat_id, HashSet::from([user_id])).await;
-        assert_none!(expired.status(chat_id, user_id).await);
+        expired.insert(chat_id, HashSet::from([user_id]));
+        assert_none!(expired.status(chat_id, user_id));
     }
 }
