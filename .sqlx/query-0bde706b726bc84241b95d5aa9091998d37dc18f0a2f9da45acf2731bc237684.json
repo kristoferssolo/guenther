@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT\n            c.id AS card_id,\n            c.user_id,\n            c.owner_name,\n            c.bingo_announced AS `bingo_announced: bool`,\n            g.id AS game_id,\n            g.chat_id,\n            g.slug,\n            g.name AS game_name,\n            g.description,\n            g.center_text,\n            g.state,\n            g.is_default AS `is_default: bool`\n        FROM\n            bingo_cards c\n            JOIN bingo_games g ON g.id = c.game_id\n        WHERE\n            c.id = ?\n        ",
+  "query": "\n        SELECT\n            c.id AS card_id,\n            c.user_id,\n            c.owner_name,\n            c.bingo_announced AS `bingo_announced: bool`,\n            g.id AS game_id,\n            g.chat_id,\n            g.slug,\n            g.name AS game_name,\n            g.description,\n            g.center_text,\n            g.state,\n            g.is_default AS `is_default: bool`,\n            u.username AS `known_username?`,\n            u.display_name AS `known_display_name?`\n        FROM\n            bingo_cards c\n            JOIN bingo_games g ON g.id = c.game_id\n            LEFT JOIN bingo_users u ON u.chat_id = g.chat_id AND u.user_id = c.user_id\n        WHERE\n            c.id = ?\n        ",
   "describe": {
     "columns": [
       {
@@ -134,6 +134,28 @@
             "name": "is_default"
           }
         }
+      },
+      {
+        "name": "known_username?",
+        "ordinal": 12,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "name": "known_display_name?",
+        "ordinal": 13,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "bingo_users",
+            "name": "display_name"
+          }
+        }
       }
     ],
     "parameters": {
@@ -151,8 +173,10 @@
       false,
       false,
       false,
-      false
+      false,
+      true,
+      true
     ]
   },
-  "hash": "d630106917cd9b1aade9485d6fca351f4d536be3e91bae3e77cd53790f03f8e3"
+  "hash": "0bde706b726bc84241b95d5aa9091998d37dc18f0a2f9da45acf2731bc237684"
 }
