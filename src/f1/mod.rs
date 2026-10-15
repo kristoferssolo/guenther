@@ -1,12 +1,11 @@
+mod error;
 mod schedule;
 mod standings;
 
-use crate::{
-    config::F1Config,
-    error::{Error, Result},
-};
+use crate::{config::F1Config, f1::error::Result};
 use reqwest::Client;
 
+pub use error::F1Error;
 pub use schedule::ScheduleView;
 
 /// Fetches and formats Formula 1 data using one reusable HTTP client.
@@ -23,7 +22,9 @@ impl F1 {
     ///
     /// Returns an error if the HTTP client cannot be built.
     pub fn new(config: F1Config) -> Result<Self> {
-        let http = Client::builder().build().map_err(Error::BuildHttpClient)?;
+        let http = Client::builder()
+            .build()
+            .map_err(F1Error::BuildHttpClient)?;
         Ok(Self { http, config })
     }
 

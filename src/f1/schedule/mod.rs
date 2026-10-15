@@ -1,7 +1,7 @@
 mod format;
 mod race;
 
-use crate::error::{Error, Result};
+use crate::f1::error::{F1Error, Result};
 use chrono::{FixedOffset, Utc};
 use format::{format_duration, format_start};
 use race::{JolpicaResponse, Race, SessionKind, next_session};
@@ -58,7 +58,7 @@ pub(super) async fn next_race_message(
         .collect();
 
     if lines.is_empty() {
-        return Err(Error::MissingF1Sessions);
+        return Err(F1Error::MissingSessions);
     }
 
     Ok(format!("{}\n\n{}", race.header(offset), lines.join("\n")))
@@ -76,7 +76,7 @@ pub(super) async fn countdown_message(client: &Client, offset: FixedOffset) -> R
 
     let sessions = race.sessions()?;
     let Some((kind, start)) = next_session(&sessions, now) else {
-        return Err(Error::MissingF1Sessions);
+        return Err(F1Error::MissingSessions);
     };
 
     Ok(format!(
@@ -94,12 +94,12 @@ async fn next_race(client: &Client) -> Result<Race> {
         .get(NEXT_RACE_URL)
         .send()
         .await
-        .map_err(Error::FetchF1Schedule)?
+        .map_err(F1Error::FetchSchedule)?
         .error_for_status()
-        .map_err(Error::FetchF1Schedule)?
+        .map_err(F1Error::FetchSchedule)?
         .json::<JolpicaResponse>()
         .await
-        .map_err(Error::DecodeF1Schedule)?;
+        .map_err(F1Error::DecodeSchedule)?;
 
     response
         .mr_data
@@ -107,5 +107,5 @@ async fn next_race(client: &Client) -> Result<Race> {
         .races
         .into_iter()
         .next()
-        .ok_or(Error::MissingF1Race)
+        .ok_or(F1Error::MissingRace)
 }

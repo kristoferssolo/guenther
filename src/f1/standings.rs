@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::f1::error::{F1Error, Result};
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -79,7 +79,7 @@ pub(super) async fn standings_message(client: &Client) -> Result<String> {
     )?;
 
     if drivers.standings.is_empty() || constructors.standings.is_empty() {
-        return Err(Error::MissingF1Standings);
+        return Err(F1Error::MissingStandings);
     }
 
     Ok(format!(
@@ -97,12 +97,12 @@ where
         .get(url)
         .send()
         .await
-        .map_err(Error::FetchF1Standings)?
+        .map_err(F1Error::FetchStandings)?
         .error_for_status()
-        .map_err(Error::FetchF1Standings)?
+        .map_err(F1Error::FetchStandings)?
         .json::<StandingsResponse<T>>()
         .await
-        .map_err(Error::DecodeF1Standings)?;
+        .map_err(F1Error::DecodeStandings)?;
 
     response
         .mr_data
@@ -110,7 +110,7 @@ where
         .standings_lists
         .into_iter()
         .next()
-        .ok_or(Error::MissingF1Standings)
+        .ok_or(F1Error::MissingStandings)
 }
 
 fn format_driver_standings(list: &StandingsList<DriverStanding>) -> String {

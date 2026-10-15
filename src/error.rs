@@ -20,12 +20,6 @@ pub enum Error {
     #[error("No media found")]
     NoMediaFound,
 
-    #[error("Failed to fetch the F1 schedule: {0}")]
-    FetchF1Schedule(#[source] reqwest::Error),
-
-    #[error("Failed to decode the F1 schedule: {0}")]
-    DecodeF1Schedule(#[source] reqwest::Error),
-
     #[error("Failed to extract the tweet ID")]
     InvalidTwitterUrl,
 
@@ -43,28 +37,6 @@ pub enum Error {
 
     #[error("Failed to download the Twitter image: {0}")]
     DownloadTwitterImage(#[source] reqwest::Error),
-
-    #[error("No upcoming F1 race was found")]
-    MissingF1Race,
-
-    #[error("No matching F1 sessions were found")]
-    MissingF1Sessions,
-
-    #[error("Failed to fetch the F1 standings: {0}")]
-    FetchF1Standings(#[source] reqwest::Error),
-
-    #[error("Failed to decode the F1 standings: {0}")]
-    DecodeF1Standings(#[source] reqwest::Error),
-
-    #[error("No F1 standings were found")]
-    MissingF1Standings,
-
-    #[error("Failed to parse F1 session time `{raw}`")]
-    ParseF1SessionTime {
-        raw: String,
-        #[source]
-        source: chrono::ParseError,
-    },
 
     #[error("{0}")]
     Other(String),
