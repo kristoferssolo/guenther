@@ -86,7 +86,6 @@ impl From<Weight> for FontWeight {
 pub struct TextBlock {
     pub lines: Vec<String>,
     pub font: Font,
-    pub truncated: bool,
 }
 
 impl TextBlock {
@@ -119,11 +118,7 @@ pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
         }
         let lines = layout(text, font, bounds);
         if lines_fit(&lines, font, bounds.height) {
-            return TextBlock {
-                lines,
-                font,
-                truncated: false,
-            };
+            return TextBlock { lines, font };
         }
     }
 
@@ -141,7 +136,6 @@ pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
         return TextBlock {
             lines: Vec::new(),
             font,
-            truncated: !text.is_empty(),
         };
     }
 
@@ -151,11 +145,7 @@ pub fn fit_text(text: &str, bounds: Rect, fonts: &[Font]) -> TextBlock {
         let keep = columns.saturating_sub(1);
         *last = format!("{}…", last.chars().take(keep).collect::<String>());
     }
-    TextBlock {
-        lines,
-        font,
-        truncated: true,
-    }
+    TextBlock { lines, font }
 }
 
 fn layout(text: &str, font: Font, bounds: Rect) -> Vec<String> {
@@ -257,7 +247,7 @@ mod tests {
         let text = "Safety car during a wet race creates an unexpected strategy gamble for every driver on the grid before the restart";
         let text = format!("{text:<128}");
         let block = fit_text(text.trim(), CELL_BOUNDS, &CELL_FONTS);
-        assert!(!block.truncated);
+        assert!(block.lines.last().is_some_and(|line| !line.ends_with('…')));
         assert!(block.width() <= CELL_BOUNDS.width);
         assert!(block.height() <= CELL_BOUNDS.height);
     }
@@ -265,7 +255,6 @@ mod tests {
     #[test]
     fn ellipsizes_text_that_cannot_fit_at_the_minimum_size() {
         let block = fit_text(&"x\n".repeat(128), CELL_BOUNDS, &CELL_FONTS);
-        assert!(block.truncated);
         assert!(block.lines.last().is_some_and(|line| line.ends_with('…')));
         assert!(block.width() <= CELL_BOUNDS.width);
         assert!(block.height() <= CELL_BOUNDS.height);
@@ -282,7 +271,6 @@ mod tests {
         );
         let block = fit_text("x", bounds, &[font]);
 
-        assert!(block.truncated);
         assert_eq!(block.lines, Vec::<String>::new());
         assert!(block.width() <= bounds.width);
         assert!(block.height() <= bounds.height);

@@ -46,19 +46,6 @@ fn detect_from_mime(mime_type: &str) -> MediaKind {
     }
 }
 
-/// Detect media kind from a path, using its extension before file contents.
-pub fn detect_media_kind(path: &Path) -> MediaKind {
-    if let Some(kind) = detect_from_extension(path) {
-        return kind;
-    }
-
-    if let Ok(Some(kind)) = infer::get_from_path(path) {
-        return detect_from_mime(kind.mime_type());
-    }
-
-    MediaKind::Unknown
-}
-
 /// Detect media kind without blocking on file I/O.
 pub async fn detect_media_kind_async(path: &Path) -> MediaKind {
     if let Some(kind) = detect_from_extension(path) {
@@ -118,21 +105,31 @@ impl Display for MediaKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::{assert_none, assert_some_eq};
 
     #[test]
     fn detect_media_kind_by_extension() {
-        assert_eq!(detect_media_kind(Path::new("video.mp4")), MediaKind::Video);
-        assert_eq!(detect_media_kind(Path::new("image.jpg")), MediaKind::Image);
-        assert_eq!(
-            detect_media_kind(Path::new("unknown.txt")),
-            MediaKind::Unknown
+        assert_some_eq!(
+            detect_from_extension(Path::new("video.mp4")),
+            MediaKind::Video
         );
+        assert_some_eq!(
+            detect_from_extension(Path::new("image.jpg")),
+            MediaKind::Image
+        );
+        assert_none!(detect_from_extension(Path::new("unknown.txt")));
     }
 
     #[test]
     fn media_kind_case_insensitive() {
-        assert_eq!(detect_media_kind(Path::new("VIDEO.MP4")), MediaKind::Video);
-        assert_eq!(detect_media_kind(Path::new("IMAGE.JPG")), MediaKind::Image);
+        assert_some_eq!(
+            detect_from_extension(Path::new("VIDEO.MP4")),
+            MediaKind::Video
+        );
+        assert_some_eq!(
+            detect_from_extension(Path::new("IMAGE.JPG")),
+            MediaKind::Image
+        );
     }
 
     #[test]
