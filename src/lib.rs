@@ -4,6 +4,7 @@ pub mod config;
 pub mod db;
 pub mod download;
 pub mod f1;
+pub mod inline;
 pub mod telemetry;
 pub mod utils;
 pub mod voice_lines;
