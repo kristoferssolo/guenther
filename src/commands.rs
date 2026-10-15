@@ -1,6 +1,6 @@
 #[cfg(feature = "bingo")]
-use guenther::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
-use guenther::{
+use crate::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
+use crate::{
     comments::Comments,
     f1::{F1, ScheduleView},
 };
@@ -63,6 +63,11 @@ pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
         .map_or_else(|_| RouteAction::HandleMessage, RouteAction::HandleCommand)
 }
 
+/// Reply to a parsed bot command.
+///
+/// # Errors
+///
+/// Returns an error if a Telegram request fails or a bingo command fails.
 pub async fn answer(
     bot: &Bot,
     message: &Message,

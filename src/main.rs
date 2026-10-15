@@ -1,9 +1,7 @@
-mod commands;
-
-use crate::commands::{RouteAction, answer, route_message};
 use dotenvy::dotenv;
 use guenther::{
     cache::MediaCache,
+    commands::{RouteAction, answer, route_message},
     comments::{Comments, failure_comment},
     config::Config,
     db,
