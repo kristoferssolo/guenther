@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "voice-line-capture")]
-use std::{fs::OpenOptions, io::Write};
 use std::{
     env, io,
     path::{Path, PathBuf},
     sync::Arc,
 };
+#[cfg(feature = "voice-line-capture")]
+use std::{fs::OpenOptions, io::Write};
 #[cfg(feature = "voice-line-capture")]
 use tempfile::NamedTempFile;
 use tokio::fs;
@@ -104,7 +104,8 @@ async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre
         // The temp file starts as 0600. Copy the target's mode, creating the target first so a
         // new file gets the default mode, and other readers keep access.
         let target = OpenOptions::new().append(true).create(true).open(&path)?;
-        temp.as_file().set_permissions(target.metadata()?.permissions())?;
+        temp.as_file()
+            .set_permissions(target.metadata()?.permissions())?;
         temp.as_file().sync_all()?;
         temp.persist(&path)?;
         Ok(())
