@@ -100,7 +100,7 @@ impl MediaCache {
         for (index, item) in items.iter().enumerate() {
             let position =
                 i64::try_from(index).map_err(|_| CacheError::PositionOutOfRange(index))?;
-            let kind = item.kind.as_str();
+            let kind = <&str>::from(item.kind);
             sqlx::query!(
                 r#"
                 INSERT INTO
@@ -144,11 +144,8 @@ impl MediaCache {
 /// Only `video` and `image` pass the table's `CHECK` constraint; anything else
 /// means the stored row is corrupt and should surface as an error.
 fn media_kind_from_db(kind: &str) -> Result<MediaKind> {
-    match kind {
-        "video" => Ok(MediaKind::Video),
-        "image" => Ok(MediaKind::Image),
-        other => Err(CacheError::InvalidMediaKind(other.to_owned())),
-    }
+    kind.parse()
+        .map_err(|_| CacheError::InvalidMediaKind(kind.to_owned()))
 }
 
 #[cfg(test)]

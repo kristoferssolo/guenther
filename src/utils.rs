@@ -1,4 +1,5 @@
-use std::{ffi::OsStr, fmt::Display, path::Path};
+use std::{ffi::OsStr, path::Path};
+use strum::{Display, EnumString, IntoStaticStr};
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::warn;
 
@@ -6,19 +7,13 @@ pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mov", "mkv", "avi", "m4v
 pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];
 
 /// Media type supported by the Telegram handler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The lowercase names are stored in `media_cache.kind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr, Display, EnumString)]
+#[strum(serialize_all = "lowercase")]
 pub enum MediaKind {
     Video,
     Image,
-}
-
-impl MediaKind {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Video => "video",
-            Self::Image => "image",
-        }
-    }
 }
 
 fn ext_matches(ext: &str, extensions: &[&str]) -> bool {
@@ -85,16 +80,10 @@ pub fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
     format!("{truncated}...")
 }
 
-impl Display for MediaKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_none, assert_some_eq};
+    use claims::{assert_none, assert_ok_eq, assert_some_eq};
     use rstest::rstest;
 
     #[rstest]
@@ -103,6 +92,14 @@ mod tests {
     #[case("text/plain", None)]
     fn detect_media_kind_by_mime(#[case] mime_type: &str, #[case] expected: Option<MediaKind>) {
         assert_eq!(detect_from_mime(mime_type), expected);
+    }
+
+    #[rstest]
+    #[case(MediaKind::Video, "video")]
+    #[case(MediaKind::Image, "image")]
+    fn media_kind_round_trips_stored_names(#[case] kind: MediaKind, #[case] name: &str) {
+        assert_eq!(<&str>::from(kind), name);
+        assert_ok_eq!(name.parse::<MediaKind>(), kind);
     }
 
     #[test]
