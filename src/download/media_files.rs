@@ -1,5 +1,5 @@
 use crate::{
-    error::{Error, Result},
+    download::error::{DownloadError, Result},
     utils::{MediaKind, detect_media_kind},
 };
 use std::path::PathBuf;
@@ -23,7 +23,8 @@ impl DownloadResult {
     ///
     /// # Errors
     ///
-    /// Returns `NoMediaFound` when there are no valid image/video files left after classification.
+    /// Returns [`DownloadError::NoMediaFound`] when there are no valid image/video files left after
+    /// classification.
     pub async fn supported_media(&self) -> Result<Vec<(PathBuf, MediaKind)>> {
         let mut media_items = Vec::new();
         for path in &self.files {
@@ -39,7 +40,7 @@ impl DownloadResult {
         }
 
         if media_items.is_empty() {
-            return Err(Error::NoMediaFound);
+            return Err(DownloadError::NoMediaFound);
         }
         Ok(media_items)
     }

@@ -1,7 +1,7 @@
 use crate::voice_lines::{
-    VoiceLine, VoiceLines, VoiceLinesFile, load_voice_lines_file, save_voice_lines_file,
+    Result, VoiceLine, VoiceLines, VoiceLinesError, VoiceLinesFile, load_voice_lines_file,
+    save_voice_lines_file,
 };
-use color_eyre::eyre::{Context, eyre};
 use std::path::Path;
 use teloxide::{
     net::Download,
@@ -12,7 +12,7 @@ use tempfile::tempdir;
 use tokio::{fs, process::Command};
 
 impl VoiceLines {
-    pub async fn capture(&self, bot: &Bot, msg: &Message) -> color_eyre::Result<()> {
+    pub async fn capture(&self, bot: &Bot, msg: &Message) -> Result<()> {
         let Some(capture) = capture_candidate(msg) else {
             return Ok(());
         };
@@ -31,9 +31,8 @@ impl VoiceLines {
                     return Ok(());
                 }
 
-                let line = convert_audio_to_voice_line(bot, msg.chat.id, audio, &self.ffmpeg)
-                    .await
-                    .wrap_err("convert incoming audio to a reusable voice message")?;
+                let line =
+                    convert_audio_to_voice_line(bot, msg.chat.id, audio, &self.ffmpeg).await?;
 
                 if contains_line(&file, &line) {
                     return Ok(());
@@ -130,22 +129,21 @@ async fn convert_audio_to_voice_line(
     chat_id: ChatId,
     audio: AudioCapture,
     ffmpeg: &Path,
-) -> color_eyre::Result<VoiceLine> {
+) -> Result<VoiceLine> {
     let source_file = bot
         .get_file(audio.file_id.clone())
         .await
-        .wrap_err("fetch Telegram file metadata for incoming audio")?;
+        .map_err(VoiceLinesError::FetchAudioFile)?;
 
-    let tempdir = tempdir().wrap_err("create temporary directory for voice conversion")?;
+    let tempdir = tempdir().map_err(VoiceLinesError::PrepareAudio)?;
     let input_path = tempdir.path().join("input");
     let output_path = tempdir.path().join("voice.ogg");
 
     let mut input_file = fs::File::create(&input_path)
         .await
-        .wrap_err("create temporary input file for downloaded audio")?;
+        .map_err(VoiceLinesError::PrepareAudio)?;
     bot.download_file(&source_file.path, &mut input_file)
-        .await
-        .wrap_err("download incoming audio from Telegram")?;
+        .await?;
     drop(input_file);
 
     transcode_audio_to_voice(ffmpeg, &input_path, &output_path).await?;
@@ -153,12 +151,12 @@ async fn convert_audio_to_voice_line(
     let sent_message = bot
         .send_voice(chat_id, InputFile::file(output_path))
         .await
-        .wrap_err("upload converted voice message to Telegram")?;
+        .map_err(VoiceLinesError::UploadVoice)?;
 
     let voice = sent_message
         .voice()
         .cloned()
-        .ok_or_else(|| eyre!("Telegram did not return a voice message after send_voice"))?;
+        .ok_or(VoiceLinesError::MissingVoice)?;
     let unique_file_id = voice.file.unique_id.to_string();
 
     Ok(VoiceLine {
@@ -176,7 +174,7 @@ async fn transcode_audio_to_voice(
     ffmpeg: &Path,
     input_path: &Path,
     output_path: &Path,
-) -> color_eyre::Result<()> {
+) -> Result<()> {
     let output = Command::new(ffmpeg)
         .arg("-y")
         .arg("-i")
@@ -189,15 +187,14 @@ async fn transcode_audio_to_voice(
         .arg(output_path)
         .output()
         .await
-        .wrap_err("run ffmpeg to convert audio into Telegram voice format")?;
+        .map_err(VoiceLinesError::RunFfmpeg)?;
 
     if output.status.success() {
         return Ok(());
     }
 
-    Err(eyre!(
-        "ffmpeg failed to convert audio: {}",
-        String::from_utf8_lossy(&output.stderr).trim()
+    Err(VoiceLinesError::Ffmpeg(
+        String::from_utf8_lossy(&output.stderr).trim().to_owned(),
     ))
 }
 

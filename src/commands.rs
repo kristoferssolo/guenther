@@ -1,11 +1,22 @@
 #[cfg(feature = "bingo")]
-use crate::bingo::{AdminCache, BingoStore, answer_bingo};
+use crate::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
 use guenther::{
     comments::Comments,
     f1::{F1, ScheduleView},
 };
 use strum::IntoStaticStr;
-use teloxide::{prelude::*, utils::command::BotCommands};
+use teloxide::{RequestError, prelude::*, utils::command::BotCommands};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum CommandError {
+    #[error("Telegram request failed: {0}")]
+    Telegram(#[from] RequestError),
+
+    #[cfg(feature = "bingo")]
+    #[error(transparent)]
+    Bingo(#[from] BingoError),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, BotCommands, IntoStaticStr)]
 #[command(rename_rule = "lowercase")]
@@ -60,7 +71,7 @@ pub async fn answer(
     f1: &F1,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
-) -> color_eyre::Result<()> {
+) -> Result<(), CommandError> {
     let chat_id = message.chat.id;
     match cmd {
         Command::Help => {

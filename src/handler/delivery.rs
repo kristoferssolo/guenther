@@ -1,8 +1,8 @@
+use crate::handler::Result;
 use guenther::{
     cache::CachedMedia,
     comments::TELEGRAM_CAPTION_LIMIT,
     config::Platform,
-    error::Result,
     utils::{MediaKind, truncate_with_ellipsis},
 };
 use std::path::PathBuf;

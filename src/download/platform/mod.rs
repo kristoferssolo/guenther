@@ -3,8 +3,7 @@ mod twitter;
 
 use crate::{
     config::{CobaltConfig, Platform},
-    download::DownloadResult,
-    error::Result,
+    download::{DownloadResult, error::Result},
 };
 use cobalt::CobaltClient;
 use twitter::TwitterClient;

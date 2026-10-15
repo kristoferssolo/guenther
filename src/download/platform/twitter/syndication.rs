@@ -1,6 +1,7 @@
-use crate::{
-    download::{DownloadResult, platform::twitter::status_id},
-    error::{Error, Result},
+use crate::download::{
+    DownloadResult,
+    error::{DownloadError, Result},
+    platform::twitter::status_id,
 };
 use reqwest::Client;
 use serde_json::Value;
@@ -16,7 +17,7 @@ pub async fn download_tweet_images(client: &Client, payload: &Value) -> Result<D
     let image_urls = extract_photo_urls(payload);
 
     if image_urls.is_empty() {
-        return Err(Error::MissingTwitterImages);
+        return Err(DownloadError::MissingTwitterImages);
     }
 
     let tempdir = tempdir()?;
@@ -27,14 +28,14 @@ pub async fn download_tweet_images(client: &Client, payload: &Value) -> Result<D
             .get(image_url)
             .send()
             .await
-            .map_err(Error::DownloadTwitterImage)?;
+            .map_err(DownloadError::DownloadTwitterImage)?;
         debug!(index, status = %response.status(), "Received Twitter image response");
         let bytes = response
             .error_for_status()
-            .map_err(Error::DownloadTwitterImage)?
+            .map_err(DownloadError::DownloadTwitterImage)?
             .bytes()
             .await
-            .map_err(Error::DownloadTwitterImage)?;
+            .map_err(DownloadError::DownloadTwitterImage)?;
 
         let path = tempdir
             .path()
@@ -51,7 +52,7 @@ pub async fn download_tweet_images(client: &Client, payload: &Value) -> Result<D
 }
 
 pub async fn fetch_tweet(client: &Client, url: &str) -> Result<Value> {
-    let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
+    let tweet_id = extract_tweet_id(url).ok_or(DownloadError::InvalidTwitterUrl)?;
     fetch_tweet_result(client, &tweet_id).await
 }
 
@@ -65,14 +66,14 @@ async fn fetch_tweet_result(client: &Client, tweet_id: &str) -> Result<Value> {
         .get(url)
         .send()
         .await
-        .map_err(Error::FetchTwitterSyndication)?;
+        .map_err(DownloadError::FetchTwitterSyndication)?;
     debug!(status = %response.status(), "Received Twitter syndication response");
     response
         .error_for_status()
-        .map_err(Error::FetchTwitterSyndication)?
+        .map_err(DownloadError::FetchTwitterSyndication)?
         .json::<Value>()
         .await
-        .map_err(Error::ParseTwitterSyndication)
+        .map_err(DownloadError::ParseTwitterSyndication)
 }
 
 fn extract_tweet_id(url: &str) -> Option<String> {

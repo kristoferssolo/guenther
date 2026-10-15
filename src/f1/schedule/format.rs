@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::f1::error::{F1Error, Result};
 use chrono::{DateTime, FixedOffset, TimeDelta, Utc};
 
 /// Display format for session start times, e.g. `Sun, 28 Jun 16:00`.
@@ -9,7 +9,7 @@ pub(super) fn parse_session_time(date: &str, time: &str) -> Result<DateTime<Utc>
     let raw = format!("{date}T{time}");
     DateTime::parse_from_rfc3339(&raw)
         .map(|parsed| parsed.with_timezone(&Utc))
-        .map_err(|source| Error::ParseF1SessionTime { raw, source })
+        .map_err(|source| F1Error::ParseSessionTime { raw, source })
 }
 
 /// Renders a session start in the viewer's offset.
