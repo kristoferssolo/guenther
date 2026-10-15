@@ -6,7 +6,6 @@ use crate::bingo::{
     telegram::{
         admin::{AdminCache, is_chat_admin},
         document::read_entry_file,
-        known_user,
         render::{HELP, send_card, send_cards, send_entries, send_games, send_text},
     },
 };
@@ -88,7 +87,7 @@ async fn execute_game_admin(
                 .from
                 .as_ref()
                 .ok_or(BingoError::PermissionDenied)
-                .map(known_user)?;
+                .map(KnownUser::from)?;
             let game = store
                 .create_game(chat_id, &slug, &name, actor.user_id)
                 .await?;
@@ -329,13 +328,13 @@ async fn resolve_target(
         .reply_to_message()
         .and_then(|reply| reply.from.as_ref())
     {
-        let user = known_user(user);
+        let user = KnownUser::from(user);
         store.observe_user(chat_id, &user).await?;
         return Ok(user);
     }
     if default_to_actor {
         let user = message.from.as_ref().ok_or(BingoError::PermissionDenied)?;
-        return Ok(known_user(user));
+        return Ok(KnownUser::from(user));
     }
     Err(BingoError::InvalidCommand(
         "Mention a user or reply to one of their messages".to_owned(),

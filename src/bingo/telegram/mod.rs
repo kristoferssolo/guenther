@@ -5,10 +5,7 @@ mod document;
 mod render;
 
 use crate::bingo::{error::Result, model::KnownUser, store::BingoStore};
-use teloxide::{
-    prelude::*,
-    types::{Message, User},
-};
+use teloxide::{prelude::*, types::Message};
 
 pub use admin::AdminCache;
 pub use callback::answer_callback;
@@ -19,7 +16,7 @@ pub async fn observe_message_users(store: &BingoStore, message: &Message) -> Res
         if user.is_bot {
             continue;
         }
-        let known = known_user(user);
+        let known = KnownUser::from(user);
         store.observe_user(chat_id, &known).await?;
     }
     Ok(())
@@ -41,17 +38,5 @@ pub async fn answer_bingo(
             Ok(())
         }
         Err(error) => Err(error),
-    }
-}
-
-pub fn known_user(user: &User) -> KnownUser {
-    let display_name = user.last_name.as_ref().map_or_else(
-        || user.first_name.clone(),
-        |last_name| format!("{} {last_name}", user.first_name),
-    );
-    KnownUser {
-        user_id: user.id,
-        username: user.username.clone(),
-        display_name,
     }
 }
