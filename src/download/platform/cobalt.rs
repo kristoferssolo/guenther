@@ -5,7 +5,7 @@ use crate::{
         error::{DownloadError, Result},
     },
 };
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt, stream};
 use reqwest::{
     Client,
     header::{ACCEPT, AUTHORIZATION},
@@ -20,6 +20,8 @@ use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::debug;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_mins(5);
+/// Caps parallel requests to Cobalt and the source site for large carousels.
+const PICKER_CONCURRENCY: usize = 4;
 
 #[derive(Debug, Clone)]
 pub(super) struct CobaltClient {
@@ -46,17 +48,7 @@ impl CobaltClient {
             | CobaltResponse::Redirect { url, filename } => {
                 vec![self.download_media(&tempdir, &url, &filename, 0).await?]
             }
-            CobaltResponse::Picker { picker } => {
-                let mut files = Vec::with_capacity(picker.len());
-                for (index, item) in picker.into_iter().enumerate() {
-                    let filename = format!("media-{index}.{}", extension_for(&item.media_type));
-                    files.push(
-                        self.download_media(&tempdir, &item.url, &filename, index)
-                            .await?,
-                    );
-                }
-                files
-            }
+            CobaltResponse::Picker { picker } => self.download_picker(&tempdir, picker).await?,
             CobaltResponse::LocalProcessing => return Err(DownloadError::CobaltLocalProcessing),
             CobaltResponse::Rejected { error } => {
                 return Err(DownloadError::CobaltRejected(error.code));
@@ -88,6 +80,23 @@ impl CobaltClient {
         let response = request.send().await.map_err(DownloadError::CobaltRequest)?;
         debug!(status = %response.status(), "Received Cobalt response");
         response.json().await.map_err(DownloadError::CobaltRequest)
+    }
+
+    /// Downloads picker items concurrently, returning paths in picker order.
+    async fn download_picker(
+        &self,
+        tempdir: &TempDir,
+        picker: Vec<PickerItem>,
+    ) -> Result<Vec<PathBuf>> {
+        stream::iter(picker.into_iter().enumerate())
+            .map(|(index, item)| async move {
+                let filename = format!("media-{index}.{}", extension_for(&item.media_type));
+                self.download_media(tempdir, &item.url, &filename, index)
+                    .await
+            })
+            .buffered(PICKER_CONCURRENCY)
+            .try_collect()
+            .await
     }
 
     async fn download_media(
@@ -198,9 +207,51 @@ fn extension_for(media_type: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_ok_eq;
+    use claims::{assert_ok, assert_ok_eq, assert_some};
     use rstest::rstest;
     use serde_json::{from_str, json, to_value};
+    use std::fs;
+    use tokio::{
+        io::{AsyncBufReadExt, BufReader},
+        net::{TcpListener, TcpStream},
+        time::sleep,
+    };
+
+    /// Serves each request path back as its body, delaying `/slow`.
+    async fn serve_paths(listener: TcpListener) {
+        while let Ok((socket, _)) = listener.accept().await {
+            tokio::spawn(respond_with_path(socket));
+        }
+    }
+
+    async fn respond_with_path(socket: TcpStream) {
+        let mut reader = BufReader::new(socket);
+        let mut request_line = String::new();
+        assert_ok!(reader.read_line(&mut request_line).await);
+        let (path, _) = assert_some!(
+            request_line
+                .strip_prefix("GET ")
+                .and_then(|rest| rest.split_once(' '))
+        );
+
+        let mut header = String::new();
+        loop {
+            header.clear();
+            let read = assert_ok!(reader.read_line(&mut header).await);
+            if read == 0 || header == "\r\n" {
+                break;
+            }
+        }
+
+        if path == "/slow" {
+            sleep(Duration::from_millis(200)).await;
+        }
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{path}",
+            path.len()
+        );
+        assert_ok!(reader.get_mut().write_all(response.as_bytes()).await);
+    }
 
     #[test]
     fn serializes_cobalt_request_with_api_field_names() {
@@ -247,5 +298,32 @@ mod tests {
     fn strips_directories_from_suggested_filename() {
         assert_eq!(safe_filename("../../video.mp4", 2), "002-video.mp4");
         assert_eq!(safe_filename("..", 0), "000-media");
+    }
+
+    #[tokio::test]
+    async fn downloads_picker_items_in_picker_order() {
+        let listener = assert_ok!(TcpListener::bind("127.0.0.1:0").await);
+        let address = assert_ok!(listener.local_addr());
+        tokio::spawn(serve_paths(listener));
+
+        let client = assert_ok!(CobaltClient::new(CobaltConfig::default()));
+        let tempdir = assert_ok!(tempdir());
+        let bodies = ["/slow", "/fast"];
+        let picker = bodies
+            .map(|path| PickerItem {
+                media_type: "photo".into(),
+                url: format!("http://{address}{path}"),
+            })
+            .into();
+
+        let files = assert_ok!(client.download_picker(&tempdir, picker).await);
+
+        assert_eq!(
+            files,
+            ["000-media-0.jpg", "001-media-1.jpg"].map(|name| tempdir.path().join(name))
+        );
+        for (file, body) in files.iter().zip(bodies) {
+            assert_ok_eq!(fs::read_to_string(file), body);
+        }
     }
 }
