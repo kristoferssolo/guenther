@@ -488,15 +488,16 @@ mod tests {
         let original = setup_card(&store, &owner).await;
         let (_, entries) = assert_ok!(store.list_entries(CHAT_ID, Some("season")).await);
         let mut entries = entries.iter();
-        let imported = Position::iter()
-            .map(|cell_position| ImportedCell {
+        let imported = std::array::from_fn(|index| {
+            let cell_position = position(index);
+            ImportedCell {
                 entry_number: (cell_position != Position::FREE)
                     .then(|| entries.next().map(|entry| entry.number))
                     .flatten(),
                 marked: cell_position == position(0) || cell_position == Position::FREE,
                 is_free: cell_position == Position::FREE,
-            })
-            .collect::<Vec<_>>();
+            }
+        });
         let card = assert_ok!(
             store
                 .import_card(CHAT_ID, "season", &owner, &imported, true)
@@ -508,8 +509,7 @@ mod tests {
         assert!(assert_some!(card.cells.get(Position::FREE.index())).is_free);
 
         let mut invalid = imported;
-        assert_some!(invalid.first_mut()).entry_number =
-            Some(assert_ok!(EntryNumber::try_from(i64::MAX)));
+        invalid[0].entry_number = Some(assert_ok!(EntryNumber::try_from(i64::MAX)));
         assert_err!(
             store
                 .import_card(CHAT_ID, "season", &owner, &invalid, true)

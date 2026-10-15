@@ -215,6 +215,9 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
         }
     }
 
+    let cells = Box::<[ImportedCell; CELL_COUNT]>::try_from(cells).map_err(|_| {
+        BingoError::InvalidCommand(format!("An imported card must contain {CELL_COUNT} cells"))
+    })?;
     Ok(BingoCommand::Card(CardAdmin::Import {
         slug,
         target,

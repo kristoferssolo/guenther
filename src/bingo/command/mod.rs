@@ -3,7 +3,7 @@ mod parser;
 
 use crate::bingo::{
     error::Result,
-    model::{EntryNumber, GameState, ImportedCell, Position},
+    model::{CELL_COUNT, EntryNumber, GameState, ImportedCell, Position},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub enum CardAdmin {
     Import {
         slug: String,
         target: Option<String>,
-        cells: Vec<ImportedCell>,
+        cells: Box<[ImportedCell; CELL_COUNT]>,
         replace: bool,
     },
     Set {
