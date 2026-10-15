@@ -182,7 +182,9 @@ async fn inline_query_handler(
     query: teloxide::types::InlineQuery,
     state: AppState,
 ) -> color_eyre::Result<()> {
-    answer_inline_query(bot, query, &state.voice_lines).await
+    answer_inline_query(bot, query, &state.voice_lines)
+        .await
+        .map_err(Into::into)
 }
 
 #[cfg(feature = "bingo")]

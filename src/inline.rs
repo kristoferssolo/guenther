@@ -1,14 +1,25 @@
-use crate::voice_lines::{VoiceLine, VoiceLines};
+use crate::voice_lines::{VoiceLine, VoiceLines, VoiceLinesError};
 use teloxide::{
+    RequestError,
     prelude::*,
     types::{FileId, InlineQuery, InlineQueryResult, InlineQueryResultCachedVoice},
 };
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum InlineError {
+    #[error(transparent)]
+    VoiceLines(#[from] VoiceLinesError),
+
+    #[error("Telegram request failed: {0}")]
+    Telegram(#[from] RequestError),
+}
 
 pub async fn answer_inline_query(
     bot: Bot,
     query: InlineQuery,
     voice_lines: &VoiceLines,
-) -> color_eyre::Result<()> {
+) -> Result<(), InlineError> {
     let results = voice_lines
         .search(&query.query)
         .await?
