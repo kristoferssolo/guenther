@@ -1,6 +1,6 @@
 use crate::bingo::{
     card_image::render_card_png,
-    error::Result,
+    error::{BingoError, Result},
     model::{CardId, Position, ToggleResult},
     store::BingoStore,
     telegram::{
@@ -12,9 +12,11 @@ use teloxide::{
     ApiError, RequestError,
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
     prelude::{Bot, Requester},
-    types::{CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, MessageId},
+    types::{
+        CallbackQuery, ChatId, InputFile, InputMedia, InputMediaPhoto, Message, MessageId, UserId,
+    },
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct CardCallback {
@@ -35,32 +37,18 @@ pub async fn answer_callback(
     let Some(callback) = parse_callback(data) else {
         return Ok(());
     };
-    let can_edit_any_card = if let Some(message) = query.regular_message() {
-        is_user_chat_admin(
-            bot,
-            message.chat.id,
-            query.from.id,
-            message.chat.is_private(),
-            admin_cache,
-        )
-        .await?
-    } else {
-        false
+    // Cards are only ever sent as regular messages, so anything else cannot be a card.
+    let Some(message) = query.regular_message() else {
+        bot.answer_callback_query(query.id.clone()).await?;
+        return Ok(());
     };
     debug!(
         card_id = %callback.card_id,
         %callback.position,
-        can_edit_any_card,
         "Toggling bingo card cell"
     );
-    let result = store
-        .toggle_cell(
-            callback.card_id,
-            query.from.id,
-            callback.position,
-            can_edit_any_card,
-        )
-        .await;
+    let result =
+        toggle_as_owner_or_admin(bot, store, admin_cache, message, query.from.id, callback).await;
     match result {
         Ok(toggle) => finish_toggle(bot, query, toggle, callback.image_message_id).await,
         Err(error) if error.is_user_facing() => {
@@ -71,14 +59,56 @@ pub async fn answer_callback(
             Ok(())
         }
         Err(error) => {
-            let _ = bot
+            if let Err(error) = bot
                 .answer_callback_query(query.id.clone())
                 .text("Could not update the card")
                 .show_alert(true)
-                .await;
+                .await
+            {
+                warn!(%error, "Could not answer a failed bingo callback");
+            }
             Err(error)
         }
     }
+}
+
+/// Toggles as the card owner first, so chat administrators are only looked up when someone taps
+/// another user's card. Retrying is safe because ownership is checked before any write.
+async fn toggle_as_owner_or_admin(
+    bot: &Bot,
+    store: &BingoStore,
+    admin_cache: &AdminCache,
+    message: &Message,
+    user_id: UserId,
+    callback: CardCallback,
+) -> Result<ToggleResult> {
+    let chat_id = message.chat.id;
+    let toggle = move |can_edit_any_card| {
+        store.toggle_cell(
+            chat_id,
+            callback.card_id,
+            user_id,
+            callback.position,
+            can_edit_any_card,
+        )
+    };
+    match toggle(false).await {
+        Err(BingoError::NotCardOwner) => {}
+        result => return result,
+    }
+    let is_admin = is_user_chat_admin(
+        bot,
+        chat_id,
+        user_id,
+        message.chat.is_private(),
+        admin_cache,
+    )
+    .await?;
+    if !is_admin {
+        return Err(BingoError::NotCardOwner);
+    }
+    debug!("Toggling another user's bingo card as a chat administrator");
+    toggle(true).await
 }
 
 async fn finish_toggle(
@@ -158,18 +188,15 @@ pub(super) fn format_callback(
 }
 
 fn parse_callback(data: &str) -> Option<CardCallback> {
-    let parts = data.strip_prefix("b:")?.split(':').collect::<Vec<_>>();
-    let (card_id, image_message_id, position) = match parts.as_slice() {
-        [card_id, position] => (card_id.parse().ok()?, None, position),
-        [card_id, image_message_id, position] => (
-            card_id.parse().ok()?,
-            Some(MessageId(image_message_id.parse().ok()?)),
-            position,
-        ),
-        _ => return None,
+    let (ids, position) = data.strip_prefix("b:")?.rsplit_once(':')?;
+    let (card_id, image_message_id) = match ids.split_once(':') {
+        Some((card_id, image_message_id)) => {
+            (card_id, Some(MessageId(image_message_id.parse().ok()?)))
+        }
+        None => (ids, None),
     };
     Some(CardCallback {
-        card_id,
+        card_id: card_id.parse().ok()?,
         image_message_id,
         position: position.parse::<usize>().ok()?.try_into().ok()?,
     })

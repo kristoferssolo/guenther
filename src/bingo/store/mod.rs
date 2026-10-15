@@ -21,11 +21,15 @@ impl BingoStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::{
-        CELL_COUNT, Card, EntryNumber, GameState, ImportedCell, KnownUser,
-        MAX_GAME_DESCRIPTION_CHARS, Position, REQUIRED_ENTRIES,
+    use crate::bingo::{
+        error::BingoError,
+        model::{
+            CELL_COUNT, Card, EntryNumber, GameState, ImportedCell, KnownUser,
+            MAX_GAME_DESCRIPTION_CHARS, Position, REQUIRED_ENTRIES,
+        },
     };
     use claims::{assert_err, assert_ok, assert_ok_eq, assert_some};
+    use std::assert_matches;
     use teloxide::types::{ChatId, UserId};
 
     const CHAT_ID: ChatId = ChatId(1);
@@ -323,7 +327,7 @@ mod tests {
         let card = setup_card(&store, &owner).await;
         assert_ok!(
             store
-                .toggle_cell(card.id, owner.user_id, position(0), false)
+                .toggle_cell(CHAT_ID, card.id, owner.user_id, position(0), false)
                 .await
         );
         assert_ok!(
@@ -335,7 +339,7 @@ mod tests {
         assert_err!(store.reset_card(CHAT_ID, None, owner.user_id).await);
         assert_err!(
             store
-                .toggle_cell(card.id, UserId(99), position(1), true)
+                .toggle_cell(CHAT_ID, card.id, UserId(99), position(1), true)
                 .await
         );
         let fetched = assert_ok!(store.card(CHAT_ID, None, owner.user_id).await);
@@ -350,30 +354,30 @@ mod tests {
 
         assert_err!(
             store
-                .toggle_cell(card.id, UserId(99), position(0), false)
+                .toggle_cell(CHAT_ID, card.id, UserId(99), position(0), false)
                 .await
         );
         assert_ok!(
             store
-                .toggle_cell(card.id, UserId(99), position(0), true)
+                .toggle_cell(CHAT_ID, card.id, UserId(99), position(0), true)
                 .await
         );
         assert_ok!(
             store
-                .toggle_cell(card.id, UserId(99), position(0), true)
+                .toggle_cell(CHAT_ID, card.id, UserId(99), position(0), true)
                 .await
         );
         for index in 0..4 {
             let toggle = assert_ok!(
                 store
-                    .toggle_cell(card.id, owner.user_id, position(index), false)
+                    .toggle_cell(CHAT_ID, card.id, owner.user_id, position(index), false)
                     .await
             );
             assert!(!toggle.newly_completed);
         }
         let toggle = assert_ok!(
             store
-                .toggle_cell(card.id, owner.user_id, position(4), false)
+                .toggle_cell(CHAT_ID, card.id, owner.user_id, position(4), false)
                 .await
         );
         assert!(toggle.newly_completed);
@@ -381,15 +385,31 @@ mod tests {
 
         assert_ok!(
             store
-                .toggle_cell(card.id, owner.user_id, position(4), false)
+                .toggle_cell(CHAT_ID, card.id, owner.user_id, position(4), false)
                 .await
         );
         let repeated = assert_ok!(
             store
-                .toggle_cell(card.id, owner.user_id, position(4), false)
+                .toggle_cell(CHAT_ID, card.id, owner.user_id, position(4), false)
                 .await
         );
         assert!(!repeated.newly_completed);
+    }
+
+    #[tokio::test]
+    async fn rejects_toggles_from_another_chat() {
+        let store = store().await;
+        let owner = user(10, "driver");
+        let card = setup_card(&store, &owner).await;
+
+        assert_matches!(
+            store
+                .toggle_cell(ChatId(2), card.id, owner.user_id, position(0), true)
+                .await,
+            Err(BingoError::NotFound(_))
+        );
+        let fetched = assert_ok!(store.card(CHAT_ID, None, owner.user_id).await);
+        assert!(!assert_some!(fetched.cells.first()).marked);
     }
 
     #[tokio::test]
