@@ -81,9 +81,14 @@ fn extract_tweet_id(url: &str) -> Option<String> {
     status_id(&parsed).map(str::to_owned)
 }
 
-/// The reference implementation formats this value in base 36. The endpoint
-/// only rejects a missing or empty token and does not validate its value, so
-/// the base-10 digits work.
+/// Build the `token` query parameter for the syndication `tweet-result` endpoint.
+///
+/// The endpoint requires a non-empty token and answers `{}` to an empty or
+/// missing one. It does not check the value (as of 2026-10-16), so any
+/// non-empty string works.
+///
+/// Follows react-tweet's `getToken`, but formats the digits in base 10 where
+/// the reference uses base 36.
 fn syndication_token(tweet_id: &str) -> String {
     let id = tweet_id.parse::<f64>().unwrap_or_default();
     ((id / 1e15) * std::f64::consts::PI)
@@ -253,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn syndication_token_is_not_empty() {
+    fn syndication_token_is_never_empty() {
         assert_ne!(syndication_token("2037463638215462967"), "");
     }
 }
