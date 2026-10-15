@@ -5,9 +5,9 @@ mod platform;
 use std::env;
 use tracing::warn;
 
-pub use cobalt::CobaltConfig;
-pub use f1::F1Config;
-pub use platform::{ParsePlatformError, Platform, PlatformConfig};
+pub use crate::config::cobalt::CobaltConfig;
+pub use crate::config::f1::F1Config;
+pub use crate::config::platform::{ParsePlatformError, Platform, PlatformConfig};
 
 #[derive(Debug, Clone)]
 pub struct Config {

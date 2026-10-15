@@ -3,12 +3,14 @@ mod twitter;
 
 use crate::{
     config::{CobaltConfig, Platform},
-    download::{DownloadResult, error::Result},
+    download::{
+        DownloadResult,
+        error::Result,
+        platform::{cobalt::CobaltClient, twitter::TwitterClient},
+    },
 };
-use cobalt::CobaltClient;
-use twitter::TwitterClient;
 
-pub use twitter::status_id as twitter_status_id;
+pub use crate::download::platform::twitter::status_id as twitter_status_id;
 
 /// Downloads media for every supported platform using reusable HTTP clients.
 #[derive(Debug, Clone)]

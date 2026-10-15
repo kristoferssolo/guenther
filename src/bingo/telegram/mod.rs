@@ -7,8 +7,8 @@ mod render;
 use crate::bingo::{error::Result, model::KnownUser, store::BingoStore};
 use teloxide::{prelude::*, types::Message};
 
-pub use admin::AdminCache;
-pub use callback::answer_callback;
+pub use crate::bingo::telegram::admin::AdminCache;
+pub use crate::bingo::telegram::callback::answer_callback;
 
 /// Remember the non-bot users a message mentions, so bingo commands can resolve them later.
 ///
