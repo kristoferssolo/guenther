@@ -89,6 +89,12 @@ impl<'a> NewCell<'a> {
     }
 }
 
+/// The error for a card that does not exist, also used for cards outside the caller's chat so
+/// their ids are not revealed.
+pub fn card_not_found() -> BingoError {
+    BingoError::NotFound("That bingo card no longer exists".to_owned())
+}
+
 pub async fn fetch_card(connection: &mut SqliteConnection, card_id: CardId) -> Result<Card> {
     let row = sqlx::query_as!(
         CardRow,
@@ -120,7 +126,7 @@ pub async fn fetch_card(connection: &mut SqliteConnection, card_id: CardId) -> R
     )
     .fetch_optional(&mut *connection)
     .await?
-    .ok_or_else(|| BingoError::NotFound("That bingo card no longer exists".to_owned()))?;
+    .ok_or_else(card_not_found)?;
     let cells = fetch_cells(connection, card_id).await?;
     row.into_card(cells)
 }

@@ -35,18 +35,20 @@ pub async fn answer_callback(
     let Some(callback) = parse_callback(data) else {
         return Ok(());
     };
-    let can_edit_any_card = if let Some(message) = query.regular_message() {
-        is_user_chat_admin(
-            bot,
-            message.chat.id,
-            query.from.id,
-            message.chat.is_private(),
-            admin_cache,
-        )
-        .await?
-    } else {
-        false
+    // Cards are only ever sent as regular messages, so anything else cannot be a card.
+    let Some(message) = query.regular_message() else {
+        bot.answer_callback_query(query.id.clone()).await?;
+        return Ok(());
     };
+    let chat_id = message.chat.id;
+    let can_edit_any_card = is_user_chat_admin(
+        bot,
+        chat_id,
+        query.from.id,
+        message.chat.is_private(),
+        admin_cache,
+    )
+    .await?;
     debug!(
         card_id = %callback.card_id,
         %callback.position,
@@ -55,6 +57,7 @@ pub async fn answer_callback(
     );
     let result = store
         .toggle_cell(
+            chat_id,
             callback.card_id,
             query.from.id,
             callback.position,

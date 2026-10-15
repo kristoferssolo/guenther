@@ -9,9 +9,9 @@ use crate::bingo::{
     store::{
         BingoStore,
         card::queries::{
-            NewCell, announce_bingo, card_id_in, delete_or_reject_existing, fetch_active_entry,
-            fetch_card, find_card_id, insert_card, insert_cell, reset_card_state, toggle_cell_mark,
-            update_cell,
+            NewCell, announce_bingo, card_id_in, card_not_found, delete_or_reject_existing,
+            fetch_active_entry, fetch_card, find_card_id, insert_card, insert_cell,
+            reset_card_state, toggle_cell_mark, update_cell,
         },
         validation::{ensure_active, ensure_editable},
     },
@@ -201,6 +201,7 @@ impl BingoStore {
 
     pub async fn toggle_cell(
         &self,
+        chat_id: ChatId,
         card_id: CardId,
         user_id: UserId,
         position: Position,
@@ -211,6 +212,9 @@ impl BingoStore {
         }
         let mut transaction = self.pool.begin().await?;
         let mut card = fetch_card(&mut transaction, card_id).await?;
+        if card.game.chat_id != chat_id {
+            return Err(card_not_found());
+        }
         if card.owner.user_id != user_id && !can_edit_any_card {
             return Err(BingoError::NotCardOwner);
         }
