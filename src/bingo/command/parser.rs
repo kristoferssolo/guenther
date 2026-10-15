@@ -7,9 +7,7 @@ use crate::bingo::{
         },
     },
     error::{BingoError, Result},
-    model::{
-        CELL_COUNT, EntryNumber, FREE_POSITION, GRID_SIDE, GameState, ImportedCell, MAX_ENTRY_CHARS,
-    },
+    model::{CELL_COUNT, EntryNumber, FREE_POSITION, GRID_SIDE, GameState, ImportedCell},
 };
 
 pub fn parse(input: &str) -> Result<BingoCommand> {
@@ -116,7 +114,6 @@ fn parse_add(input: &str) -> Result<BingoCommand> {
     } else {
         (None, input.trim())
     };
-    validate_text(text, "entry")?;
     Ok(BingoCommand::Add {
         slug,
         text: text.to_owned(),
@@ -132,7 +129,6 @@ fn parse_edit(input: &str) -> Result<BingoCommand> {
         let (raw_number, text) = required_pair(rest, USAGE)?;
         (Some(first.to_owned()), raw_number, text)
     };
-    validate_text(text, "entry")?;
     Ok(BingoCommand::Entry(EntryAdmin::Edit {
         slug,
         entry_number: parse_id(raw_number, "entry number")?,
@@ -259,14 +255,4 @@ fn parse_card(input: &str) -> Result<BingoCommand> {
         position,
         entry_number: parse_id(raw_entry_number, "entry number")?,
     }))
-}
-
-fn validate_text(text: &str, label: &str) -> Result<()> {
-    let length = text.chars().count();
-    if length == 0 || length > MAX_ENTRY_CHARS {
-        return Err(BingoError::InvalidCommand(format!(
-            "The {label} text must contain between 1 and {MAX_ENTRY_CHARS} characters"
-        )));
-    }
-    Ok(())
 }
