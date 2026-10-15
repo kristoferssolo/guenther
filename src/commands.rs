@@ -135,7 +135,7 @@ async fn send_f1_standings(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::assert_matches;
+    use std::assert_matches;
 
     #[test]
     fn routes_commands_plain_messages_and_missing_text() {
