@@ -6,7 +6,7 @@ use crate::bingo::{
     telegram::{
         admin::{AdminCache, is_chat_admin},
         document::read_entry_file,
-        known_user, observe_message_users,
+        known_user,
         render::{HELP, send_card, send_cards, send_entries, send_games, send_text},
     },
 };
@@ -33,7 +33,6 @@ pub async fn execute_bingo(
     admin_cache: &AdminCache,
     input: &str,
 ) -> Result<()> {
-    observe_message_users(store, message).await?;
     let command = BingoCommand::parse(input)?;
     Span::current().record("action", command.name());
     if command.requires_admin() && !is_chat_admin(bot, message, admin_cache).await? {
