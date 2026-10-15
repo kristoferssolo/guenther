@@ -133,20 +133,18 @@ pub(super) fn parse_post_text_from_value(json: &Value) -> Option<String> {
     (!text.is_empty()).then(|| text.to_owned())
 }
 
-fn image_extension(url: &str) -> String {
+fn image_extension(url: &str) -> &'static str {
+    const SUPPORTED: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];
+
     Url::parse(url)
         .ok()
         .and_then(|parsed| {
-            parsed
-                .path_segments()
-                .and_then(|mut segments| segments.next_back().map(str::to_owned))
+            let (_, ext) = parsed.path_segments()?.next_back()?.rsplit_once('.')?;
+            SUPPORTED
+                .into_iter()
+                .find(|supported| ext.eq_ignore_ascii_case(supported))
         })
-        .and_then(|last| {
-            last.rsplit_once('.')
-                .map(|(_, ext)| ext.to_ascii_lowercase())
-        })
-        .filter(|ext| matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif"))
-        .unwrap_or_else(|| "jpg".to_owned())
+        .unwrap_or("jpg")
 }
 
 #[cfg(test)]
@@ -243,6 +241,14 @@ mod tests {
     #[case::whitespace_only(json!({"full_text": "   "}), None)]
     fn parses_post_text(#[case] payload: Value, #[case] expected: Option<&str>) {
         assert_eq!(parse_post_text_from_value(&payload).as_deref(), expected);
+    }
+
+    #[rstest]
+    #[case::uppercase("https://pbs.twimg.com/media/one.PNG", "png")]
+    #[case::no_extension("https://pbs.twimg.com/media/one", "jpg")]
+    #[case::unsupported("https://pbs.twimg.com/media/one.svg", "jpg")]
+    fn picks_image_extension(#[case] url: &str, #[case] expected: &str) {
+        assert_eq!(image_extension(url), expected);
     }
 
     #[test]
