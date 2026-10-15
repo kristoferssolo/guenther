@@ -7,6 +7,23 @@ use crate::{
 };
 use reqwest::Client;
 use tracing::warn;
+use url::Url;
+
+/// Extract the numeric post ID that follows `status` in a Twitter/X URL path,
+/// such as `/<user>/status/<id>` or `/i/status/<id>`.
+pub fn status_id(url: &Url) -> Option<&str> {
+    let mut segments = url.path_segments()?;
+    while let Some(segment) = segments.next() {
+        if segment == "status"
+            && let Some(id) = segments.next()
+            && !id.is_empty()
+            && id.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Some(id);
+        }
+    }
+    None
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct TwitterClient {

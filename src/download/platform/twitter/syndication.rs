@@ -1,5 +1,8 @@
 use crate::{
-    download::{DownloadResult, platform::twitter::metadata::parse_post_text_from_value},
+    download::{
+        DownloadResult,
+        platform::twitter::{metadata::parse_post_text_from_value, status_id},
+    },
     error::{Error, Result},
 };
 use reqwest::Client;
@@ -80,10 +83,7 @@ async fn fetch_tweet_result(client: &Client, tweet_id: &str) -> Result<Value> {
 
 fn extract_tweet_id(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
-    parsed
-        .path_segments()?
-        .find(|segment| segment.chars().all(|ch| ch.is_ascii_digit()))
-        .map(str::to_owned)
+    status_id(&parsed).map(str::to_owned)
 }
 
 fn syndication_token(tweet_id: &str) -> String {
@@ -143,6 +143,7 @@ fn image_extension(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::assert_some_eq;
     use serde_json::json;
 
     #[test]
@@ -150,6 +151,14 @@ mod tests {
         assert_eq!(
             extract_tweet_id("https://x.com/i/status/2037463638215462967").as_deref(),
             Some("2037463638215462967")
+        );
+    }
+
+    #[test]
+    fn extracts_tweet_id_after_status_segment() {
+        assert_some_eq!(
+            extract_tweet_id("https://x.com/12345/status/678").as_deref(),
+            "678"
         );
     }
 

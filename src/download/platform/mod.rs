@@ -9,6 +9,8 @@ use crate::{
 use cobalt::CobaltClient;
 use twitter::TwitterClient;
 
+pub use twitter::status_id as twitter_status_id;
+
 /// Downloads media for every supported platform using reusable HTTP clients.
 #[derive(Debug, Clone)]
 pub struct Downloader {
