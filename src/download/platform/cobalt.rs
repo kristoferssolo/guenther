@@ -1,7 +1,9 @@
 use crate::{
     config::CobaltConfig,
-    download::DownloadResult,
-    error::{Error, Result},
+    download::{
+        DownloadResult,
+        error::{DownloadError, Result},
+    },
 };
 use futures::StreamExt;
 use reqwest::{
@@ -31,7 +33,7 @@ impl CobaltClient {
             .connect_timeout(Duration::from_secs(15))
             .timeout(REQUEST_TIMEOUT)
             .build()
-            .map_err(Error::BuildHttpClient)?;
+            .map_err(DownloadError::BuildHttpClient)?;
         Ok(Self { http, config })
     }
 
@@ -55,12 +57,14 @@ impl CobaltClient {
                 }
                 files
             }
-            CobaltResponse::LocalProcessing => return Err(Error::CobaltLocalProcessing),
-            CobaltResponse::Rejected { error } => return Err(Error::CobaltRejected(error.code)),
+            CobaltResponse::LocalProcessing => return Err(DownloadError::CobaltLocalProcessing),
+            CobaltResponse::Rejected { error } => {
+                return Err(DownloadError::CobaltRejected(error.code));
+            }
         };
 
         if files.is_empty() {
-            return Err(Error::NoMediaFound);
+            return Err(DownloadError::NoMediaFound);
         }
 
         Ok(DownloadResult {
@@ -91,9 +95,9 @@ impl CobaltClient {
         }
 
         debug!("Requesting Cobalt download");
-        let response = request.send().await.map_err(Error::CobaltRequest)?;
+        let response = request.send().await.map_err(DownloadError::CobaltRequest)?;
         debug!(status = %response.status(), "Received Cobalt response");
-        response.json().await.map_err(Error::CobaltRequest)
+        response.json().await.map_err(DownloadError::CobaltRequest)
     }
 
     async fn download_media(
@@ -110,14 +114,16 @@ impl CobaltClient {
             .get(media_url)
             .send()
             .await
-            .map_err(Error::CobaltRequest)?;
+            .map_err(DownloadError::CobaltRequest)?;
         debug!(index, status = %response.status(), "Received Cobalt media response");
-        let response = response.error_for_status().map_err(Error::CobaltRequest)?;
+        let response = response
+            .error_for_status()
+            .map_err(DownloadError::CobaltRequest)?;
         let mut stream = response.bytes_stream();
         let mut file = File::create(&path).await?;
 
         while let Some(chunk) = stream.next().await {
-            file.write_all(&chunk.map_err(Error::CobaltRequest)?)
+            file.write_all(&chunk.map_err(DownloadError::CobaltRequest)?)
                 .await?;
         }
         file.flush().await?;

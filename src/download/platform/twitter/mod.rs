@@ -1,8 +1,9 @@
 mod syndication;
 
-use crate::{
-    download::{DownloadResult, platform::cobalt::CobaltClient},
-    error::{Error, Result},
+use crate::download::{
+    DownloadResult,
+    error::{DownloadError, Result},
+    platform::cobalt::CobaltClient,
 };
 use reqwest::Client;
 use tracing::warn;
@@ -35,7 +36,7 @@ impl TwitterClient {
             http: Client::builder()
                 .user_agent(syndication::USER_AGENT)
                 .build()
-                .map_err(Error::BuildHttpClient)?,
+                .map_err(DownloadError::BuildHttpClient)?,
         })
     }
 
