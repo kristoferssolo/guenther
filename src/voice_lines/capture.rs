@@ -85,7 +85,11 @@ fn capture_candidate(msg: &Message) -> Option<CapturedLine> {
         CapturedLine::Audio(AudioCapture {
             file_id: audio.file.id.clone(),
             unique_file_id: audio.file.unique_id.to_string(),
-            title: capture_audio_title(msg),
+            title: pick_audio_title(
+                msg.caption(),
+                audio.title.as_deref(),
+                audio.file_name.as_deref(),
+            ),
         })
     })
 }
@@ -95,14 +99,6 @@ fn capture_voice_title(caption: Option<&str>, unique_file_id: &str) -> String {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map_or_else(|| format!("voice_{unique_file_id}"), ToOwned::to_owned)
-}
-
-fn capture_audio_title(msg: &Message) -> String {
-    pick_audio_title(
-        msg.caption(),
-        msg.audio().and_then(|audio| audio.title.as_deref()),
-        msg.audio().and_then(|audio| audio.file_name.as_deref()),
-    )
 }
 
 fn pick_audio_title(caption: Option<&str>, title: Option<&str>, file_name: Option<&str>) -> String {
