@@ -45,8 +45,8 @@ impl VoiceLines {
 
         tracing::info!(
             file_id = %line.file_id,
-            unique_file_id = %line.unique_file_id,
-            source_unique_file_id = %line.source_unique_file_id,
+            unique_file_id = line.unique_file_id.as_deref(),
+            source_unique_file_id = line.source_unique_file_id.as_deref(),
             path = %self.path.display(),
             "capturing incoming voice line metadata"
         );
@@ -74,10 +74,10 @@ fn capture_candidate(msg: &Message) -> Option<CapturedLine> {
             id: unique_file_id.clone(),
             title: capture_voice_title(msg.caption(), &unique_file_id),
             file_id: voice.file.id.to_string(),
-            unique_file_id,
+            unique_file_id: Some(unique_file_id),
             tags: Vec::new(),
-            source_file_id: String::new(),
-            source_unique_file_id: String::new(),
+            source_file_id: None,
+            source_unique_file_id: None,
         }));
     }
 
@@ -85,7 +85,11 @@ fn capture_candidate(msg: &Message) -> Option<CapturedLine> {
         CapturedLine::Audio(AudioCapture {
             file_id: audio.file.id.clone(),
             unique_file_id: audio.file.unique_id.to_string(),
-            title: capture_audio_title(msg),
+            title: pick_audio_title(
+                msg.caption(),
+                audio.title.as_deref(),
+                audio.file_name.as_deref(),
+            ),
         })
     })
 }
@@ -95,14 +99,6 @@ fn capture_voice_title(caption: Option<&str>, unique_file_id: &str) -> String {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map_or_else(|| format!("voice_{unique_file_id}"), ToOwned::to_owned)
-}
-
-fn capture_audio_title(msg: &Message) -> String {
-    pick_audio_title(
-        msg.caption(),
-        msg.audio().and_then(|audio| audio.title.as_deref()),
-        msg.audio().and_then(|audio| audio.file_name.as_deref()),
-    )
 }
 
 fn pick_audio_title(caption: Option<&str>, title: Option<&str>, file_name: Option<&str>) -> String {
@@ -117,14 +113,15 @@ fn pick_audio_title(caption: Option<&str>, title: Option<&str>, file_name: Optio
 
 fn contains_line(file: &VoiceLinesFile, candidate: &VoiceLine) -> bool {
     file.voice_lines.iter().any(|line| {
-        line.unique_file_id == candidate.unique_file_id || line.file_id == candidate.file_id
+        (line.unique_file_id.is_some() && line.unique_file_id == candidate.unique_file_id)
+            || line.file_id == candidate.file_id
     })
 }
 
 fn contains_audio_source(file: &VoiceLinesFile, audio: &AudioCapture) -> bool {
     file.voice_lines.iter().any(|line| {
-        line.source_unique_file_id == audio.unique_file_id
-            || (!line.source_file_id.is_empty() && line.source_file_id == audio.file_id.0)
+        line.source_unique_file_id.as_deref() == Some(audio.unique_file_id.as_str())
+            || line.source_file_id.as_deref() == Some(audio.file_id.0.as_str())
     })
 }
 
@@ -168,10 +165,10 @@ async fn convert_audio_to_voice_line(
         id: unique_file_id.clone(),
         title: audio.title,
         file_id: voice.file.id.to_string(),
-        unique_file_id,
+        unique_file_id: Some(unique_file_id),
         tags: Vec::new(),
-        source_file_id: audio.file_id.0,
-        source_unique_file_id: audio.unique_file_id,
+        source_file_id: Some(audio.file_id.0),
+        source_unique_file_id: Some(audio.unique_file_id),
     })
 }
 
@@ -226,5 +223,27 @@ mod tests {
             pick_audio_title(Some("   "), Some("Fallback title"), Some("fallback.mp3")),
             "Fallback title"
         );
+    }
+
+    #[test]
+    fn contains_audio_source_ignores_lines_without_source_ids() {
+        let file = VoiceLinesFile {
+            voice_lines: vec![VoiceLine {
+                id: "line_1".to_owned(),
+                title: "Box box".to_owned(),
+                file_id: "voice-file".to_owned(),
+                unique_file_id: Some("voice-unique".to_owned()),
+                tags: Vec::new(),
+                source_file_id: None,
+                source_unique_file_id: None,
+            }],
+        };
+        let audio = AudioCapture {
+            file_id: FileId("audio-file".to_owned()),
+            unique_file_id: "audio-unique".to_owned(),
+            title: "Box box".to_owned(),
+        };
+
+        assert!(!contains_audio_source(&file, &audio));
     }
 }
