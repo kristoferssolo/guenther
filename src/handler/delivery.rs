@@ -61,18 +61,15 @@ pub(super) async fn send_media(
 }
 
 fn into_input_media(input: InputFile, kind: MediaKind, caption: Option<String>) -> InputMedia {
-    macro_rules! with_caption {
-        ($media:expr) => {
-            match caption {
-                Some(caption) => $media.caption(caption),
-                None => $media,
-            }
-        };
-    }
-
     match kind {
-        MediaKind::Video => InputMedia::Video(with_caption!(InputMediaVideo::new(input))),
-        MediaKind::Image => InputMedia::Photo(with_caption!(InputMediaPhoto::new(input))),
+        MediaKind::Video => InputMedia::Video(InputMediaVideo {
+            caption,
+            ..InputMediaVideo::new(input)
+        }),
+        MediaKind::Image => InputMedia::Photo(InputMediaPhoto {
+            caption,
+            ..InputMediaPhoto::new(input)
+        }),
     }
 }
 
@@ -104,18 +101,12 @@ async fn send_single(
     kind: MediaKind,
     caption: &str,
 ) -> Result<Message> {
-    macro_rules! send_msg {
-        ($request_expr:expr) => {{
-            let message = $request_expr.caption(caption.to_owned()).await?;
-            info!(message_id = message.id.to_string(), "{} sent", kind);
-            message
-        }};
-    }
-
-    match kind {
-        MediaKind::Video => Ok(send_msg!(bot.send_video(chat_id, input))),
-        MediaKind::Image => Ok(send_msg!(bot.send_photo(chat_id, input))),
-    }
+    let message = match kind {
+        MediaKind::Video => bot.send_video(chat_id, input).caption(caption).await?,
+        MediaKind::Image => bot.send_photo(chat_id, input).caption(caption).await?,
+    };
+    info!(message_id = message.id.to_string(), "{} sent", kind);
+    Ok(message)
 }
 
 pub(super) fn should_include_source_text(
