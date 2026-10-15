@@ -1,4 +1,5 @@
-use std::{collections::HashSet, env};
+use crate::config::env_var;
+use std::collections::HashSet;
 use strum::{Display, EnumString, VariantArray};
 use thiserror::Error;
 use tracing::warn;
@@ -35,13 +36,8 @@ impl ParsePlatformError {
 
 impl PlatformConfig {
     pub(super) fn from_env() -> Self {
-        let raw = match env::var("ENABLED_PLATFORMS") {
-            Ok(raw) => raw,
-            Err(env::VarError::NotPresent) => return Self::default(),
-            Err(env::VarError::NotUnicode(_)) => {
-                warn!("ENABLED_PLATFORMS is not valid Unicode; enabling all platforms");
-                return Self::default();
-            }
+        let Some(raw) = env_var("ENABLED_PLATFORMS") else {
+            return Self::default();
         };
         let mut config = Self::none();
 

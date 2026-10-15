@@ -1,5 +1,5 @@
+use crate::config::get_string_from_env;
 use chrono::{FixedOffset, Offset, Utc};
-use std::env;
 use tracing::warn;
 
 #[derive(Debug, Clone, Copy)]
@@ -9,17 +9,14 @@ pub struct F1Config {
 
 impl F1Config {
     pub(super) fn from_env() -> Self {
-        let utc_offset = match env::var("F1_UTC_OFFSET") {
-            Ok(raw) => parse_utc_offset(&raw).unwrap_or_else(|| {
-                warn!(raw = %raw, "F1_UTC_OFFSET is set but invalid; expected +3, +03, or +03:00");
-                Utc.fix()
-            }),
-            Err(env::VarError::NotPresent) => Utc.fix(),
-            Err(env::VarError::NotUnicode(_)) => {
-                warn!("F1_UTC_OFFSET is not valid Unicode");
-                Utc.fix()
-            }
-        };
+        let utc_offset = get_string_from_env("F1_UTC_OFFSET")
+            .and_then(|raw| {
+                parse_utc_offset(&raw).or_else(|| {
+                    warn!(raw = %raw, "F1_UTC_OFFSET is set but invalid; expected +3, +03, or +03:00");
+                    None
+                })
+            })
+            .unwrap_or_else(|| Utc.fix());
 
         Self { utc_offset }
     }
