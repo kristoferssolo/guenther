@@ -11,28 +11,24 @@ use crate::bingo::{
 };
 
 pub fn parse(input: &str) -> Result<BingoCommand> {
-    let input = input.trim();
-    if input.is_empty() || input.eq_ignore_ascii_case("help") {
-        return Ok(BingoCommand::Help);
-    }
-
     let (head, rest) = split_once_whitespace(input);
-    match head {
-        value if value.eq_ignore_ascii_case("games") => Ok(BingoCommand::Games),
-        value if value.eq_ignore_ascii_case("game") => parse_game(rest),
-        value if value.eq_ignore_ascii_case("entries") => parse_entries(rest),
-        value if value.eq_ignore_ascii_case("add") => parse_add(rest),
-        value if value.eq_ignore_ascii_case("edit") => parse_edit(rest),
-        value if value.eq_ignore_ascii_case("delete") => parse_delete(rest),
-        value if value.eq_ignore_ascii_case("generate") => parse_card_target(rest, false),
-        value if value.eq_ignore_ascii_case("regenerate") => parse_card_target(rest, true),
-        value if value.eq_ignore_ascii_case("get") => parse_get(rest),
-        value if value.eq_ignore_ascii_case("import") => parse_import(rest, false),
-        value if value.eq_ignore_ascii_case("reimport") => parse_import(rest, true),
-        value if value.eq_ignore_ascii_case("card") => parse_card(rest),
-        value if value.eq_ignore_ascii_case("reset") => parse_reset(rest),
-        unknown => Err(BingoError::InvalidCommand(format!(
-            "Unknown bingo command `{unknown}`; use /bingo help"
+    match head.to_ascii_lowercase().as_str() {
+        "" | "help" => Ok(BingoCommand::Help),
+        "games" => Ok(BingoCommand::Games),
+        "game" => parse_game(rest),
+        "entries" => parse_entries(rest),
+        "add" => parse_add(rest),
+        "edit" => parse_edit(rest),
+        "delete" => parse_delete(rest),
+        "generate" => parse_card_target(rest, false),
+        "regenerate" => parse_card_target(rest, true),
+        "get" => parse_get(rest),
+        "import" => parse_import(rest, false),
+        "reimport" => parse_import(rest, true),
+        "card" => parse_card(rest),
+        "reset" => parse_reset(rest),
+        _ => Err(BingoError::InvalidCommand(format!(
+            "Unknown bingo command `{head}`; use /bingo help"
         ))),
     }
 }
@@ -51,44 +47,36 @@ fn parse_entries(input: &str) -> Result<BingoCommand> {
 
 fn parse_game(input: &str) -> Result<BingoCommand> {
     let (action, rest) = split_once_whitespace(input);
-    match action {
-        value if value.eq_ignore_ascii_case("create") => {
+    match action.to_ascii_lowercase().as_str() {
+        "create" => {
             let (slug, name) = required_pair(rest, "game create <slug> <name>")?;
             Ok(BingoCommand::Game(GameAdmin::Create {
                 slug: slug.to_owned(),
                 name: name.to_owned(),
             }))
         }
-        value if value.eq_ignore_ascii_case("delete") => {
-            Ok(BingoCommand::Game(GameAdmin::Delete {
-                slug: required_word(rest, "game delete <slug>")?.to_owned(),
-            }))
-        }
-        value if value.eq_ignore_ascii_case("activate") => {
-            Ok(BingoCommand::Game(GameAdmin::SetState {
-                slug: required_word(rest, "game activate <slug>")?.to_owned(),
-                state: GameState::Active,
-            }))
-        }
-        value if value.eq_ignore_ascii_case("close") => {
-            Ok(BingoCommand::Game(GameAdmin::SetState {
-                slug: required_word(rest, "game close <slug>")?.to_owned(),
-                state: GameState::Closed,
-            }))
-        }
-        value if value.eq_ignore_ascii_case("default") => {
-            Ok(BingoCommand::Game(GameAdmin::SetDefault {
-                slug: required_word(rest, "game default <slug>")?.to_owned(),
-            }))
-        }
-        value if value.eq_ignore_ascii_case("center") => {
+        "delete" => Ok(BingoCommand::Game(GameAdmin::Delete {
+            slug: required_word(rest, "game delete <slug>")?.to_owned(),
+        })),
+        "activate" => Ok(BingoCommand::Game(GameAdmin::SetState {
+            slug: required_word(rest, "game activate <slug>")?.to_owned(),
+            state: GameState::Active,
+        })),
+        "close" => Ok(BingoCommand::Game(GameAdmin::SetState {
+            slug: required_word(rest, "game close <slug>")?.to_owned(),
+            state: GameState::Closed,
+        })),
+        "default" => Ok(BingoCommand::Game(GameAdmin::SetDefault {
+            slug: required_word(rest, "game default <slug>")?.to_owned(),
+        })),
+        "center" => {
             let (slug, text) = required_pair(rest, "game center <slug> <text>")?;
             Ok(BingoCommand::Game(GameAdmin::SetCenter {
                 slug: slug.to_owned(),
                 text: text.to_owned(),
             }))
         }
-        value if value.eq_ignore_ascii_case("description") => {
+        "description" => {
             let (slug, description) = split_once_whitespace(rest);
             if slug.is_empty() {
                 return Err(usage("game description <slug> [text]"));

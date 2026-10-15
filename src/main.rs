@@ -149,7 +149,7 @@ async fn message_handler(
     match route_message(text.as_deref(), &state.bot_name) {
         RouteAction::HandleCommand(cmd) => {
             span.record("route", "command");
-            span.record("command", cmd.name());
+            span.record("command", <&'static str>::from(&cmd));
             if let Err(e) = answer(
                 &bot,
                 &msg,

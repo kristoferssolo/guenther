@@ -1,46 +1,24 @@
-use crate::bingo::{
-    error::{BingoError, Result},
-    model::GameId,
-};
-use std::{fmt, str::FromStr};
+use crate::bingo::{error::BingoError, model::GameId};
+use strum::{AsRefStr, Display, EnumString};
 use teloxide::types::ChatId;
 
 pub const MAX_GAME_DESCRIPTION_CHARS: usize = 256;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lifecycle of a game; the lowercase names are stored in `bingo_games.state`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr, Display, EnumString)]
+#[strum(
+    serialize_all = "lowercase",
+    parse_err_ty = BingoError,
+    parse_err_fn = invalid_stored_game_state
+)]
 pub enum GameState {
     Draft,
     Active,
     Closed,
 }
 
-impl AsRef<str> for GameState {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::Draft => "draft",
-            Self::Active => "active",
-            Self::Closed => "closed",
-        }
-    }
-}
-
-impl FromStr for GameState {
-    type Err = BingoError;
-
-    fn from_str(value: &str) -> Result<Self> {
-        match value {
-            "draft" => Ok(Self::Draft),
-            "active" => Ok(Self::Active),
-            "closed" => Ok(Self::Closed),
-            unknown => Err(BingoError::InvalidStoredGameState(unknown.to_owned())),
-        }
-    }
-}
-
-impl fmt::Display for GameState {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_ref())
-    }
+fn invalid_stored_game_state(value: &str) -> BingoError {
+    BingoError::InvalidStoredGameState(value.to_owned())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,4 +31,29 @@ pub struct Game {
     pub center_text: String,
     pub state: GameState,
     pub is_default: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::assert_ok_eq;
+    use rstest::rstest;
+    use std::assert_matches;
+
+    #[rstest]
+    #[case(GameState::Draft, "draft")]
+    #[case(GameState::Active, "active")]
+    #[case(GameState::Closed, "closed")]
+    fn game_state_round_trips_stored_names(#[case] state: GameState, #[case] name: &str) {
+        assert_eq!(state.as_ref(), name);
+        assert_ok_eq!(name.parse::<GameState>(), state);
+    }
+
+    #[test]
+    fn game_state_parse_is_case_sensitive() {
+        assert_matches!(
+            "Active".parse::<GameState>(),
+            Err(BingoError::InvalidStoredGameState(value)) if value == "Active"
+        );
+    }
 }

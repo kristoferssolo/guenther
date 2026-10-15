@@ -4,10 +4,12 @@ use guenther::{
     comments::Comments,
     f1::{F1, ScheduleView},
 };
+use strum::IntoStaticStr;
 use teloxide::{prelude::*, utils::command::BotCommands};
 
-#[derive(Debug, Clone, PartialEq, Eq, BotCommands)]
+#[derive(Debug, Clone, PartialEq, Eq, BotCommands, IntoStaticStr)]
 #[command(rename_rule = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum Command {
     /// Display this text.
     #[command(aliases = ["h", "?"])]
@@ -48,22 +50,6 @@ pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
     };
     Command::parse(text, bot_name)
         .map_or_else(|_| RouteAction::HandleMessage, RouteAction::HandleCommand)
-}
-
-impl Command {
-    pub const fn name(&self) -> &'static str {
-        match self {
-            Self::Help => "help",
-            Self::Curse => "curse",
-            Self::Weekend => "weekend",
-            Self::Quali => "quali",
-            Self::Race => "race",
-            Self::Countdown => "countdown",
-            Self::Standings => "standings",
-            #[cfg(feature = "bingo")]
-            Self::Bingo(_) => "bingo",
-        }
-    }
 }
 
 pub async fn answer(
