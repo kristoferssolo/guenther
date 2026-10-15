@@ -7,7 +7,7 @@ use guenther::{
     cache::MediaCache,
     comments::Comments,
     config::{Platform, PlatformConfig},
-    download::{collect_supported_media, platform::Downloader},
+    download::platform::Downloader,
     error::Result,
 };
 use regex::{Error as RegexError, Regex};
@@ -88,16 +88,16 @@ impl MediaHandlers {
             }
         }
 
-        let mut dr = self
+        let download = self
             .downloader
             .download(link.platform, &link.original_url)
             .await?;
-        let source_text = dr.source_text.take();
-        let (_tempdir, media_items) = collect_supported_media(dr).await?;
+        let media_items = download.supported_media().await?;
+        let source_text = download.source_text.as_deref();
         let media_count = media_items.len();
         let base_caption = self.comments.build_caption();
         let include_source_text =
-            should_include_source_text(link.platform, &media_items, source_text.as_deref());
+            should_include_source_text(link.platform, &media_items, source_text);
 
         debug!(
             platform = %link.platform,
@@ -108,7 +108,7 @@ impl MediaHandlers {
         );
 
         let caption = if include_source_text {
-            compose_caption(&base_caption, source_text.as_deref())
+            compose_caption(&base_caption, source_text)
         } else {
             base_caption
         };

@@ -2,8 +2,7 @@ use crate::{
     error::{Error, Result},
     utils::{MediaKind, detect_media_kind},
 };
-use futures::{StreamExt, stream};
-use std::{cmp::min, path::PathBuf};
+use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// `TempDir` guard + downloaded files. Keep this value alive until you're
@@ -15,41 +14,35 @@ pub struct DownloadResult {
     pub source_text: Option<String>,
 }
 
-/// Classify and filter files in a `DownloadResult`.
-///
-/// Keeps the tempdir alive while the returned `DownloadResult` remains in scope.
-///
-/// # Errors
-///
-/// Returns `NoMediaFound` when there are no valid image/video files left after classification.
-pub async fn collect_supported_media(
-    mut dr: DownloadResult,
-) -> Result<(TempDir, Vec<(PathBuf, MediaKind)>)> {
-    if dr.files.is_empty() {
-        return Err(Error::NoMediaFound);
-    }
-
-    let concurrency = min(8, dr.files.len());
-    let results = stream::iter(dr.files.drain(..).map(|path| async move {
-        let Ok(meta) = tokio::fs::metadata(&path).await else {
-            return None;
-        };
-        if !meta.is_file() || meta.len() == 0 {
-            return None;
+impl DownloadResult {
+    /// Classify the downloaded files, keeping non-empty images and videos in
+    /// download order.
+    ///
+    /// The returned paths point into the tempdir owned by `self`, so keep the
+    /// `DownloadResult` alive until the files have been sent.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NoMediaFound` when there are no valid image/video files left after classification.
+    pub async fn supported_media(&self) -> Result<Vec<(PathBuf, MediaKind)>> {
+        let mut media_items = Vec::new();
+        for path in &self.files {
+            let Ok(meta) = tokio::fs::metadata(path).await else {
+                continue;
+            };
+            if !meta.is_file() || meta.len() == 0 {
+                continue;
+            }
+            if let Some(kind) = detect_media_kind(path).await {
+                media_items.push((path.clone(), kind));
+            }
         }
 
-        detect_media_kind(&path).await.map(|kind| (path, kind))
-    }))
-    .buffered(concurrency)
-    .collect::<Vec<_>>()
-    .await;
-
-    let media_items = results.into_iter().flatten().collect::<Vec<_>>();
-    if media_items.is_empty() {
-        return Err(Error::NoMediaFound);
+        if media_items.is_empty() {
+            return Err(Error::NoMediaFound);
+        }
+        Ok(media_items)
     }
-
-    Ok((dr.tempdir, media_items))
 }
 
 #[cfg(test)]
@@ -58,7 +51,7 @@ mod tests {
     use claims::assert_ok;
 
     #[tokio::test]
-    async fn collect_preserves_download_order_for_mixed_media() {
+    async fn supported_media_preserves_download_order_for_mixed_media() {
         let tempdir = assert_ok!(tempfile::tempdir());
         let image = tempdir.path().join("first.jpg");
         let video = tempdir.path().join("second.mp4");
@@ -72,7 +65,7 @@ mod tests {
             files: vec![image.clone(), video.clone(), second_image.clone()],
             source_text: None,
         };
-        let (_, media_items) = assert_ok!(collect_supported_media(result).await);
+        let media_items = assert_ok!(result.supported_media().await);
 
         assert_eq!(
             media_items,
