@@ -1,4 +1,3 @@
-mod metadata;
 mod syndication;
 
 use crate::{
@@ -45,27 +44,39 @@ impl TwitterClient {
         cobalt: &CobaltClient,
         url: &str,
     ) -> Result<DownloadResult> {
-        match cobalt.download(url).await {
+        let (cobalt_result, tweet) = tokio::join!(
+            cobalt.download(url),
+            syndication::fetch_tweet(&self.http, url),
+        );
+
+        let cobalt_error = match cobalt_result {
             Ok(mut result) => {
-                result.source_text = match syndication::fetch_tweet_text(&self.http, url).await {
-                    Ok(text) => text,
+                result.source_text = match tweet {
+                    Ok(payload) => syndication::parse_post_text_from_value(&payload),
                     Err(err) => {
                         warn!(%err, "Could not fetch post text from Twitter syndication");
                         None
                     }
                 };
+                return Ok(result);
+            }
+            Err(err) => err,
+        };
+
+        let fallback = match tweet {
+            Ok(payload) => syndication::download_tweet_images(&self.http, &payload).await,
+            Err(err) => Err(err),
+        };
+
+        match fallback {
+            Ok(result) => {
+                warn!(%cobalt_error, "Cobalt could not fetch Twitter media; used image fallback");
                 Ok(result)
             }
-            Err(cobalt_error) => match syndication::download_tweet_images(&self.http, url).await {
-                Ok(result) => {
-                    warn!(%cobalt_error, "Cobalt could not fetch Twitter media; used image fallback");
-                    Ok(result)
-                }
-                Err(fallback_error) => {
-                    warn!(%fallback_error, "Twitter image fallback was not applicable");
-                    Err(cobalt_error)
-                }
-            },
+            Err(fallback_error) => {
+                warn!(%fallback_error, "Twitter image fallback was not applicable");
+                Err(cobalt_error)
+            }
         }
     }
 }

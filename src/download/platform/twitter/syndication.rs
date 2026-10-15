@@ -1,8 +1,5 @@
 use crate::{
-    download::{
-        DownloadResult,
-        platform::twitter::{metadata::parse_post_text_from_value, status_id},
-    },
+    download::{DownloadResult, platform::twitter::status_id},
     error::{Error, Result},
 };
 use reqwest::Client;
@@ -15,10 +12,8 @@ use url::Url;
 
 pub(super) const USER_AGENT: &str = concat!("guenther/", env!("CARGO_PKG_VERSION"));
 
-pub async fn download_tweet_images(client: &Client, url: &str) -> Result<DownloadResult> {
-    let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
-    let payload = fetch_tweet_result(client, &tweet_id).await?;
-    let image_urls = extract_photo_urls(&payload);
+pub async fn download_tweet_images(client: &Client, payload: &Value) -> Result<DownloadResult> {
+    let image_urls = extract_photo_urls(payload);
 
     if image_urls.is_empty() {
         return Err(Error::MissingTwitterImages);
@@ -51,14 +46,13 @@ pub async fn download_tweet_images(client: &Client, url: &str) -> Result<Downloa
     Ok(DownloadResult {
         tempdir,
         files,
-        source_text: parse_post_text_from_value(&payload),
+        source_text: parse_post_text_from_value(payload),
     })
 }
 
-pub async fn fetch_tweet_text(client: &Client, url: &str) -> Result<Option<String>> {
+pub async fn fetch_tweet(client: &Client, url: &str) -> Result<Value> {
     let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
-    let payload = fetch_tweet_result(client, &tweet_id).await?;
-    Ok(parse_post_text_from_value(&payload))
+    fetch_tweet_result(client, &tweet_id).await
 }
 
 async fn fetch_tweet_result(client: &Client, tweet_id: &str) -> Result<Value> {
@@ -127,26 +121,37 @@ fn extract_photo_urls(payload: &Value) -> Vec<String> {
         .collect()
 }
 
-fn image_extension(url: &str) -> String {
+pub(super) fn parse_post_text_from_value(json: &Value) -> Option<String> {
+    let text = json
+        .get("full_text")
+        .and_then(Value::as_str)
+        .or_else(|| json.get("text").and_then(Value::as_str))
+        .or_else(|| json.get("description").and_then(Value::as_str))
+        .or_else(|| json.get("title").and_then(Value::as_str))?
+        .trim();
+
+    (!text.is_empty()).then(|| text.to_owned())
+}
+
+fn image_extension(url: &str) -> &'static str {
+    const SUPPORTED: [&str; 5] = ["jpg", "jpeg", "png", "webp", "gif"];
+
     Url::parse(url)
         .ok()
         .and_then(|parsed| {
-            parsed
-                .path_segments()
-                .and_then(|mut segments| segments.next_back().map(str::to_owned))
+            let (_, ext) = parsed.path_segments()?.next_back()?.rsplit_once('.')?;
+            SUPPORTED
+                .into_iter()
+                .find(|supported| ext.eq_ignore_ascii_case(supported))
         })
-        .and_then(|last| {
-            last.rsplit_once('.')
-                .map(|(_, ext)| ext.to_ascii_lowercase())
-        })
-        .filter(|ext| matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif"))
-        .unwrap_or_else(|| "jpg".to_owned())
+        .unwrap_or("jpg")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use claims::assert_some_eq;
+    use rstest::rstest;
     use serde_json::json;
 
     #[test]
@@ -227,6 +232,23 @@ mod tests {
             extract_photo_urls(&payload),
             vec!["https://pbs.twimg.com/media/one.jpg".to_owned()]
         );
+    }
+
+    #[rstest]
+    #[case::full_text(json!({"full_text": "hello world", "description": "fallback"}), Some("hello world"))]
+    #[case::text(json!({"text": "tweet body"}), Some("tweet body"))]
+    #[case::description(json!({"description": "fallback"}), Some("fallback"))]
+    #[case::whitespace_only(json!({"full_text": "   "}), None)]
+    fn parses_post_text(#[case] payload: Value, #[case] expected: Option<&str>) {
+        assert_eq!(parse_post_text_from_value(&payload).as_deref(), expected);
+    }
+
+    #[rstest]
+    #[case::uppercase("https://pbs.twimg.com/media/one.PNG", "png")]
+    #[case::no_extension("https://pbs.twimg.com/media/one", "jpg")]
+    #[case::unsupported("https://pbs.twimg.com/media/one.svg", "jpg")]
+    fn picks_image_extension(#[case] url: &str, #[case] expected: &str) {
+        assert_eq!(image_extension(url), expected);
     }
 
     #[test]
