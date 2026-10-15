@@ -1,4 +1,6 @@
-use super::{VoiceLine, VoiceLines, VoiceLinesFile, load_voice_lines_file, save_voice_lines_file};
+use crate::voice_lines::{
+    VoiceLine, VoiceLines, VoiceLinesFile, load_voice_lines_file, save_voice_lines_file,
+};
 use color_eyre::eyre::{Context, eyre};
 use std::path::Path;
 use teloxide::{
