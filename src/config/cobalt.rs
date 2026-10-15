@@ -1,4 +1,4 @@
-use super::get_string_from_env;
+use crate::config::get_string_from_env;
 
 #[derive(Debug, Clone)]
 pub struct CobaltConfig {

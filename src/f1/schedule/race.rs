@@ -1,5 +1,5 @@
-use super::format::{format_offset, parse_session_time};
 use crate::error::Result;
+use crate::f1::schedule::format::{format_offset, parse_session_time};
 use chrono::{DateTime, FixedOffset, Utc};
 use serde::Deserialize;
 

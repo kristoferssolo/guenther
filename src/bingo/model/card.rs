@@ -1,4 +1,4 @@
-use super::{CELL_COUNT, CardId, EntryNumber, GRID_SIDE, Game, KnownUser, Position};
+use crate::bingo::model::{CELL_COUNT, CardId, EntryNumber, GRID_SIDE, Game, KnownUser, Position};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardCell {

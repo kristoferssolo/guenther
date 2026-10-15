@@ -1,5 +1,5 @@
 use crate::bingo::card_image::{
-    layout::{BLACK, CIRCLE_DIAMETER, GRID, GRID_LINE_WIDTH, Rect},
+    layout::{BLACK, CELL_SIZE, CIRCLE_DIAMETER, GRID, GRID_LINE_WIDTH, Rect},
     text::{Font, TextBlock},
 };
 use image::{Rgba, RgbaImage};
@@ -38,12 +38,8 @@ pub fn draw_circle(image: &mut RgbaImage, bounds: Rect, color: [u8; 4]) {
 
 pub fn draw_grid(image: &mut RgbaImage) {
     for offset in 0..=5_u32 {
-        let x = GRID
-            .x
-            .saturating_add(offset.saturating_mul(super::layout::CELL_SIZE));
-        let y = GRID
-            .y
-            .saturating_add(offset.saturating_mul(super::layout::CELL_SIZE));
+        let x = GRID.x.saturating_add(offset.saturating_mul(CELL_SIZE));
+        let y = GRID.y.saturating_add(offset.saturating_mul(CELL_SIZE));
         draw_filled_rect(
             image,
             Rect::new(
