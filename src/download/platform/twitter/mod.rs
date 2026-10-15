@@ -1,4 +1,3 @@
-mod metadata;
 mod syndication;
 
 use crate::{

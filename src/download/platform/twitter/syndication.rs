@@ -1,8 +1,5 @@
 use crate::{
-    download::{
-        DownloadResult,
-        platform::twitter::{metadata::parse_post_text_from_value, status_id},
-    },
+    download::{DownloadResult, platform::twitter::status_id},
     error::{Error, Result},
 };
 use reqwest::Client;
@@ -127,6 +124,18 @@ fn extract_photo_urls(payload: &Value) -> Vec<String> {
         .collect()
 }
 
+fn parse_post_text_from_value(json: &Value) -> Option<String> {
+    let text = json
+        .get("full_text")
+        .and_then(Value::as_str)
+        .or_else(|| json.get("text").and_then(Value::as_str))
+        .or_else(|| json.get("description").and_then(Value::as_str))
+        .or_else(|| json.get("title").and_then(Value::as_str))?
+        .trim();
+
+    (!text.is_empty()).then(|| text.to_owned())
+}
+
 fn image_extension(url: &str) -> String {
     Url::parse(url)
         .ok()
@@ -147,6 +156,7 @@ fn image_extension(url: &str) -> String {
 mod tests {
     use super::*;
     use claims::assert_some_eq;
+    use rstest::rstest;
     use serde_json::json;
 
     #[test]
@@ -227,6 +237,15 @@ mod tests {
             extract_photo_urls(&payload),
             vec!["https://pbs.twimg.com/media/one.jpg".to_owned()]
         );
+    }
+
+    #[rstest]
+    #[case::full_text(json!({"full_text": "hello world", "description": "fallback"}), Some("hello world"))]
+    #[case::text(json!({"text": "tweet body"}), Some("tweet body"))]
+    #[case::description(json!({"description": "fallback"}), Some("fallback"))]
+    #[case::whitespace_only(json!({"full_text": "   "}), None)]
+    fn parses_post_text(#[case] payload: Value, #[case] expected: Option<&str>) {
+        assert_eq!(parse_post_text_from_value(&payload).as_deref(), expected);
     }
 
     #[test]
