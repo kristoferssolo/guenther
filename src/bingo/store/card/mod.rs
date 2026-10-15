@@ -223,8 +223,8 @@ impl BingoStore {
         }
         let cell = card
             .cells
-            .iter_mut()
-            .find(|cell| cell.position == position && !cell.is_free)
+            .get_mut(position.index())
+            .filter(|cell| !cell.is_free)
             .ok_or_else(|| BingoError::NotFound("That card cell was not found".to_owned()))?;
         toggle_cell_mark(&mut transaction, card_id, position).await?;
         cell.marked = !cell.marked;

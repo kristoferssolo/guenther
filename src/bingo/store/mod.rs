@@ -24,8 +24,8 @@ mod tests {
     use crate::bingo::{
         error::BingoError,
         model::{
-            CELL_COUNT, Card, EntryNumber, GameState, ImportedCell, KnownUser,
-            MAX_GAME_DESCRIPTION_CHARS, Position, REQUIRED_ENTRIES,
+            Card, EntryNumber, GameState, ImportedCell, KnownUser, MAX_GAME_DESCRIPTION_CHARS,
+            Position, REQUIRED_ENTRIES,
         },
     };
     use claims::{assert_err, assert_ok, assert_ok_eq, assert_some};
@@ -88,7 +88,6 @@ mod tests {
         let store = store().await;
         let owner = user(10, "driver");
         let card = setup_card(&store, &owner).await;
-        assert_eq!(card.cells.len(), CELL_COUNT);
         let free = assert_some!(card.cells.get(Position::FREE.index()));
         assert!(free.is_free);
         assert!(free.marked);
@@ -343,7 +342,7 @@ mod tests {
                 .await
         );
         let fetched = assert_ok!(store.card(CHAT_ID, None, owner.user_id).await);
-        assert!(assert_some!(fetched.cells.first()).marked);
+        assert!(fetched.cells[0].marked);
     }
 
     #[tokio::test]
@@ -409,7 +408,7 @@ mod tests {
             Err(BingoError::NotFound(_))
         );
         let fetched = assert_ok!(store.card(CHAT_ID, None, owner.user_id).await);
-        assert!(!assert_some!(fetched.cells.first()).marked);
+        assert!(!fetched.cells[0].marked);
     }
 
     #[tokio::test]
@@ -447,14 +446,14 @@ mod tests {
         let owner = user(10, "driver");
         let card = setup_card(&store, &owner).await;
         let (_, entries) = assert_ok!(store.list_entries(CHAT_ID, Some("season")).await);
-        let current_text = &assert_some!(card.cells.first()).text;
+        let current_text = &card.cells[0].text;
         let entry = assert_some!(entries.iter().find(|entry| entry.text != *current_text));
         let changed = assert_ok!(
             store
                 .set_card_cell(CHAT_ID, "season", owner.user_id, position(0), entry.number,)
                 .await
         );
-        assert_eq!(assert_some!(changed.cells.first()).text, entry.text);
+        assert_eq!(changed.cells[0].text, entry.text);
 
         assert_ok!(
             store
@@ -478,8 +477,8 @@ mod tests {
                 )
                 .await
         );
-        assert_eq!(assert_some!(changed.cells.get(1)).text, "Entry 0");
-        assert_ne!(assert_some!(changed.cells.get(1)).text, other_entry.text);
+        assert_eq!(changed.cells[1].text, "Entry 0");
+        assert_ne!(changed.cells[1].text, other_entry.text);
     }
 
     #[tokio::test]
@@ -503,7 +502,7 @@ mod tests {
                 .import_card(CHAT_ID, "season", &owner, &imported, true)
                 .await
         );
-        let first = assert_some!(card.cells.first());
+        let first = &card.cells[0];
         assert!(first.marked);
         assert_eq!(first.text, "Entry 0");
         assert!(assert_some!(card.cells.get(Position::FREE.index())).is_free);
