@@ -75,21 +75,11 @@ impl CobaltClient {
     }
 
     async fn request_download(&self, source_url: &str) -> Result<CobaltResponse> {
-        let payload = CobaltRequest {
-            url: source_url,
-            video_quality: "1080",
-            youtube_video_codec: "h264",
-            youtube_video_container: "mp4",
-            convert_gif: false,
-            filename_style: "basic",
-            always_proxy: true,
-            local_processing: "disabled",
-        };
         let mut request = self
             .http
             .post(&self.config.api_url)
             .header(ACCEPT, "application/json")
-            .json(&payload);
+            .json(&CobaltRequest::new(source_url));
         if let Some(api_key) = &self.config.api_key {
             request = request.header(AUTHORIZATION, format!("Api-Key {api_key}"));
         }
@@ -145,7 +135,22 @@ struct CobaltRequest<'a> {
     local_processing: &'static str,
 }
 
-#[derive(Debug, Deserialize)]
+impl<'a> CobaltRequest<'a> {
+    const fn new(url: &'a str) -> Self {
+        Self {
+            url,
+            video_quality: "1080",
+            youtube_video_codec: "h264",
+            youtube_video_container: "mp4",
+            convert_gif: false,
+            filename_style: "basic",
+            always_proxy: true,
+            local_processing: "disabled",
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(tag = "status")]
 enum CobaltResponse {
     #[serde(rename = "tunnel")]
@@ -160,14 +165,14 @@ enum CobaltResponse {
     Rejected { error: CobaltApiError },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 struct PickerItem {
     #[serde(rename = "type")]
     media_type: String,
     url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 struct CobaltApiError {
     code: String,
 }
@@ -193,61 +198,49 @@ fn extension_for(media_type: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_ok, assert_some};
-    use serde_json::{Value, from_str, to_value};
-    use std::assert_matches;
+    use claims::assert_ok_eq;
+    use rstest::rstest;
+    use serde_json::{from_str, json, to_value};
 
     #[test]
     fn serializes_cobalt_request_with_api_field_names() {
-        let request = CobaltRequest {
-            url: "https://www.youtube.com/shorts/example",
-            video_quality: "1080",
-            youtube_video_codec: "h264",
-            youtube_video_container: "mp4",
-            convert_gif: false,
-            filename_style: "basic",
-            always_proxy: true,
-            local_processing: "disabled",
-        };
+        let url = "https://www.youtube.com/shorts/example";
 
-        let value = assert_ok!(to_value(request));
-        assert_eq!(
-            value.get("youtubeVideoCodec"),
-            Some(&Value::String("h264".into()))
-        );
-        assert_eq!(value.get("convertGif"), Some(&Value::Bool(false)));
-        assert_eq!(value.get("alwaysProxy"), Some(&Value::Bool(true)));
-        assert_eq!(
-            value.get("localProcessing"),
-            Some(&Value::String("disabled".into()))
+        assert_ok_eq!(
+            to_value(CobaltRequest::new(url)),
+            json!({
+                "url": url,
+                "videoQuality": "1080",
+                "youtubeVideoCodec": "h264",
+                "youtubeVideoContainer": "mp4",
+                "convertGif": false,
+                "filenameStyle": "basic",
+                "alwaysProxy": true,
+                "localProcessing": "disabled",
+            })
         );
     }
 
-    #[test]
-    fn deserializes_picker_response() {
-        let response = assert_ok!(from_str::<CobaltResponse>(
-            r#"{"status":"picker","picker":[{"type":"photo","url":"https://example.com/a"}]}"#,
-        ));
-
-        assert_matches!(&response, CobaltResponse::Picker { .. });
-        let CobaltResponse::Picker { picker } = response else {
-            return;
-        };
-        assert_eq!(picker.len(), 1);
-        assert_eq!(assert_some!(picker.first()).media_type, "photo");
-    }
-
-    #[test]
-    fn deserializes_error_response() {
-        let response = assert_ok!(from_str::<CobaltResponse>(
-            r#"{"status":"error","error":{"code":"error.api.youtube.login"}}"#,
-        ));
-
-        assert_matches!(&response, CobaltResponse::Rejected { .. });
-        let CobaltResponse::Rejected { error } = response else {
-            return;
-        };
-        assert_eq!(error.code, "error.api.youtube.login");
+    #[rstest]
+    #[case::picker(
+        r#"{"status":"picker","picker":[{"type":"photo","url":"https://example.com/a"}]}"#,
+        CobaltResponse::Picker {
+            picker: vec![PickerItem {
+                media_type: "photo".into(),
+                url: "https://example.com/a".into(),
+            }],
+        },
+    )]
+    #[case::error(
+        r#"{"status":"error","error":{"code":"error.api.youtube.login"}}"#,
+        CobaltResponse::Rejected {
+            error: CobaltApiError {
+                code: "error.api.youtube.login".into(),
+            },
+        },
+    )]
+    fn deserializes_response(#[case] raw: &str, #[case] expected: CobaltResponse) {
+        assert_ok_eq!(from_str::<CobaltResponse>(raw), expected);
     }
 
     #[test]

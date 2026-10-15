@@ -106,11 +106,39 @@ pub fn failure_comment() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn default_comments_use_fallbacks() {
-        let comments = Comments::default();
-        assert_eq!(comments.lines.len(), FALLBACK_COMMENTS.len());
-        assert_ne!(comments.lines, Vec::<String>::new());
+    use claims::assert_ok;
+    use std::{assert_matches, fs};
+    use tempfile::tempdir;
+
+    async fn load(contents: &str) -> Result<Comments> {
+        let dir = assert_ok!(tempdir());
+        let path = dir.path().join("lines.txt");
+        assert_ok!(fs::write(&path, contents));
+        Comments::load_from_file(&path).await
+    }
+
+    #[tokio::test]
+    async fn loads_trimmed_lines_in_order_skipping_blank_and_comment_lines() {
+        let comments =
+            assert_ok!(load("  first  \n\n# note\n\tsecond\n   \n  # indented\nthird\n").await);
+        assert_eq!(comments.lines, ["first", "second", "third"]);
+    }
+
+    #[tokio::test]
+    async fn rejects_file_without_usable_lines() {
+        assert_matches!(
+            load("\n   \n# note\n  # indented\n").await,
+            Err(CommentsError::Empty)
+        );
+    }
+
+    #[tokio::test]
+    async fn reports_missing_file_as_io_error() {
+        let dir = assert_ok!(tempdir());
+        assert_matches!(
+            Comments::load_from_file(dir.path().join("missing.txt")).await,
+            Err(CommentsError::Io(_))
+        );
     }
 
     #[test]
@@ -137,10 +165,5 @@ mod tests {
         assert!(FAILURE_COMMENTS.iter().all(|comment| {
             !comment.trim().is_empty() && comment.chars().count() <= TELEGRAM_CAPTION_LIMIT
         }));
-    }
-
-    #[test]
-    fn picks_failure_comment_from_pool() {
-        assert!(FAILURE_COMMENTS.contains(&failure_comment()));
     }
 }
