@@ -1,9 +1,13 @@
 use crate::{
-    download::{DownloadResult, platform::twitter::metadata::parse_post_text_from_value},
+    download::{
+        DownloadResult,
+        platform::twitter::{metadata::parse_post_text_from_value, status_id},
+    },
     error::{Error, Result},
 };
 use reqwest::Client;
 use serde_json::Value;
+use std::collections::HashSet;
 use tempfile::tempdir;
 use tokio::fs;
 use tracing::debug;
@@ -79,12 +83,12 @@ async fn fetch_tweet_result(client: &Client, tweet_id: &str) -> Result<Value> {
 
 fn extract_tweet_id(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
-    parsed
-        .path_segments()?
-        .find(|segment| segment.chars().all(|ch| ch.is_ascii_digit()))
-        .map(str::to_owned)
+    status_id(&parsed).map(str::to_owned)
 }
 
+/// The reference implementation formats this value in base 36. The endpoint
+/// only rejects a missing or empty token and does not validate its value, so
+/// the base-10 digits work.
 fn syndication_token(tweet_id: &str) -> String {
     let id = tweet_id.parse::<f64>().unwrap_or_default();
     ((id / 1e15) * std::f64::consts::PI)
@@ -116,10 +120,11 @@ fn extract_photo_urls(payload: &Value) -> Vec<String> {
                 .map(str::to_owned)
         });
 
-    let mut urls = photos.chain(media_details).collect::<Vec<_>>();
-    urls.sort();
-    urls.dedup();
-    urls
+    let mut seen = HashSet::new();
+    photos
+        .chain(media_details)
+        .filter(|url| seen.insert(url.clone()))
+        .collect()
 }
 
 fn image_extension(url: &str) -> String {
@@ -141,6 +146,7 @@ fn image_extension(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use claims::assert_some_eq;
     use serde_json::json;
 
     #[test]
@@ -148,6 +154,35 @@ mod tests {
         assert_eq!(
             extract_tweet_id("https://x.com/i/status/2037463638215462967").as_deref(),
             Some("2037463638215462967")
+        );
+    }
+
+    #[test]
+    fn extracts_tweet_id_after_status_segment() {
+        assert_some_eq!(
+            extract_tweet_id("https://x.com/12345/status/678").as_deref(),
+            "678"
+        );
+    }
+
+    #[test]
+    fn extracts_photo_urls_in_tweet_order_without_duplicates() {
+        let payload = json!({
+            "photos": [
+                { "url": "https://pbs.twimg.com/media/b.jpg" },
+                { "url": "https://pbs.twimg.com/media/a.jpg" }
+            ],
+            "mediaDetails": [
+                { "type": "photo", "media_url_https": "https://pbs.twimg.com/media/b.jpg" }
+            ]
+        });
+
+        assert_eq!(
+            extract_photo_urls(&payload),
+            vec![
+                "https://pbs.twimg.com/media/b.jpg".to_owned(),
+                "https://pbs.twimg.com/media/a.jpg".to_owned()
+            ]
         );
     }
 

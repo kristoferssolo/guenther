@@ -1,5 +1,5 @@
 use super::Handler;
-use guenther::config::Platform;
+use guenther::{config::Platform, download::platform::twitter_status_id};
 use std::collections::HashSet;
 use url::Url;
 
@@ -90,16 +90,7 @@ fn tiktok_video_key(url: &Url) -> Option<String> {
 }
 
 fn twitter_status_key(url: &Url) -> Option<String> {
-    let mut segments = path_segments(url);
-    while let Some(segment) = segments.next() {
-        if segment == "status"
-            && let Some(identifier) = segments.next()
-            && identifier.bytes().all(|byte| byte.is_ascii_digit())
-        {
-            return Some(format!("twitter:status:{identifier}"));
-        }
-    }
-    None
+    twitter_status_id(url).map(|identifier| format!("twitter:status:{identifier}"))
 }
 
 fn youtube_video_key(url: &Url) -> Option<String> {
