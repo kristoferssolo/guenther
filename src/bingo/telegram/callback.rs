@@ -158,18 +158,15 @@ pub(super) fn format_callback(
 }
 
 fn parse_callback(data: &str) -> Option<CardCallback> {
-    let parts = data.strip_prefix("b:")?.split(':').collect::<Vec<_>>();
-    let (card_id, image_message_id, position) = match parts.as_slice() {
-        [card_id, position] => (card_id.parse().ok()?, None, position),
-        [card_id, image_message_id, position] => (
-            card_id.parse().ok()?,
-            Some(MessageId(image_message_id.parse().ok()?)),
-            position,
-        ),
-        _ => return None,
+    let (ids, position) = data.strip_prefix("b:")?.rsplit_once(':')?;
+    let (card_id, image_message_id) = match ids.split_once(':') {
+        Some((card_id, image_message_id)) => {
+            (card_id, Some(MessageId(image_message_id.parse().ok()?)))
+        }
+        None => (ids, None),
     };
     Some(CardCallback {
-        card_id,
+        card_id: card_id.parse().ok()?,
         image_message_id,
         position: position.parse::<usize>().ok()?.try_into().ok()?,
     })
