@@ -230,8 +230,12 @@ async fn report_media_failure(
     err: &Error,
 ) {
     error!(platform = %link.platform, %err, "Media handler failed");
-    let _ = bot.send_message(chat_id, failure_comment()).await;
-    if let Some(admin_chat_id) = admin_chat_id {
-        let _ = bot.send_message(admin_chat_id, err.to_string()).await;
+    if let Err(err) = bot.send_message(chat_id, failure_comment()).await {
+        warn!(platform = %link.platform, %err, "Failed to send the failure reply");
+    }
+    if let Some(admin_chat_id) = admin_chat_id
+        && let Err(err) = bot.send_message(admin_chat_id, err.to_string()).await
+    {
+        warn!(platform = %link.platform, %err, "Failed to report the failure to the admin chat");
     }
 }
