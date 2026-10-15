@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "voice-line-capture")]
-use std::io::Write;
+use std::{fs::OpenOptions, io::Write};
 use std::{
     env, io,
     path::{Path, PathBuf},
@@ -101,10 +101,10 @@ async fn save_voice_lines_file(path: &Path, file: &VoiceLinesFile) -> color_eyre
     task::spawn_blocking(move || -> color_eyre::Result<()> {
         let mut temp = NamedTempFile::new_in(&directory)?;
         temp.write_all(content.as_bytes())?;
-        // The temp file starts as 0600; keep the target's mode so other readers retain access.
-        if let Ok(metadata) = path.metadata() {
-            temp.as_file().set_permissions(metadata.permissions())?;
-        }
+        // The temp file starts as 0600. Copy the target's mode, creating the target first so a
+        // new file gets the default mode, and other readers keep access.
+        let target = OpenOptions::new().append(true).create(true).open(&path)?;
+        temp.as_file().set_permissions(target.metadata()?.permissions())?;
         temp.as_file().sync_all()?;
         temp.persist(&path)?;
         Ok(())
@@ -271,5 +271,21 @@ tags = ["pit"]
 
         let mode = assert_ok!(path.metadata()).permissions().mode();
         assert_eq!(mode & 0o777, 0o644);
+    }
+
+    #[cfg(feature = "voice-line-capture")]
+    #[tokio::test]
+    async fn save_creates_target_with_default_permissions() {
+        let directory = assert_ok!(tempfile::tempdir());
+        let path = directory.path().join("voice_lines.toml");
+        let reference = directory.path().join("reference");
+        assert_ok!(std::fs::write(&reference, ""));
+
+        assert_ok!(save_voice_lines_file(&path, &VoiceLinesFile::default()).await);
+
+        assert_eq!(
+            assert_ok!(path.metadata()).permissions(),
+            assert_ok!(reference.metadata()).permissions()
+        );
     }
 }
