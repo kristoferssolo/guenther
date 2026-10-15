@@ -12,10 +12,8 @@ use url::Url;
 
 pub(super) const USER_AGENT: &str = concat!("guenther/", env!("CARGO_PKG_VERSION"));
 
-pub async fn download_tweet_images(client: &Client, url: &str) -> Result<DownloadResult> {
-    let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
-    let payload = fetch_tweet_result(client, &tweet_id).await?;
-    let image_urls = extract_photo_urls(&payload);
+pub async fn download_tweet_images(client: &Client, payload: &Value) -> Result<DownloadResult> {
+    let image_urls = extract_photo_urls(payload);
 
     if image_urls.is_empty() {
         return Err(Error::MissingTwitterImages);
@@ -48,14 +46,13 @@ pub async fn download_tweet_images(client: &Client, url: &str) -> Result<Downloa
     Ok(DownloadResult {
         tempdir,
         files,
-        source_text: parse_post_text_from_value(&payload),
+        source_text: parse_post_text_from_value(payload),
     })
 }
 
-pub async fn fetch_tweet_text(client: &Client, url: &str) -> Result<Option<String>> {
+pub async fn fetch_tweet(client: &Client, url: &str) -> Result<Value> {
     let tweet_id = extract_tweet_id(url).ok_or(Error::InvalidTwitterUrl)?;
-    let payload = fetch_tweet_result(client, &tweet_id).await?;
-    Ok(parse_post_text_from_value(&payload))
+    fetch_tweet_result(client, &tweet_id).await
 }
 
 async fn fetch_tweet_result(client: &Client, tweet_id: &str) -> Result<Value> {
@@ -124,7 +121,7 @@ fn extract_photo_urls(payload: &Value) -> Vec<String> {
         .collect()
 }
 
-fn parse_post_text_from_value(json: &Value) -> Option<String> {
+pub(super) fn parse_post_text_from_value(json: &Value) -> Option<String> {
     let text = json
         .get("full_text")
         .and_then(Value::as_str)
