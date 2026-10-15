@@ -12,6 +12,12 @@ use tempfile::tempdir;
 use tokio::{fs, process::Command};
 
 impl VoiceLines {
+    /// Record an incoming voice or audio message as a new voice line.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the voice lines file cannot be read or written, or if converting an
+    /// audio message through Telegram and ffmpeg fails.
     pub async fn capture(&self, bot: &Bot, msg: &Message) -> Result<()> {
         let Some(capture) = capture_candidate(msg) else {
             return Ok(());

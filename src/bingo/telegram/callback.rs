@@ -25,6 +25,12 @@ struct CardCallback {
     position: Position,
 }
 
+/// Toggle the card cell named by a bingo callback query and answer the query.
+///
+/// # Errors
+///
+/// Returns an error if toggling the cell fails for a reason the user cannot fix, or if a
+/// Telegram request fails.
 pub async fn answer_callback(
     bot: &Bot,
     query: &CallbackQuery,

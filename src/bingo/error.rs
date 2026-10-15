@@ -57,7 +57,7 @@ pub enum BingoError {
 }
 
 impl BingoError {
-    pub const fn is_user_facing(&self) -> bool {
+    pub(crate) const fn is_user_facing(&self) -> bool {
         matches!(
             self,
             Self::InvalidCommand(_)

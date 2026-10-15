@@ -20,7 +20,7 @@ use rand::seq::SliceRandom;
 use teloxide::types::{ChatId, UserId};
 
 impl BingoStore {
-    pub async fn generate_card(
+    pub(crate) async fn generate_card(
         &self,
         chat_id: ChatId,
         slug: Option<&str>,
@@ -71,7 +71,7 @@ impl BingoStore {
     ///
     /// Draft imports are supported so administrators can stage paper cards before activating a
     /// game.
-    pub async fn import_card(
+    pub(crate) async fn import_card(
         &self,
         chat_id: ChatId,
         slug: &str,
@@ -117,7 +117,12 @@ impl BingoStore {
         fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
-    pub async fn card(&self, chat_id: ChatId, slug: Option<&str>, user_id: UserId) -> Result<Card> {
+    pub(crate) async fn card(
+        &self,
+        chat_id: ChatId,
+        slug: Option<&str>,
+        user_id: UserId,
+    ) -> Result<Card> {
         let game = self.game(chat_id, slug).await?;
         let card_id = find_card_id(&self.pool, game.id, user_id)
             .await?
@@ -130,7 +135,7 @@ impl BingoStore {
         fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
-    pub async fn cards(&self, chat_id: ChatId) -> Result<Vec<Card>> {
+    pub(crate) async fn cards(&self, chat_id: ChatId) -> Result<Vec<Card>> {
         let game = self.game(chat_id, None).await?;
         ensure_active(&game)?;
         let card_ids = sqlx::query_scalar!(
@@ -157,7 +162,7 @@ impl BingoStore {
         Ok(cards)
     }
 
-    pub async fn set_card_cell(
+    pub(crate) async fn set_card_cell(
         &self,
         chat_id: ChatId,
         slug: &str,
@@ -178,7 +183,7 @@ impl BingoStore {
         fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
-    pub async fn reset_card(
+    pub(crate) async fn reset_card(
         &self,
         chat_id: ChatId,
         slug: Option<&str>,
@@ -193,7 +198,7 @@ impl BingoStore {
         fetch_card(&mut *self.pool.acquire().await?, card_id).await
     }
 
-    pub async fn toggle_cell(
+    pub(crate) async fn toggle_cell(
         &self,
         chat_id: ChatId,
         card_id: CardId,

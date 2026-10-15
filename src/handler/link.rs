@@ -1,14 +1,14 @@
 use crate::handler::Handler;
-use guenther::{config::Platform, download::platform::twitter_status_id};
+use crate::{config::Platform, download::platform::twitter_status_id};
 use std::collections::HashSet;
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaLink {
     pub platform: Platform,
-    pub original_url: String,
-    pub cache_key: String,
-    pub source_position: usize,
+    pub(crate) original_url: String,
+    pub(crate) cache_key: String,
+    pub(crate) source_position: usize,
 }
 
 pub fn extract_media_links(
@@ -122,18 +122,18 @@ fn canonical_url(url: &Url) -> String {
 mod tests {
     use super::*;
     use crate::handler::MediaHandlers;
-    use claims::assert_ok;
-    use guenther::{
+    use crate::{
         config::{CobaltConfig, PlatformConfig},
         download::platform::Downloader,
     };
+    use claims::assert_ok;
 
     fn handlers() -> MediaHandlers {
         let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
         assert_ok!(MediaHandlers::new(
             &PlatformConfig::default(),
             downloader,
-            std::sync::Arc::new(guenther::comments::Comments::default()),
+            std::sync::Arc::new(crate::comments::Comments::default()),
         ))
     }
 

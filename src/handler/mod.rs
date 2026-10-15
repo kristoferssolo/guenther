@@ -3,7 +3,7 @@ mod link;
 
 use self::delivery::{compose_caption, send_media, should_include_source_text};
 use self::link::{extract_media_links, normalize_cache_key};
-use guenther::{
+use crate::{
     cache::MediaCache,
     comments::Comments,
     config::{Platform, PlatformConfig},
@@ -32,7 +32,7 @@ pub enum HandlerError {
 type Result<T> = StdResult<T, HandlerError>;
 
 #[derive(Debug, Clone)]
-pub struct Handler {
+pub(crate) struct Handler {
     platform: Platform,
     regex: Regex,
 }
@@ -46,6 +46,11 @@ pub struct MediaHandlers {
 }
 
 impl MediaHandlers {
+    /// Build URL matchers for the enabled platforms.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a platform URL pattern fails to compile.
     pub fn new(
         platforms: &PlatformConfig,
         downloader: Downloader,
@@ -67,6 +72,11 @@ impl MediaHandlers {
         extract_media_links(text, caption, &self.handlers)
     }
 
+    /// Reply in `chat_id` with the media behind `link`, preferring cached Telegram file ids.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the download fails or Telegram rejects the downloaded media.
     pub async fn handle(
         &self,
         bot: &Bot,
@@ -178,16 +188,16 @@ impl MediaHandlers {
 }
 
 impl Handler {
-    pub fn new(platform: Platform, regex_pattern: &str) -> StdResult<Self, RegexError> {
+    pub(crate) fn new(platform: Platform, regex_pattern: &str) -> StdResult<Self, RegexError> {
         let regex = Regex::new(regex_pattern)?;
         Ok(Self { platform, regex })
     }
 
-    pub const fn platform(&self) -> Platform {
+    pub(crate) const fn platform(&self) -> Platform {
         self.platform
     }
 
-    pub fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
+    pub(crate) fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
         self.regex
             .captures_iter(text)
             .filter_map(|captures| {
@@ -236,8 +246,8 @@ fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, Rege
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::CobaltConfig;
     use claims::{assert_ok, assert_some};
-    use guenther::config::CobaltConfig;
 
     fn all_handlers() -> MediaHandlers {
         let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));

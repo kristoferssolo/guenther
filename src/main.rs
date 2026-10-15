@@ -1,32 +1,23 @@
-#[cfg(feature = "bingo")]
-mod bingo;
-mod commands;
-mod handler;
-mod inline;
-mod voice_lines;
-
-use crate::{
-    commands::{RouteAction, answer, route_message},
-    handler::{HandlerError, MediaHandlers, MediaLink},
-    inline::answer_inline_query,
-    voice_lines::VoiceLines,
-};
 use dotenvy::dotenv;
 use guenther::{
     cache::MediaCache,
+    commands::{RouteAction, answer, route_message},
     comments::{Comments, failure_comment},
     config::Config,
     db,
     download::platform::Downloader,
     f1::F1,
+    handler::{HandlerError, MediaHandlers, MediaLink},
+    inline::answer_inline_query,
     telemetry::setup_logger,
+    voice_lines::VoiceLines,
 };
 use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{Span, error, info, warn};
 
 #[cfg(feature = "bingo")]
-use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
+use guenther::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
 
 #[derive(Clone)]
 struct AppState {

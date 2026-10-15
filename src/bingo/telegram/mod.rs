@@ -10,6 +10,11 @@ use teloxide::{prelude::*, types::Message};
 pub use admin::AdminCache;
 pub use callback::answer_callback;
 
+/// Remember the non-bot users a message mentions, so bingo commands can resolve them later.
+///
+/// # Errors
+///
+/// Returns an error if a user cannot be stored.
 pub async fn observe_message_users(store: &BingoStore, message: &Message) -> Result<()> {
     let chat_id = message.chat.id;
     for user in message.mentioned_users() {
@@ -22,6 +27,12 @@ pub async fn observe_message_users(store: &BingoStore, message: &Message) -> Res
     Ok(())
 }
 
+/// Run a `/bingo` command, replying with user-facing errors instead of returning them.
+///
+/// # Errors
+///
+/// Returns an error if the command fails for a reason the user cannot fix, or if sending the
+/// error reply fails.
 pub async fn answer_bingo(
     bot: &Bot,
     message: &Message,

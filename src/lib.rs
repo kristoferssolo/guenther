@@ -1,8 +1,14 @@
+#[cfg(feature = "bingo")]
+pub mod bingo;
 pub mod cache;
+pub mod commands;
 pub mod comments;
 pub mod config;
 pub mod db;
 pub mod download;
 pub mod f1;
+pub mod handler;
+pub mod inline;
 pub mod telemetry;
 pub mod utils;
+pub mod voice_lines;

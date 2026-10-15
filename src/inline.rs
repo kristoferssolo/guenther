@@ -15,6 +15,11 @@ pub enum InlineError {
     Telegram(#[from] RequestError),
 }
 
+/// Answer an inline query with the voice lines that match its text.
+///
+/// # Errors
+///
+/// Returns an error if the voice lines cannot be searched or Telegram rejects the answer.
 pub async fn answer_inline_query(
     bot: Bot,
     query: InlineQuery,
