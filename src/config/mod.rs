@@ -21,20 +21,11 @@ pub struct Config {
 impl Config {
     /// Load configuration from environment variables.
     pub fn from_env() -> Self {
-        let chat_id = match env::var("CHAT_ID") {
-            Ok(raw) => raw.parse::<i64>().map_or_else(
-                |_| {
-                    warn!(raw = %raw, "CHAT_ID is set but invalid; expected i64");
-                    None
-                },
-                Some,
-            ),
-            Err(env::VarError::NotPresent) => None,
-            Err(env::VarError::NotUnicode(_)) => {
-                warn!("CHAT_ID is not valid Unicode");
-                None
-            }
-        };
+        let chat_id = get_string_from_env("CHAT_ID").and_then(|raw| {
+            raw.parse::<i64>()
+                .inspect_err(|_| warn!(raw = %raw, "CHAT_ID is set but invalid; expected i64"))
+                .ok()
+        });
         Self {
             chat_id,
             database_url: get_string_from_env("DATABASE_URL")
@@ -47,14 +38,19 @@ impl Config {
 }
 
 fn get_string_from_env(env_key: &str) -> Option<String> {
-    match env::var(env_key) {
-        Ok(raw) => match raw.trim() {
-            "" => None,
-            value => Some(value.to_owned()),
-        },
+    let raw = env_var(env_key)?;
+    match raw.trim() {
+        "" => None,
+        value => Some(value.to_owned()),
+    }
+}
+
+fn env_var(key: &str) -> Option<String> {
+    match env::var(key) {
+        Ok(value) => Some(value),
         Err(env::VarError::NotPresent) => None,
         Err(env::VarError::NotUnicode(_)) => {
-            warn!(env_key, "Environment variable is not valid Unicode");
+            warn!(key, "Environment variable is not valid Unicode");
             None
         }
     }
