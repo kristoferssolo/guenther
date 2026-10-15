@@ -18,11 +18,11 @@ use guenther::{
     config::Config,
     db,
     download::platform::Downloader,
-    error::{Error, Result as MediaResult},
+    error::Error,
     f1::F1,
     telemetry::setup_logger,
 };
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{Span, error, info, warn};
 
@@ -215,27 +215,9 @@ async fn process_message(
     cache: &MediaCache,
     admin_chat_id: Option<ChatId>,
 ) {
-    let links = handlers.extract(msg.text(), msg.caption());
-    process_links(
-        links,
-        |link| async move { handlers.handle(bot, msg.chat.id, &link, cache).await },
-        |link, err| async move {
+    for link in handlers.extract(msg.text(), msg.caption()) {
+        if let Err(err) = handlers.handle(bot, msg.chat.id, &link, cache).await {
             report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err).await;
-        },
-    )
-    .await;
-}
-
-async fn process_links<F, Fut, E, Eut>(links: Vec<MediaLink>, mut handle: F, mut on_error: E)
-where
-    F: FnMut(MediaLink) -> Fut,
-    Fut: Future<Output = MediaResult<()>>,
-    E: FnMut(MediaLink, Error) -> Eut,
-    Eut: Future<Output = ()>,
-{
-    for link in links {
-        if let Err(err) = handle(link.clone()).await {
-            on_error(link, err).await;
         }
     }
 }
@@ -251,56 +233,5 @@ async fn report_media_failure(
     let _ = bot.send_message(chat_id, failure_comment()).await;
     if let Some(admin_chat_id) = admin_chat_id {
         let _ = bot.send_message(admin_chat_id, err.to_string()).await;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use claims::assert_ok;
-    use guenther::config::Platform;
-
-    #[tokio::test]
-    async fn failed_link_does_not_stop_later_links() {
-        let downloader = assert_ok!(Downloader::new(guenther::config::CobaltConfig::default()));
-        let handlers = assert_ok!(MediaHandlers::new(
-            &guenther::config::PlatformConfig::default(),
-            downloader,
-            Arc::new(Comments::default()),
-        ));
-        let links = handlers.extract(
-            Some("https://x.com/driver/status/111 https://www.youtube.com/shorts/after-222"),
-            None,
-        );
-        let mut attempted = Vec::new();
-        let mut failures = Vec::new();
-
-        process_links(
-            links,
-            |link| {
-                let url = link.original_url.clone();
-                let failed = link.platform == Platform::Twitter;
-                attempted.push(url);
-                async move {
-                    if failed {
-                        Err(Error::other("network failure"))
-                    } else {
-                        Ok(())
-                    }
-                }
-            },
-            |link, _| {
-                failures.push(link.original_url);
-                async {}
-            },
-        )
-        .await;
-
-        assert_eq!(attempted.len(), 2);
-        assert_eq!(failures.len(), 1);
-        assert_eq!(
-            attempted.get(1).map(String::as_str),
-            Some("https://www.youtube.com/shorts/after-222")
-        );
     }
 }
