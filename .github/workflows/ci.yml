@@ -42,6 +42,8 @@ jobs:
             features: --all-features
           - name: no default features
             features: --no-default-features
+          - name: voice line capture
+            features: --no-default-features --features voice-line-capture
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
