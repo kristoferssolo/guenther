@@ -1,4 +1,4 @@
-use crate::bingo::model::{CardCell, GRID_SIDE, Position};
+use crate::bingo::model::{GRID_SIDE, Position};
 
 pub const IMAGE_WIDTH: u32 = 1_400;
 pub const IMAGE_HEIGHT: u32 = 2_000;
@@ -46,13 +46,6 @@ impl Rect {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CellFill {
-    None,
-    Marked,
-    Free,
-}
-
 pub fn cell_rect(position: Position) -> Rect {
     let index = u32::try_from(position.index()).unwrap_or_default();
     let grid_side = u32::try_from(GRID_SIDE).unwrap_or(1);
@@ -66,30 +59,10 @@ pub fn cell_rect(position: Position) -> Rect {
     )
 }
 
-pub const fn cell_fill(cell: &CardCell) -> CellFill {
-    if cell.is_free {
-        CellFill::Free
-    } else if cell.marked {
-        CellFill::Marked
-    } else {
-        CellFill::None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::CardCell;
     use claims::assert_ok;
-
-    fn cell(position: &str, marked: bool, is_free: bool) -> CardCell {
-        CardCell {
-            position: assert_ok!(position.parse()),
-            text: position.to_owned(),
-            marked,
-            is_free,
-        }
-    }
 
     #[test]
     fn maps_a1_through_e5_in_row_major_order() {
@@ -113,12 +86,5 @@ mod tests {
             cell_rect(assert_ok!("E5".parse())),
             Rect::new(1_078, 1_468, 252, 252)
         );
-    }
-
-    #[test]
-    fn selects_marked_and_free_cell_fills() {
-        assert_eq!(cell_fill(&cell("A1", false, false)), CellFill::None);
-        assert_eq!(cell_fill(&cell("A1", true, false)), CellFill::Marked);
-        assert_eq!(cell_fill(&cell("C3", true, true)), CellFill::Free);
     }
 }

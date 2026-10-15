@@ -6,8 +6,8 @@ use crate::bingo::{error::Result, model::Card};
 use draw::{draw_circle, draw_grid, draw_text_block};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use layout::{
-    BLACK, CELL_PADDING, CellFill, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH,
-    MARKED_RED, TITLE, WHITE, cell_fill, cell_rect,
+    BLACK, CELL_PADDING, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH, MARKED_RED,
+    TITLE, WHITE, cell_rect,
 };
 use std::io::Cursor;
 use text::{Font, Size, Weight, fit_text};
@@ -42,12 +42,14 @@ pub fn render_card_png(card: &Card) -> Result<Vec<u8>> {
     }
 
     for cell in &card.cells {
-        let bounds = cell_rect(cell.position);
-        match cell_fill(cell) {
-            CellFill::None => {}
-            CellFill::Marked => draw_circle(&mut image, bounds, MARKED_RED),
-            CellFill::Free => draw_circle(&mut image, bounds, FREE_GOLD),
-        }
+        let color = if cell.is_free {
+            FREE_GOLD
+        } else if cell.marked {
+            MARKED_RED
+        } else {
+            continue;
+        };
+        draw_circle(&mut image, cell_rect(cell.position), color);
     }
     draw_grid(&mut image);
     for cell in &card.cells {
