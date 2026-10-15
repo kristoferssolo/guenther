@@ -150,7 +150,6 @@ impl CardAdmin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::FREE_POSITION;
     use claims::{assert_err, assert_ok, assert_ok_eq, assert_some};
     use std::assert_matches;
 
@@ -181,7 +180,7 @@ mod tests {
             return;
         };
         let first = assert_some!(cells.first());
-        let free = assert_some!(cells.get(FREE_POSITION));
+        let free = assert_some!(cells.get(Position::FREE.index()));
         assert!(first.marked);
         assert_eq!(first.entry_number, Some(assert_ok!("81".parse())));
         assert!(free.marked);

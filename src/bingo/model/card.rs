@@ -61,7 +61,6 @@ pub fn has_bingo(cells: &[CardCell]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::{FREE_POSITION, Position};
     use claims::assert_ok;
 
     fn cells(marked_positions: &[usize]) -> Vec<CardCell> {
@@ -72,7 +71,7 @@ mod tests {
                     position,
                     text: position.to_string(),
                     marked: marked_positions.contains(&index),
-                    is_free: index == FREE_POSITION,
+                    is_free: position == Position::FREE,
                 }
             })
             .collect()
