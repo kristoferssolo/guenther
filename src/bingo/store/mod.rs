@@ -47,7 +47,7 @@ mod tests {
     }
 
     async fn store() -> BingoStore {
-        let pool = assert_ok!(guenther::db::connect("sqlite::memory:").await);
+        let pool = assert_ok!(crate::db::connect("sqlite::memory:").await);
         BingoStore::new(pool)
     }
 

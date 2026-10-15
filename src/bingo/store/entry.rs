@@ -25,7 +25,7 @@ struct UpsertedEntry {
 }
 
 impl BingoStore {
-    pub async fn add_entry(
+    pub(crate) async fn add_entry(
         &self,
         chat_id: ChatId,
         slug: Option<&str>,
@@ -42,7 +42,7 @@ impl BingoStore {
         })
     }
 
-    pub async fn list_entries(
+    pub(crate) async fn list_entries(
         &self,
         chat_id: ChatId,
         slug: Option<&str>,
@@ -75,7 +75,7 @@ impl BingoStore {
         Ok((game, entries))
     }
 
-    pub async fn import_entries(
+    pub(crate) async fn import_entries(
         &self,
         chat_id: ChatId,
         slug: &str,
@@ -93,7 +93,7 @@ impl BingoStore {
         Ok(imported_ids.len())
     }
 
-    pub async fn edit_entry(
+    pub(crate) async fn edit_entry(
         &self,
         chat_id: ChatId,
         slug: Option<&str>,
@@ -139,7 +139,7 @@ impl BingoStore {
         row.try_into()
     }
 
-    pub async fn delete_entry(
+    pub(crate) async fn delete_entry(
         &self,
         chat_id: ChatId,
         slug: Option<&str>,

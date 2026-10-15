@@ -1,3 +1,5 @@
+#[cfg(feature = "bingo")]
+pub mod bingo;
 pub mod cache;
 pub mod comments;
 pub mod config;

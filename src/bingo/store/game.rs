@@ -23,7 +23,7 @@ struct GameRow {
 }
 
 impl BingoStore {
-    pub async fn create_game(
+    pub(crate) async fn create_game(
         &self,
         chat_id: ChatId,
         slug: &str,
@@ -78,7 +78,7 @@ impl BingoStore {
         row.try_into()
     }
 
-    pub async fn list_games(&self, chat_id: ChatId) -> Result<Vec<Game>> {
+    pub(crate) async fn list_games(&self, chat_id: ChatId) -> Result<Vec<Game>> {
         let chat_id = chat_id.0;
         let rows = sqlx::query_as!(
             GameRow,
@@ -106,7 +106,7 @@ impl BingoStore {
         rows.into_iter().map(Game::try_from).collect()
     }
 
-    pub async fn delete_game(&self, chat_id: ChatId, slug: &str) -> Result<()> {
+    pub(crate) async fn delete_game(&self, chat_id: ChatId, slug: &str) -> Result<()> {
         let mut transaction = self.pool.begin().await?;
         let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
         sqlx::query!(
@@ -151,11 +151,11 @@ impl BingoStore {
         Ok(())
     }
 
-    pub async fn game(&self, chat_id: ChatId, slug: Option<&str>) -> Result<Game> {
+    pub(crate) async fn game(&self, chat_id: ChatId, slug: Option<&str>) -> Result<Game> {
         fetch_game(&self.pool, chat_id, slug).await
     }
 
-    pub async fn set_game_state(
+    pub(crate) async fn set_game_state(
         &self,
         chat_id: ChatId,
         slug: &str,
@@ -192,7 +192,7 @@ impl BingoStore {
         row.try_into()
     }
 
-    pub async fn set_default_game(&self, chat_id: ChatId, slug: &str) -> Result<Game> {
+    pub(crate) async fn set_default_game(&self, chat_id: ChatId, slug: &str) -> Result<Game> {
         let mut transaction = self.pool.begin().await?;
         let game = fetch_game(&mut *transaction, chat_id, Some(slug)).await?;
         let chat_id = chat_id.0;
@@ -237,7 +237,12 @@ impl BingoStore {
         Ok(game)
     }
 
-    pub async fn set_center_text(&self, chat_id: ChatId, slug: &str, text: &str) -> Result<Game> {
+    pub(crate) async fn set_center_text(
+        &self,
+        chat_id: ChatId,
+        slug: &str,
+        text: &str,
+    ) -> Result<Game> {
         validate_nonempty(text, "center text", 60)?;
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
@@ -268,7 +273,7 @@ impl BingoStore {
         row.try_into()
     }
 
-    pub async fn set_game_description(
+    pub(crate) async fn set_game_description(
         &self,
         chat_id: ChatId,
         slug: &str,

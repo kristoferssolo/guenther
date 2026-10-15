@@ -1,5 +1,5 @@
 #[cfg(feature = "bingo")]
-use crate::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
+use guenther::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
 use guenther::{
     comments::Comments,
     f1::{F1, ScheduleView},

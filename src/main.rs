@@ -1,5 +1,3 @@
-#[cfg(feature = "bingo")]
-mod bingo;
 mod commands;
 
 use crate::commands::{RouteAction, answer, route_message};
@@ -21,7 +19,7 @@ use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{Span, error, info, warn};
 
 #[cfg(feature = "bingo")]
-use crate::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
+use guenther::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
 
 #[derive(Clone)]
 struct AppState {

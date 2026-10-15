@@ -9,7 +9,7 @@ use crate::bingo::{
 use teloxide::types::{ChatId, UserId};
 
 impl BingoStore {
-    pub async fn observe_user(&self, chat_id: ChatId, user: &KnownUser) -> Result<()> {
+    pub(crate) async fn observe_user(&self, chat_id: ChatId, user: &KnownUser) -> Result<()> {
         let chat_id = chat_id.0;
         let user_id = db_user_id(user.user_id)?;
         let mut transaction = self.pool.begin().await?;
@@ -55,7 +55,7 @@ impl BingoStore {
         Ok(())
     }
 
-    pub async fn user_by_id(&self, chat_id: ChatId, user_id: UserId) -> Result<KnownUser> {
+    pub(crate) async fn user_by_id(&self, chat_id: ChatId, user_id: UserId) -> Result<KnownUser> {
         let chat_id = chat_id.0;
         let db_user_id = db_user_id(user_id)?;
         sqlx::query!(
@@ -88,7 +88,11 @@ impl BingoStore {
         })
     }
 
-    pub async fn user_by_username(&self, chat_id: ChatId, username: &str) -> Result<KnownUser> {
+    pub(crate) async fn user_by_username(
+        &self,
+        chat_id: ChatId,
+        username: &str,
+    ) -> Result<KnownUser> {
         let username = username.trim_start_matches('@');
         let chat_id = chat_id.0;
         sqlx::query!(
