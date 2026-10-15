@@ -187,8 +187,9 @@ fn extension_for(media_type: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_matches, assert_ok, assert_some};
+    use claims::{assert_ok, assert_some};
     use serde_json::{Value, from_str, to_value};
+    use std::assert_matches;
 
     #[test]
     fn serializes_cobalt_request_with_api_field_names() {

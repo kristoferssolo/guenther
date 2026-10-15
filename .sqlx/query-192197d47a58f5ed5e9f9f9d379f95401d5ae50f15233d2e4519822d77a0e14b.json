@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT\n            c.id AS card_id,\n            c.user_id,\n            c.owner_name,\n            c.bingo_announced AS `bingo_announced: bool`,\n            g.id AS game_id,\n            g.chat_id,\n            g.slug,\n            g.name AS game_name,\n            g.description,\n            g.center_text,\n            g.state,\n            g.is_default AS `is_default: bool`,\n            u.username AS `known_username?`,\n            u.display_name AS `known_display_name?`\n        FROM\n            bingo_cards c\n            JOIN bingo_games g ON g.id = c.game_id\n            LEFT JOIN bingo_users u ON u.chat_id = g.chat_id AND u.user_id = c.user_id\n        WHERE\n            c.id = ?\n        ",
+  "query": "\n        SELECT\n            c.id AS card_id,\n            c.user_id,\n            c.owner_name,\n            c.bingo_announced AS `bingo_announced: bool`,\n            g.id AS game_id,\n            g.chat_id,\n            g.slug,\n            g.name AS game_name,\n            g.description,\n            g.center_text,\n            g.state,\n            g.is_default AS `is_default: bool`,\n            u.username AS `known_username?`,\n            u.display_name AS `known_display_name?`\n        FROM\n            bingo_cards c\n            JOIN bingo_games g ON g.id = c.game_id\n            LEFT JOIN bingo_users u ON u.chat_id = g.chat_id\n            AND u.user_id = c.user_id\n        WHERE\n            c.id = ?\n        ",
   "describe": {
     "columns": [
       {
@@ -178,5 +178,5 @@
       true
     ]
   },
-  "hash": "0bde706b726bc84241b95d5aa9091998d37dc18f0a2f9da45acf2731bc237684"
+  "hash": "192197d47a58f5ed5e9f9f9d379f95401d5ae50f15233d2e4519822d77a0e14b"
 }

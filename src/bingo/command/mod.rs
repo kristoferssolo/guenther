@@ -151,7 +151,8 @@ impl CardAdmin {
 mod tests {
     use super::*;
     use crate::bingo::model::FREE_POSITION;
-    use claims::{assert_err, assert_matches, assert_ok, assert_ok_eq, assert_some};
+    use claims::{assert_err, assert_ok, assert_ok_eq, assert_some};
+    use std::assert_matches;
 
     #[test]
     fn parses_entry_add_with_optional_game() {

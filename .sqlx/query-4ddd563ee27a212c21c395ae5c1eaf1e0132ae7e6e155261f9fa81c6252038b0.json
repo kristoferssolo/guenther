@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    COUNT(*) AS `count!: i64`\n                FROM\n                    bingo_card_cells\n                WHERE\n                    card_id = ?\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "count!: i64",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4ddd563ee27a212c21c395ae5c1eaf1e0132ae7e6e155261f9fa81c6252038b0"
+}
