@@ -14,7 +14,7 @@ pub struct Card {
     pub game: Game,
     pub owner: KnownUser,
     pub bingo_announced: bool,
-    pub cells: Vec<CardCell>,
+    pub cells: [CardCell; CELL_COUNT],
 }
 
 impl Card {
@@ -36,12 +36,7 @@ pub struct ToggleResult {
     pub newly_completed: bool,
 }
 
-pub fn has_bingo(cells: &[CardCell]) -> bool {
-    if cells.len() != CELL_COUNT {
-        return false;
-    }
-
-    // CELL_COUNT is GRID_SIDE squared, so the length check guarantees complete rows.
+pub fn has_bingo(cells: &[CardCell; CELL_COUNT]) -> bool {
     let (rows, _) = cells.as_chunks::<GRID_SIDE>();
     rows.iter().any(|row| row.iter().all(|cell| cell.marked))
         || (0..GRID_SIDE).any(|column| {
@@ -61,21 +56,18 @@ pub fn has_bingo(cells: &[CardCell]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::{FREE_POSITION, Position};
     use claims::assert_ok;
 
-    fn cells(marked_positions: &[usize]) -> Vec<CardCell> {
-        (0..CELL_COUNT)
-            .map(|index| {
-                let position = assert_ok!(Position::try_from(index));
-                CardCell {
-                    position,
-                    text: position.to_string(),
-                    marked: marked_positions.contains(&index),
-                    is_free: index == FREE_POSITION,
-                }
-            })
-            .collect()
+    fn cells(marked_positions: &[usize]) -> [CardCell; CELL_COUNT] {
+        std::array::from_fn(|index| {
+            let position = assert_ok!(Position::try_from(index));
+            CardCell {
+                position,
+                text: position.to_string(),
+                marked: marked_positions.contains(&index),
+                is_free: position == Position::FREE,
+            }
+        })
     }
 
     #[test]

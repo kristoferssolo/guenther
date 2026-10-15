@@ -2,15 +2,12 @@ mod draw;
 mod layout;
 mod text;
 
-use crate::bingo::{
-    error::{BingoError, Result},
-    model::{CELL_COUNT, Card, CardCell},
-};
+use crate::bingo::{error::Result, model::Card};
 use draw::{draw_circle, draw_grid, draw_text_block};
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use layout::{
-    BLACK, CELL_PADDING, CellFill, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH,
-    MARKED_RED, TITLE, WHITE, cell_fill, cell_rect,
+    BLACK, CELL_PADDING, DESCRIPTION, FOOTER, FREE_GOLD, IMAGE_HEIGHT, IMAGE_WIDTH, MARKED_RED,
+    TITLE, WHITE, cell_rect,
 };
 use std::io::Cursor;
 use text::{Font, Size, Weight, fit_text};
@@ -35,7 +32,6 @@ const FOOTER_FONTS: [Font; 2] = [
 ];
 
 pub fn render_card_png(card: &Card) -> Result<Vec<u8>> {
-    let cells = ordered_cells(&card.cells)?;
     let mut image = RgbaImage::from_pixel(IMAGE_WIDTH, IMAGE_HEIGHT, Rgba(WHITE));
 
     let title = fit_text(&card.game.name, TITLE, &TITLE_FONTS);
@@ -45,16 +41,18 @@ pub fn render_card_png(card: &Card) -> Result<Vec<u8>> {
         draw_text_block(&mut image, DESCRIPTION, &description, BLACK);
     }
 
-    for cell in cells {
-        let bounds = cell_rect(cell.position);
-        match cell_fill(cell) {
-            CellFill::None => {}
-            CellFill::Marked => draw_circle(&mut image, bounds, MARKED_RED),
-            CellFill::Free => draw_circle(&mut image, bounds, FREE_GOLD),
-        }
+    for cell in &card.cells {
+        let color = if cell.is_free {
+            FREE_GOLD
+        } else if cell.marked {
+            MARKED_RED
+        } else {
+            continue;
+        };
+        draw_circle(&mut image, cell_rect(cell.position), color);
     }
     draw_grid(&mut image);
-    for cell in cells {
+    for cell in &card.cells {
         let bounds = cell_rect(cell.position).inset(CELL_PADDING);
         let text = fit_text(&cell.text, bounds, &CELL_FONTS);
         draw_text_block(&mut image, bounds, &text, BLACK);
@@ -69,67 +67,26 @@ pub fn render_card_png(card: &Card) -> Result<Vec<u8>> {
     Ok(output.into_inner())
 }
 
-fn ordered_cells(cells: &[CardCell]) -> Result<[&CardCell; CELL_COUNT]> {
-    if cells.len() != CELL_COUNT {
-        return Err(BingoError::InvalidCardLayout(format!(
-            "Expected {CELL_COUNT} cells, found {}",
-            cells.len()
-        )));
-    }
-    let mut ordered = [None; CELL_COUNT];
-    for cell in cells {
-        let index = cell.position.index();
-        let Some(slot) = ordered.get_mut(index) else {
-            return Err(BingoError::InvalidCardLayout(format!(
-                "Cell {} has an invalid position",
-                cell.position
-            )));
-        };
-        if slot.replace(cell).is_some() {
-            return Err(BingoError::InvalidCardLayout(format!(
-                "Cell {} appears more than once",
-                cell.position
-            )));
-        }
-    }
-    let Some(first) = cells.first() else {
-        return Err(BingoError::InvalidCardLayout("Missing cells".to_owned()));
-    };
-    let mut complete = [first; CELL_COUNT];
-    for (index, cell) in ordered.into_iter().enumerate() {
-        let Some(cell) = cell else {
-            return Err(BingoError::InvalidCardLayout("Missing cell".to_owned()));
-        };
-        if let Some(slot) = complete.get_mut(index) {
-            *slot = cell;
-        }
-    }
-    Ok(complete)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bingo::model::{CardId, Game, GameId, GameState, KnownUser, Position};
-    use claims::{assert_err, assert_ok, assert_some};
+    use crate::bingo::model::{CardCell, CardId, Game, GameId, GameState, KnownUser, Position};
+    use claims::assert_ok;
     use image::GenericImageView;
     use teloxide::types::{ChatId, UserId};
 
     fn card(description: &str) -> Card {
-        let mut cells = (0..CELL_COUNT)
-            .map(|index| CardCell {
-                position: assert_ok!(Position::try_from(index)),
-                text: if index == 0 {
-                    "A 128-character entry that remains complete in the companion text while the image renderer carefully wraps or truncates it as needed."
-                        .to_owned()
-                } else {
-                    format!("Cell {index}")
-                },
-                marked: index == 1 || index == 12,
-                is_free: index == 12,
-            })
-            .collect::<Vec<_>>();
-        cells.reverse();
+        let cells = std::array::from_fn(|index| CardCell {
+            position: assert_ok!(Position::try_from(index)),
+            text: if index == 0 {
+                "A 128-character entry that remains complete in the companion text while the image renderer carefully wraps or truncates it as needed."
+                    .to_owned()
+            } else {
+                format!("Cell {index}")
+            },
+            marked: index == 1 || index == 12,
+            is_free: index == 12,
+        });
         Card {
             id: CardId::from(42),
             game: Game {
@@ -150,23 +107,6 @@ mod tests {
             bingo_announced: false,
             cells,
         }
-    }
-
-    #[test]
-    fn validates_and_orders_cells_by_stored_position() {
-        let card = card("");
-        let ordered = assert_ok!(ordered_cells(&card.cells));
-        assert_eq!(assert_some!(ordered.first()).position.to_string(), "A1");
-        assert_eq!(assert_some!(ordered.last()).position.to_string(), "E5");
-
-        let mut missing = card.clone();
-        missing.cells.pop();
-        assert_err!(ordered_cells(&missing.cells));
-
-        let mut duplicate = card;
-        let duplicate_position = assert_some!(duplicate.cells.get(1)).position;
-        assert_some!(duplicate.cells.first_mut()).position = duplicate_position;
-        assert_err!(ordered_cells(&duplicate.cells));
     }
 
     #[test]

@@ -7,7 +7,7 @@ use crate::bingo::{
         },
     },
     error::{BingoError, Result},
-    model::{CELL_COUNT, EntryNumber, FREE_POSITION, GRID_SIDE, GameState, ImportedCell},
+    model::{CELL_COUNT, EntryNumber, GRID_SIDE, GameState, ImportedCell, Position},
 };
 
 pub fn parse(input: &str) -> Result<BingoCommand> {
@@ -199,7 +199,7 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
                 .strip_prefix("[x]")
                 .or_else(|| raw.strip_prefix("[X]"))
                 .map_or((false, raw), |value| (true, value.trim()));
-            let is_free = position == FREE_POSITION;
+            let is_free = position == Position::FREE.index();
             if is_free && value != "*" {
                 return Err(BingoError::InvalidCommand(
                     "The center import cell (C3) must be `*`".to_owned(),
@@ -215,6 +215,9 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
         }
     }
 
+    let cells = Box::<[ImportedCell; CELL_COUNT]>::try_from(cells).map_err(|_| {
+        BingoError::InvalidCommand(format!("An imported card must contain {CELL_COUNT} cells"))
+    })?;
     Ok(BingoCommand::Card(CardAdmin::Import {
         slug,
         target,

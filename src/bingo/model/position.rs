@@ -3,16 +3,16 @@ use std::{fmt, str::FromStr};
 
 pub const GRID_SIDE: usize = 5;
 pub const CELL_COUNT: usize = GRID_SIDE * GRID_SIDE;
-pub const FREE_POSITION: usize = 12;
 pub const REQUIRED_ENTRIES: usize = CELL_COUNT - 1;
+// `as_conversions` forbids deriving this from `GRID_SIDE` in a const.
 const GRID_SIDE_U8: u8 = 5;
-const CELL_COUNT_U8: u8 = 25;
+const CELL_COUNT_U8: u8 = GRID_SIDE_U8 * GRID_SIDE_U8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position(u8);
 
 impl Position {
-    pub const FREE: Self = Self(12);
+    pub const FREE: Self = Self(CELL_COUNT_U8 / 2);
 
     pub fn index(self) -> usize {
         usize::from(self.0)
@@ -95,5 +95,10 @@ mod tests {
         assert_ok_eq!("a1".parse::<Position>(), Position(0));
         assert_ok_eq!("E5".parse::<Position>(), Position(24));
         assert_err!("F1".parse::<Position>());
+    }
+
+    #[test]
+    fn u8_grid_matches_cell_count() {
+        assert_eq!(Position::iter().len(), CELL_COUNT);
     }
 }

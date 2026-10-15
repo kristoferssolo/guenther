@@ -76,21 +76,15 @@ impl BingoStore {
         chat_id: ChatId,
         slug: &str,
         owner: &KnownUser,
-        imported: &[ImportedCell],
+        imported: &[ImportedCell; CELL_COUNT],
         replace: bool,
     ) -> Result<Card> {
-        if imported.len() != CELL_COUNT {
-            return Err(BingoError::InvalidCommand(format!(
-                "An imported card must contain {CELL_COUNT} cells"
-            )));
-        }
         let game = self.game(chat_id, Some(slug)).await?;
         ensure_editable(&game)?;
         let mut transaction = self.pool.begin().await?;
         delete_or_reject_existing(&mut transaction, game.id, owner.user_id, replace).await?;
         let card_id = insert_card(&mut transaction, game.id, owner).await?;
-        for (position, cell) in imported.iter().enumerate() {
-            let position = Position::try_from(position)?;
+        for (position, cell) in Position::iter().zip(imported) {
             if position == Position::FREE {
                 insert_cell(
                     &mut transaction,
@@ -223,8 +217,8 @@ impl BingoStore {
         }
         let cell = card
             .cells
-            .iter_mut()
-            .find(|cell| cell.position == position && !cell.is_free)
+            .get_mut(position.index())
+            .filter(|cell| !cell.is_free)
             .ok_or_else(|| BingoError::NotFound("That card cell was not found".to_owned()))?;
         toggle_cell_mark(&mut transaction, card_id, position).await?;
         cell.marked = !cell.marked;

@@ -1,9 +1,12 @@
 use crate::bingo::{
     error::{BingoError, Result},
-    model::{Card, CardCell, CardId, EntryId, EntryNumber, Game, GameId, KnownUser, Position},
+    model::{
+        CELL_COUNT, Card, CardCell, CardId, EntryId, EntryNumber, Game, GameId, KnownUser, Position,
+    },
     store::id::{db_user_id, user_id_from_db},
 };
 use sqlx::{Sqlite, SqliteConnection, SqliteExecutor, Transaction};
+use std::cmp::Ordering;
 use teloxide::types::{ChatId, UserId};
 
 #[derive(Debug)]
@@ -25,7 +28,7 @@ struct CardRow {
 }
 
 impl CardRow {
-    fn into_card(self, cells: Vec<CardCell>) -> Result<Card> {
+    fn into_card(self, cells: [CardCell; CELL_COUNT]) -> Result<Card> {
         let (username, display_name) = self.known_display_name.map_or_else(
             || (None, self.owner_name),
             |display_name| (self.known_username, display_name),
@@ -387,7 +390,10 @@ pub async fn announce_bingo(
     Ok(())
 }
 
-async fn fetch_cells(connection: &mut SqliteConnection, card_id: CardId) -> Result<Vec<CardCell>> {
+async fn fetch_cells(
+    connection: &mut SqliteConnection,
+    card_id: CardId,
+) -> Result<[CardCell; CELL_COUNT]> {
     let rows = sqlx::query_as!(
         CellRow,
         r#"
@@ -422,11 +428,28 @@ pub async fn card_id_in(
         })
 }
 
-fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
-    rows.into_iter()
-        .map(|row| {
+/// Converts rows sorted by position into a card's cells, rejecting missing, extra or duplicate
+/// cells.
+fn convert_cells(rows: Vec<CellRow>) -> Result<[CardCell; CELL_COUNT]> {
+    let cells = rows
+        .into_iter()
+        .enumerate()
+        .map(|(index, row)| {
             let position = Position::try_from(row.position)
                 .map_err(|_| BingoError::InvalidStoredCellPosition(row.position))?;
+            match position.index().cmp(&index) {
+                Ordering::Less => {
+                    return Err(BingoError::InvalidCardLayout(format!(
+                        "Cell {position} appears more than once"
+                    )));
+                }
+                Ordering::Greater => {
+                    return Err(BingoError::InvalidCardLayout(format!(
+                        "Missing cell before {position}"
+                    )));
+                }
+                Ordering::Equal => {}
+            }
             Ok(CardCell {
                 position,
                 text: row.text,
@@ -434,5 +457,69 @@ fn convert_cells(rows: Vec<CellRow>) -> Result<Vec<CardCell>> {
                 is_free: row.is_free,
             })
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+    <[CardCell; CELL_COUNT]>::try_from(cells).map_err(|cells| {
+        BingoError::InvalidCardLayout(format!(
+            "Expected {CELL_COUNT} cells, found {}",
+            cells.len()
+        ))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::{assert_ok, assert_some};
+    use std::assert_matches;
+
+    fn rows() -> Vec<CellRow> {
+        (0..CELL_COUNT)
+            .map(|index| CellRow {
+                position: assert_ok!(i64::try_from(index)),
+                text: format!("Cell {index}"),
+                marked: false,
+                is_free: false,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn indexes_cells_by_stored_position() {
+        let cells = assert_ok!(convert_cells(rows()));
+        assert_eq!(cells[0].position.to_string(), "A1");
+        assert_eq!(cells[CELL_COUNT - 1].position.to_string(), "E5");
+    }
+
+    #[test]
+    fn rejects_missing_cells() {
+        let mut missing = rows();
+        missing.pop();
+        assert_matches!(
+            convert_cells(missing),
+            Err(BingoError::InvalidCardLayout(_))
+        );
+
+        let mut gap = rows();
+        gap.remove(1);
+        assert_matches!(convert_cells(gap), Err(BingoError::InvalidCardLayout(_)));
+    }
+
+    #[test]
+    fn rejects_duplicate_and_extra_cells() {
+        let mut duplicate = rows();
+        assert_some!(duplicate.get_mut(1)).position = 0;
+        assert_matches!(
+            convert_cells(duplicate),
+            Err(BingoError::InvalidCardLayout(_))
+        );
+
+        let mut extra = rows();
+        extra.push(CellRow {
+            position: 24,
+            text: String::new(),
+            marked: false,
+            is_free: false,
+        });
+        assert_matches!(convert_cells(extra), Err(BingoError::InvalidCardLayout(_)));
+    }
 }
