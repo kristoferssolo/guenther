@@ -75,21 +75,11 @@ impl CobaltClient {
     }
 
     async fn request_download(&self, source_url: &str) -> Result<CobaltResponse> {
-        let payload = CobaltRequest {
-            url: source_url,
-            video_quality: "1080",
-            youtube_video_codec: "h264",
-            youtube_video_container: "mp4",
-            convert_gif: false,
-            filename_style: "basic",
-            always_proxy: true,
-            local_processing: "disabled",
-        };
         let mut request = self
             .http
             .post(&self.config.api_url)
             .header(ACCEPT, "application/json")
-            .json(&payload);
+            .json(&CobaltRequest::new(source_url));
         if let Some(api_key) = &self.config.api_key {
             request = request.header(AUTHORIZATION, format!("Api-Key {api_key}"));
         }
@@ -145,6 +135,21 @@ struct CobaltRequest<'a> {
     local_processing: &'static str,
 }
 
+impl<'a> CobaltRequest<'a> {
+    const fn new(url: &'a str) -> Self {
+        Self {
+            url,
+            video_quality: "1080",
+            youtube_video_codec: "h264",
+            youtube_video_container: "mp4",
+            convert_gif: false,
+            filename_style: "basic",
+            always_proxy: true,
+            local_processing: "disabled",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "status")]
 enum CobaltResponse {
@@ -193,33 +198,26 @@ fn extension_for(media_type: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_ok, assert_some};
-    use serde_json::{Value, from_str, to_value};
+    use claims::{assert_ok, assert_ok_eq, assert_some};
+    use serde_json::{from_str, json, to_value};
     use std::assert_matches;
 
     #[test]
     fn serializes_cobalt_request_with_api_field_names() {
-        let request = CobaltRequest {
-            url: "https://www.youtube.com/shorts/example",
-            video_quality: "1080",
-            youtube_video_codec: "h264",
-            youtube_video_container: "mp4",
-            convert_gif: false,
-            filename_style: "basic",
-            always_proxy: true,
-            local_processing: "disabled",
-        };
+        let url = "https://www.youtube.com/shorts/example";
 
-        let value = assert_ok!(to_value(request));
-        assert_eq!(
-            value.get("youtubeVideoCodec"),
-            Some(&Value::String("h264".into()))
-        );
-        assert_eq!(value.get("convertGif"), Some(&Value::Bool(false)));
-        assert_eq!(value.get("alwaysProxy"), Some(&Value::Bool(true)));
-        assert_eq!(
-            value.get("localProcessing"),
-            Some(&Value::String("disabled".into()))
+        assert_ok_eq!(
+            to_value(CobaltRequest::new(url)),
+            json!({
+                "url": url,
+                "videoQuality": "1080",
+                "youtubeVideoCodec": "h264",
+                "youtubeVideoContainer": "mp4",
+                "convertGif": false,
+                "filenameStyle": "basic",
+                "alwaysProxy": true,
+                "localProcessing": "disabled",
+            })
         );
     }
 
