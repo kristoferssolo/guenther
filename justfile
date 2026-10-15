@@ -79,7 +79,7 @@ setup:
 
 [group("dev")]
 bingo-card-preview:
-    cargo test --features bingo bingo_card_preview -- --ignored --nocapture
+    cargo nextest run --features bingo bingo_card_preview --run-ignored only --no-capture
     @echo "Wrote target/bingo-card-preview.png"
 
 [group("services")]

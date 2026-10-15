@@ -11,7 +11,7 @@ use crate::{
     inline::answer_inline_query,
     voice_lines::VoiceLines,
 };
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use guenther::{
     cache::MediaCache,
     comments::{Comments, failure_comment},
