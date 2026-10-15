@@ -54,11 +54,11 @@ impl VoiceLines {
 
     pub async fn search(&self, query: &str) -> color_eyre::Result<Vec<VoiceLine>> {
         let voice_lines = load_voice_lines_file(&self.path).await?.voice_lines;
-        let needle = normalize(query);
+        let needle = query.trim();
 
         let lines = voice_lines
             .into_iter()
-            .filter(|line| needle.is_empty() || matches_query(line, &needle))
+            .filter(|line| needle.is_empty() || matches_query(line, needle))
             .take(MAX_INLINE_RESULTS)
             .collect();
 
@@ -112,14 +112,11 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
         .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
-fn normalize(text: &str) -> String {
-    text.trim().to_ascii_lowercase()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use claims::{assert_none, assert_ok};
+    use rstest::rstest;
 
     fn voice_lines_at(path: PathBuf) -> VoiceLines {
         VoiceLines {
@@ -188,8 +185,11 @@ file_id = "file-1"
         assert!(!serialized.contains("source_file_id"));
     }
 
+    #[rstest]
+    #[case("pit")]
+    #[case("PIT")]
     #[tokio::test]
-    async fn search_reads_from_the_bound_path() {
+    async fn search_reads_from_the_bound_path(#[case] query: &str) {
         let directory = assert_ok!(tempfile::tempdir());
         let path = directory.path().join("custom.toml");
         assert_ok!(std::fs::write(
@@ -204,7 +204,7 @@ tags = ["pit"]
         ));
         let voice_lines = voice_lines_at(path);
 
-        let matches = assert_ok!(voice_lines.search("pit").await);
+        let matches = assert_ok!(voice_lines.search(query).await);
 
         assert_eq!(matches.len(), 1);
         assert_eq!(
