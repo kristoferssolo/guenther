@@ -55,16 +55,16 @@ pub fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
     stable_key.unwrap_or_else(|| format!("{platform}:url:{}", canonical_url(&url)))
 }
 
+/// Reels, TV posts, and `/p/` posts share one shortcode namespace, so all of
+/// them map to the same key.
 fn instagram_media_key(url: &Url) -> Option<String> {
     let mut segments = path_segments(url);
-    while let Some(segment) = segments.next() {
-        if matches!(segment, "reel" | "tv")
-            && let Some(identifier) = segments.next()
-        {
-            return Some(format!("instagram:post:{identifier}"));
-        }
-    }
-    None
+    let ((Some("reel" | "tv" | "p"), Some(identifier), _) | (Some(_), Some("p"), Some(identifier))) =
+        (segments.next(), segments.next(), segments.next())
+    else {
+        return None;
+    };
+    Some(format!("instagram:post:{identifier}"))
 }
 
 fn tiktok_video_key(url: &Url) -> Option<String> {
@@ -230,10 +230,16 @@ mod tests {
             ),
             "instagram:post:reel-123"
         );
-        assert_ne!(
-            normalize_cache_key(Platform::Instagram, "https://www.instagram.com/p/post-123"),
-            "instagram:post:post-123"
-        );
+        for url in [
+            "https://www.instagram.com/p/post-123/?xtok=tracking",
+            "https://www.instagram.com/f1/p/post-123",
+            "https://www.instagram.com/reel/post-123",
+        ] {
+            assert_eq!(
+                normalize_cache_key(Platform::Instagram, url),
+                "instagram:post:post-123"
+            );
+        }
     }
 
     #[test]
