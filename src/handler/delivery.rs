@@ -35,9 +35,8 @@ pub(super) async fn send_media(
     }
 
     let mut cached = Vec::new();
-    while !media_items.is_empty() {
-        let chunk_len = media_items.len().min(MEDIA_GROUP_LIMIT);
-        let chunk = media_items.drain(..chunk_len).collect::<Vec<_>>();
+    for album_len in album_sizes(media_items.len()) {
+        let chunk = media_items.drain(..album_len).collect::<Vec<_>>();
         let group = chunk
             .iter()
             .enumerate()
@@ -58,6 +57,22 @@ pub(super) async fn send_media(
     }
 
     Ok(cached)
+}
+
+/// Split `len` items into the fewest albums Telegram accepts, balancing their
+/// sizes so none falls below Telegram's 2-item minimum (11 becomes 6 + 5, not
+/// 10 + 1).
+fn album_sizes(len: usize) -> impl Iterator<Item = usize> {
+    let albums = len.div_ceil(MEDIA_GROUP_LIMIT);
+    let base = len.checked_div(albums).unwrap_or_default();
+    let larger = len.checked_rem(albums).unwrap_or_default();
+    (0..albums).map(move |index| {
+        if index < larger {
+            base.saturating_add(1)
+        } else {
+            base
+        }
+    })
 }
 
 fn into_input_media(input: InputFile, kind: MediaKind, caption: Option<String>) -> InputMedia {
@@ -145,6 +160,17 @@ pub(super) fn compose_caption(quote: &str, source_text: Option<&str>) -> String 
 mod tests {
     use super::*;
     use claims::{assert_none, assert_some, assert_some_eq};
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(2, &[2])]
+    #[case(10, &[10])]
+    #[case(11, &[6, 5])]
+    #[case(19, &[10, 9])]
+    #[case(20, &[10, 10])]
+    fn album_sizes_stay_within_telegram_limits(#[case] len: usize, #[case] expected: &[usize]) {
+        assert_eq!(album_sizes(len).collect::<Vec<_>>(), expected);
+    }
 
     #[test]
     fn compose_caption_appends_source_text() {

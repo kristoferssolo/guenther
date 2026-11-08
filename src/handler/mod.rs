@@ -221,7 +221,7 @@ fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, Rege
     let handlers = [
         Handler::new(
             Platform::Instagram,
-            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
+            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|(?:[A-Za-z0-9._]+/)?p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
         ),
         Handler::new(
             Platform::Youtube,
@@ -295,17 +295,17 @@ mod tests {
         );
     }
     #[test]
-    fn ignores_instagram_post_urls() {
+    fn extracts_instagram_post_urls() {
         let handlers = all_handlers();
         let handler = instagram_handler(&handlers);
-        let urls = [
+
+        for url in [
             "https://instagram.com/p/ABC123",
             "https://instagr.am/p/ABC123",
             "https://www.instagram.com/f1/p/DcyZobPjRyI/",
-        ];
-
-        for url in urls {
-            assert_eq!(original_urls(handler, url), Vec::<String>::new());
+            "https://www.instagram.com/p/Dfevru5oYgb/?xtok=dHpmODA1ampua2lp",
+        ] {
+            assert_eq!(original_urls(handler, url), [url]);
         }
     }
     #[test]
