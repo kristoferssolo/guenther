@@ -4,6 +4,7 @@ use crate::{
     download::DownloadResult,
     handler::delivery::compose_caption,
     llm::{CaptionRequest, Captioner, LlmError, LocalMedia},
+    telegram_file::{TelegramFileError, TelegramFiles},
     utils::MediaKind,
 };
 use std::{
@@ -13,16 +14,13 @@ use std::{
     time::{Duration, Instant},
 };
 use teloxide::{
-    Bot, DownloadError as TelegramDownloadError, RequestError,
-    net::Download,
+    Bot, RequestError,
     prelude::*,
     types::{ChatId, FileId, MessageId},
 };
 use tempfile::tempdir;
 use thiserror::Error;
 use tokio::{
-    fs::File,
-    io::AsyncWriteExt,
     task::{JoinError, JoinHandle},
     time::timeout,
 };
@@ -40,7 +38,7 @@ enum CaptionJobError {
     Telegram(#[from] RequestError),
 
     #[error("Telegram file download failed: {0}")]
-    Download(#[from] TelegramDownloadError),
+    Download(#[from] TelegramFileError),
 
     #[error("Caption task stopped: {0}")]
     Join(#[from] JoinError),
@@ -64,6 +62,7 @@ pub(super) enum JobMedia {
 pub(super) struct CaptionJob {
     pub captioner: Captioner,
     pub bot: Bot,
+    pub files: TelegramFiles,
     pub platform: Platform,
     pub sender_name: Option<String>,
     pub message_text: Option<String>,
@@ -103,8 +102,13 @@ impl CaptionJob {
                 let count = self
                     .captioner
                     .visual_item_count(items.iter().map(|item| item.kind));
-                request.media =
-                    fetch_cached(&self.bot, items.into_iter().take(count), fetch_dir.path()).await;
+                request.media = fetch_cached(
+                    &self.bot,
+                    &self.files,
+                    items.into_iter().take(count),
+                    fetch_dir.path(),
+                )
+                .await;
                 Ok(self.captioner.caption(&request).await?)
             }
         }
@@ -224,16 +228,17 @@ impl Drop for PendingCaption {
 }
 
 /// Download cached media back from Telegram, skipping items that fail (the
-/// Bot API refuses files over 20 MB).
+/// cloud Bot API refuses files over 20 MB).
 async fn fetch_cached(
     bot: &Bot,
+    files: &TelegramFiles,
     items: impl IntoIterator<Item = CachedMedia>,
     dir: &Path,
 ) -> Vec<LocalMedia> {
     let mut media = Vec::new();
     for (number, item) in (1_usize..).zip(items) {
         let path = dir.join(format!("cached-{number}"));
-        match fetch_file(bot, item.file_id, &path).await {
+        match fetch_file(bot, files, item.file_id, &path).await {
             Ok(()) => media.push(LocalMedia {
                 path,
                 kind: item.kind,
@@ -246,11 +251,14 @@ async fn fetch_cached(
     media
 }
 
-async fn fetch_file(bot: &Bot, file_id: String, path: &Path) -> Result<(), CaptionJobError> {
+async fn fetch_file(
+    bot: &Bot,
+    files: &TelegramFiles,
+    file_id: String,
+    path: &Path,
+) -> Result<(), CaptionJobError> {
     let file = bot.get_file(FileId(file_id)).await?;
-    let mut destination = File::create(path).await?;
-    bot.download_file(&file.path, &mut destination).await?;
-    destination.flush().await?;
+    files.save(bot, &file.path, path).await?;
     Ok(())
 }
 

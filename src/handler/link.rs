@@ -121,10 +121,11 @@ fn canonical_url(url: &Url) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handler::MediaHandlers;
+    use crate::handler::{MediaFitter, MediaHandlers, UploadLimits};
     use crate::{
-        config::{CobaltConfig, PlatformConfig},
+        config::{CobaltConfig, FfmpegConfig, PlatformConfig},
         download::platform::Downloader,
+        ffmpeg::Ffmpeg,
     };
     use claims::assert_ok;
 
@@ -133,6 +134,7 @@ mod tests {
         assert_ok!(MediaHandlers::new(
             &PlatformConfig::default(),
             downloader,
+            MediaFitter::new(Ffmpeg::new(&FfmpegConfig::default()), UploadLimits::CLOUD),
             std::sync::Arc::new(crate::comments::Comments::default()),
         ))
     }

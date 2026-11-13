@@ -1,6 +1,8 @@
-use crate::bingo::error::{BingoError, Result};
+use crate::{
+    bingo::error::{BingoError, Result},
+    telegram_file::TelegramFiles,
+};
 use teloxide::{
-    net::Download,
     prelude::{Bot, Requester},
     types::Message,
 };
@@ -8,7 +10,11 @@ use teloxide::{
 const MAX_ENTRY_FILE_BYTES: u32 = 64 * 1_024;
 const MAX_ENTRY_FILE_LINES: usize = 1_000;
 
-pub async fn read_entry_file(bot: &Bot, message: &Message) -> Result<Vec<String>> {
+pub async fn read_entry_file(
+    bot: &Bot,
+    files: &TelegramFiles,
+    message: &Message,
+) -> Result<Vec<String>> {
     let document = message.document().ok_or_else(|| {
         BingoError::InvalidCommand(
             "Attach a UTF-8 text file and set its caption to `/bingo entries import <game>`"
@@ -22,9 +28,7 @@ pub async fn read_entry_file(bot: &Bot, message: &Message) -> Result<Vec<String>
     }
 
     let file = bot.get_file(document.file.id.clone()).await?;
-    let capacity = usize::try_from(document.file.size).unwrap_or_default();
-    let mut bytes = Vec::with_capacity(capacity);
-    bot.download_file(&file.path, &mut bytes).await?;
+    let bytes = files.read(bot, &file.path).await?;
     let text = String::from_utf8(bytes).map_err(|_| {
         BingoError::InvalidCommand("Entry files must use UTF-8 text encoding".to_owned())
     })?;

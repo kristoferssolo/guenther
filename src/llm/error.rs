@@ -1,3 +1,4 @@
+use crate::ffmpeg::FfmpegError;
 use reqwest::StatusCode;
 use std::io;
 use thiserror::Error;
@@ -22,15 +23,8 @@ pub enum LlmError {
     #[error("I/O error while preparing media: {0}")]
     Io(#[from] io::Error),
 
-    #[error("Failed to run {program}: {source}")]
-    Spawn {
-        program: &'static str,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("ffmpeg failed to extract a frame: {0}")]
-    Ffmpeg(String),
+    #[error("Failed to extract a frame: {0}")]
+    Ffmpeg(#[from] FfmpegError),
 
     #[error("Unsupported media type `{0}` for the model")]
     UnsupportedMedia(String),

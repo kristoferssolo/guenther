@@ -7,11 +7,13 @@ pub mod config;
 pub mod db;
 pub mod download;
 pub mod f1;
+pub mod ffmpeg;
 pub mod handler;
 pub mod inline;
 #[cfg(feature = "llm-captions")]
 pub mod llm;
 pub mod media_posts;
+pub mod telegram_file;
 pub mod telemetry;
 pub mod utils;
 pub mod voice_lines;

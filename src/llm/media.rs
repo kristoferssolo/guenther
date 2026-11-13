@@ -1,4 +1,5 @@
 use crate::{
+    ffmpeg::Ffmpeg,
     llm::{
         error::{LlmError, Result},
         openrouter::ContentPart,
@@ -7,11 +8,10 @@ use crate::{
 };
 use futures::future::try_join_all;
 use std::{
+    ffi::OsStr,
     path::{Path, PathBuf},
-    process::Output,
-    sync::Arc,
 };
-use tokio::{fs, process::Command};
+use tokio::fs;
 use tracing::warn;
 
 /// Upper bound on images, frames, and videos sent with one caption request.
@@ -90,16 +90,14 @@ pub fn frame_timestamps(duration_secs: Option<f64>, count: u32) -> Vec<f64> {
 /// Turns local media into model input parts using ffmpeg and ffprobe.
 #[derive(Debug, Clone)]
 pub struct MediaTools {
-    ffmpeg: Arc<Path>,
-    ffprobe: Arc<Path>,
+    ffmpeg: Ffmpeg,
     video_input: bool,
 }
 
 impl MediaTools {
-    pub fn new(ffmpeg: &Path, ffprobe: &Path, video_input: bool) -> Self {
+    pub const fn new(ffmpeg: Ffmpeg, video_input: bool) -> Self {
         Self {
-            ffmpeg: ffmpeg.into(),
-            ffprobe: ffprobe.into(),
+            ffmpeg,
             video_input,
         }
     }
@@ -161,7 +159,7 @@ impl MediaTools {
         count: u32,
         work_dir: &Path,
     ) -> Result<Vec<LabeledPart>> {
-        let timestamps = frame_timestamps(self.probe_duration(input).await, count);
+        let timestamps = frame_timestamps(self.ffmpeg.probe_duration(input).await, count);
         let total = timestamps.len();
         let extractions = (1_usize..).zip(timestamps).map(|(frame, timestamp)| {
             let output_path = work_dir.join(format!("item-{number}-frame-{frame}.jpg"));
@@ -177,46 +175,24 @@ impl MediaTools {
         try_join_all(extractions).await
     }
 
-    async fn probe_duration(&self, input: &Path) -> Option<f64> {
-        let output = Command::new(&*self.ffprobe)
-            .args([
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-            ])
-            .arg(input)
-            .output()
-            .await
-            .inspect_err(|err| warn!(%err, "Failed to run ffprobe"))
-            .ok()?;
-        if !output.status.success() {
-            warn!(stderr = %stderr(&output), "ffprobe could not read the video duration");
-            return None;
-        }
-        String::from_utf8_lossy(&output.stdout).trim().parse().ok()
-    }
-
     async fn extract_frame(&self, input: &Path, timestamp: f64, output_path: &Path) -> Result<()> {
-        let output = Command::new(&*self.ffmpeg)
-            .args(["-nostdin", "-v", "error", "-y", "-ss"])
-            .arg(format!("{timestamp:.3}"))
-            .arg("-i")
-            .arg(input)
-            .args(["-frames:v", "1", "-vf", FRAME_SCALE_FILTER, "-q:v", "4"])
-            .arg(output_path)
-            .output()
-            .await
-            .map_err(|source| LlmError::Spawn {
-                program: "ffmpeg",
-                source,
-            })?;
-        if output.status.success() {
-            return Ok(());
-        }
-        Err(LlmError::Ffmpeg(stderr(&output)))
+        let timestamp = format!("{timestamp:.3}");
+        self.ffmpeg
+            .run([
+                OsStr::new("-ss"),
+                OsStr::new(&timestamp),
+                OsStr::new("-i"),
+                input.as_os_str(),
+                OsStr::new("-frames:v"),
+                OsStr::new("1"),
+                OsStr::new("-vf"),
+                OsStr::new(FRAME_SCALE_FILTER),
+                OsStr::new("-q:v"),
+                OsStr::new("4"),
+                output_path.as_os_str(),
+            ])
+            .await?;
+        Ok(())
     }
 }
 
@@ -228,16 +204,14 @@ fn detect_mime(bytes: &[u8], prefix: &str) -> Result<&'static str> {
     Err(LlmError::UnsupportedMedia(mime_type.to_owned()))
 }
 
-fn stderr(output: &Output) -> String {
-    String::from_utf8_lossy(&output.stderr).trim().to_owned()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::FfmpegConfig;
     use claims::{assert_ok, assert_ok_eq};
     use rstest::rstest;
     use tempfile::tempdir;
+    use tokio::process::Command;
 
     use MediaKind::{Image, Video};
     use VisualPlan::Frames;
@@ -301,7 +275,7 @@ mod tests {
         );
         assert!(status.success());
 
-        let tools = MediaTools::new(Path::new("ffmpeg"), Path::new("ffprobe"), false);
+        let tools = MediaTools::new(Ffmpeg::new(&FfmpegConfig::default()), false);
         let media = [LocalMedia {
             path: video,
             kind: Video,

@@ -1,4 +1,4 @@
-use crate::handler::Result;
+use crate::handler::{HandlerError, Result};
 use crate::{
     cache::CachedMedia,
     comments::TELEGRAM_CAPTION_LIMIT,
@@ -17,65 +17,143 @@ use tracing::info;
 const MEDIA_GROUP_LIMIT: usize = 10;
 
 /// Media that reached the chat.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct SentMedia {
     /// Sent items mapped back to cache entries; items that Telegram did not
     /// echo as a photo/video are skipped.
     pub cached: Vec<CachedMedia>,
     /// Messages carrying the caption: the single message, or the first item
     /// of each album.
-    #[cfg_attr(
-        not(feature = "llm-captions"),
-        expect(dead_code, reason = "only LLM captions edit sent captions")
-    )]
     pub captioned: Vec<MessageId>,
+}
+
+impl SentMedia {
+    fn append(&mut self, other: Self) {
+        self.cached.extend(other.cached);
+        self.captioned.extend(other.captioned);
+    }
+}
+
+/// What [`send_media`] delivered before Telegram rejected a message, if it
+/// did.
+#[derive(Debug)]
+pub(super) struct Delivery {
+    pub sent: SentMedia,
+    pub failure: Option<DeliveryFailure>,
+}
+
+/// A rejected message, which stops the delivery.
+#[derive(Debug)]
+pub(super) struct DeliveryFailure {
+    /// Items in the rejected message and in every message after it.
+    pub unsent: usize,
+    pub error: HandlerError,
+}
+
+impl Delivery {
+    /// The sent media, or the error if anything was left unsent.
+    pub(super) fn complete(self) -> Result<SentMedia> {
+        match self.failure {
+            Some(failure) => Err(failure.error),
+            None => Ok(self.sent),
+        }
+    }
 }
 
 /// Send media, grouping multiple items into a single album message.
 ///
 /// Only the first item of each message carries the caption, so Telegram shows
-/// it once for the whole album.
+/// it once for the whole album. Sending stops at the first rejected message;
+/// the albums before it stay in the chat and in the result.
 pub(super) async fn send_media(
     bot: &Bot,
     chat_id: ChatId,
     mut media_items: Vec<(InputFile, MediaKind)>,
     caption: &str,
-) -> Result<SentMedia> {
+) -> Delivery {
     if media_items.len() == 1
         && let Some((input, kind)) = media_items.pop()
     {
-        let message = send_single(bot, chat_id, input, kind, caption).await?;
-        return Ok(SentMedia {
-            cached: extract_cached_media(&message, kind).into_iter().collect(),
-            captioned: vec![message.id],
-        });
+        return match send_single(bot, chat_id, input, kind, caption).await {
+            Ok(message) => Delivery {
+                sent: SentMedia {
+                    cached: extract_cached_media(&message, kind).into_iter().collect(),
+                    captioned: vec![message.id],
+                },
+                failure: None,
+            },
+            Err(error) => Delivery {
+                sent: SentMedia::default(),
+                failure: Some(DeliveryFailure { unsent: 1, error }),
+            },
+        };
     }
 
-    let mut cached = Vec::new();
-    let mut captioned = Vec::new();
-    for album_len in album_sizes(media_items.len()) {
-        let chunk = media_items.drain(..album_len).collect::<Vec<_>>();
-        let group = chunk
-            .iter()
-            .enumerate()
-            .map(|(index, (input, kind))| {
-                let caption = (index == 0).then(|| caption.to_owned());
-                into_input_media(input.clone(), *kind, caption)
-            })
-            .collect::<Vec<_>>();
+    send_albums(media_items, |album| {
+        send_album(bot, chat_id, album, caption)
+    })
+    .await
+}
 
-        let messages = bot.send_media_group(chat_id, group).await?;
-        info!(media_count = messages.len(), "Album sent");
-        captioned.extend(messages.first().map(|message| message.id));
-        cached.extend(
-            chunk
-                .iter()
-                .zip(&messages)
-                .filter_map(|((_, kind), message)| extract_cached_media(message, *kind)),
-        );
+/// Send `items` as balanced albums through `send_album`, stopping at the
+/// first album it fails to send.
+async fn send_albums<T, F, Fut>(mut items: Vec<T>, mut send_album: F) -> Delivery
+where
+    F: FnMut(Vec<T>) -> Fut,
+    Fut: Future<Output = Result<SentMedia>>,
+{
+    let mut sent = SentMedia::default();
+    for album_len in album_sizes(items.len()) {
+        let album = items.drain(..album_len).collect::<Vec<_>>();
+        match send_album(album).await {
+            Ok(album) => sent.append(album),
+            Err(error) => {
+                return Delivery {
+                    sent,
+                    failure: Some(DeliveryFailure {
+                        unsent: album_len.saturating_add(items.len()),
+                        error,
+                    }),
+                };
+            }
+        }
     }
+    Delivery {
+        sent,
+        failure: None,
+    }
+}
 
-    Ok(SentMedia { cached, captioned })
+async fn send_album(
+    bot: &Bot,
+    chat_id: ChatId,
+    album: Vec<(InputFile, MediaKind)>,
+    caption: &str,
+) -> Result<SentMedia> {
+    let kinds = album.iter().map(|(_, kind)| *kind).collect::<Vec<_>>();
+    let group = album
+        .into_iter()
+        .enumerate()
+        .map(|(index, (input, kind))| {
+            let caption = (index == 0).then(|| caption.to_owned());
+            into_input_media(input, kind, caption)
+        })
+        .collect::<Vec<_>>();
+
+    let messages = bot.send_media_group(chat_id, group).await?;
+    info!(media_count = messages.len(), "Album sent");
+    Ok(SentMedia {
+        cached: kinds
+            .into_iter()
+            .zip(&messages)
+            .filter_map(|(kind, message)| extract_cached_media(message, kind))
+            .collect(),
+        captioned: messages
+            .first()
+            .map(|message| message.id)
+            .into_iter()
+            .collect(),
+    })
 }
 
 /// Split `len` items into the fewest albums Telegram accepts, balancing their
@@ -155,6 +233,14 @@ pub(super) fn should_include_source_text(
             .all(|(_, kind)| matches!(kind, MediaKind::Image))
 }
 
+/// Notice for media over the upload limit that points to the source instead.
+pub(super) fn too_large_notice(source_url: &str, dropped: usize, total: usize) -> String {
+    if dropped < total {
+        return format!("{dropped} of {total} items were too large for Telegram: {source_url}");
+    }
+    format!("Too large for Telegram, watch it at the source: {source_url}")
+}
+
 pub(super) fn compose_caption(quote: &str, source_text: Option<&str>) -> String {
     let Some(source_text) = source_text.map(str::trim).filter(|text| !text.is_empty()) else {
         return quote.to_owned();
@@ -180,6 +266,8 @@ mod tests {
     use super::*;
     use claims::{assert_none, assert_some, assert_some_eq};
     use rstest::rstest;
+    use std::future;
+    use teloxide::{ApiError, RequestError};
 
     #[rstest]
     #[case(2, &[2])]
@@ -189,6 +277,48 @@ mod tests {
     #[case(20, &[10, 10])]
     fn album_sizes_stay_within_telegram_limits(#[case] len: usize, #[case] expected: &[usize]) {
         assert_eq!(album_sizes(len).collect::<Vec<_>>(), expected);
+    }
+
+    /// Sends `album` as messages whose ids are the item numbers, unless it
+    /// holds the `rejected` item.
+    fn fake_album(album: &[i32], rejected: Option<i32>) -> Result<SentMedia> {
+        if rejected.is_some_and(|item| album.contains(&item)) {
+            return Err(RequestError::Api(ApiError::RequestEntityTooLarge).into());
+        }
+        Ok(SentMedia {
+            cached: album
+                .iter()
+                .map(|item| CachedMedia {
+                    kind: MediaKind::Image,
+                    file_id: item.to_string(),
+                })
+                .collect(),
+            captioned: album.first().copied().map(MessageId).into_iter().collect(),
+        })
+    }
+
+    #[rstest]
+    #[case::all_sent(12, None, &[0, 6], 12, None)]
+    #[case::later_album_rejected(25, Some(9), &[0], 9, Some(16))]
+    #[case::first_album_rejected(12, Some(0), &[], 0, Some(12))]
+    #[tokio::test]
+    async fn delivery_keeps_albums_sent_before_a_rejection(
+        #[case] len: i32,
+        #[case] rejected: Option<i32>,
+        #[case] captioned: &[i32],
+        #[case] cached: usize,
+        #[case] unsent: Option<usize>,
+    ) {
+        let delivery = send_albums((0..len).collect(), |album| {
+            future::ready(fake_album(&album, rejected))
+        })
+        .await;
+        assert_eq!(
+            delivery.sent.captioned,
+            captioned.iter().copied().map(MessageId).collect::<Vec<_>>()
+        );
+        assert_eq!(delivery.sent.cached.len(), cached);
+        assert_eq!(delivery.failure.map(|failure| failure.unsent), unsent);
     }
 
     #[test]
@@ -220,6 +350,28 @@ mod tests {
             _ => None,
         });
         assert_none!(video.caption);
+    }
+
+    #[rstest]
+    #[case::everything(
+        3,
+        3,
+        "Too large for Telegram, watch it at the source: https://x.com/a/status/1"
+    )]
+    #[case::part(
+        1,
+        3,
+        "1 of 3 items were too large for Telegram: https://x.com/a/status/1"
+    )]
+    fn too_large_notice_keeps_the_source_link(
+        #[case] dropped: usize,
+        #[case] total: usize,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(
+            too_large_notice("https://x.com/a/status/1", dropped, total),
+            expected
+        );
     }
 
     #[test]

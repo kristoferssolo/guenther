@@ -1,3 +1,5 @@
+#[cfg(feature = "voice-line-capture")]
+use crate::telegram_file::{TelegramFileError, TelegramFiles};
 use serde::{Deserialize, Serialize};
 use std::{
     env, io,
@@ -7,7 +9,7 @@ use std::{
 #[cfg(feature = "voice-line-capture")]
 use std::{fs::OpenOptions, io::Write};
 #[cfg(feature = "voice-line-capture")]
-use teloxide::{DownloadError, RequestError};
+use teloxide::RequestError;
 #[cfg(feature = "voice-line-capture")]
 use tempfile::NamedTempFile;
 use thiserror::Error;
@@ -53,7 +55,7 @@ pub enum VoiceLinesError {
 
     #[cfg(feature = "voice-line-capture")]
     #[error("Failed to download incoming audio from Telegram: {0}")]
-    DownloadAudio(#[from] DownloadError),
+    DownloadAudio(#[from] TelegramFileError),
 
     #[cfg(feature = "voice-line-capture")]
     #[error("Failed to run ffmpeg to convert audio into Telegram voice format: {0}")]
@@ -101,6 +103,8 @@ pub struct VoiceLines {
     path: Arc<Path>,
     #[cfg(feature = "voice-line-capture")]
     ffmpeg: Arc<Path>,
+    #[cfg(feature = "voice-line-capture")]
+    telegram_files: TelegramFiles,
 }
 
 impl VoiceLines {
@@ -109,6 +113,19 @@ impl VoiceLines {
             path: env_path("VOICE_LINES_PATH", DEFAULT_VOICE_LINES_PATH),
             #[cfg(feature = "voice-line-capture")]
             ffmpeg: env_path("FFMPEG_BIN", DEFAULT_FFMPEG_BIN),
+            #[cfg(feature = "voice-line-capture")]
+            telegram_files: TelegramFiles::default(),
+        }
+    }
+
+    /// Fetch captured audio with `files`. Without it, audio from a local Bot
+    /// API server cannot be captured.
+    #[cfg(feature = "voice-line-capture")]
+    #[must_use]
+    pub fn with_telegram_files(self, files: TelegramFiles) -> Self {
+        Self {
+            telegram_files: files,
+            ..self
         }
     }
 
@@ -208,6 +225,8 @@ mod tests {
             path: path.into(),
             #[cfg(feature = "voice-line-capture")]
             ffmpeg: PathBuf::from(DEFAULT_FFMPEG_BIN).into(),
+            #[cfg(feature = "voice-line-capture")]
+            telegram_files: TelegramFiles::default(),
         }
     }
 
