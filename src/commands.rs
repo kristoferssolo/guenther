@@ -11,6 +11,7 @@ use crate::{
     media_posts::{MediaPosts, StatsPeriod},
     purge::purge,
     status::BotStatus,
+    telemetry::ErrorChain,
 };
 use chrono::Utc;
 use strum::IntoStaticStr;
@@ -250,7 +251,7 @@ async fn send_link_stats(
         Ok(period) => match media_posts.stats(chat_id, period, Utc::now()).await {
             Ok(stats) => stats.to_string(),
             Err(err) => {
-                warn!(%err, "Failed to load link stats");
+                warn!(error = %ErrorChain(&err), "Failed to load link stats");
                 format!("Failed to load link stats: {err}")
             }
         },

@@ -2,6 +2,7 @@ use crate::{
     cache::{CacheError, MediaCache},
     config::Platform,
     handler::MediaHandlers,
+    telemetry::ErrorChain,
 };
 use std::fmt::{self, Display, Formatter};
 use strum::VariantArray;
@@ -99,10 +100,9 @@ pub async fn purge(
     cache: &MediaCache,
 ) -> Result<String, PurgeError> {
     let target = PurgeTarget::parse(input, handlers)?;
-    let deleted = target
-        .purge(cache)
-        .await
-        .inspect_err(|err| error!(%err, %target, "Failed to purge the media cache"))?;
+    let deleted = target.purge(cache).await.inspect_err(
+        |err| error!(error = %ErrorChain(err), %target, "Failed to purge the media cache"),
+    )?;
     info!(%target, deleted, "Purged the media cache");
     let rows = if deleted == 1 { "row" } else { "rows" };
     Ok(format!(

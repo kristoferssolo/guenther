@@ -8,6 +8,7 @@ use crate::{
     cache::{CacheCount, MediaCache},
     config::Platform,
     handler::MediaHandlers,
+    telemetry::ErrorChain,
 };
 use std::{
     error::Error,
@@ -50,11 +51,11 @@ impl BotStatus {
             self.cache.platform_counts()
         );
         let cobalt = cobalt.map_err(|err| {
-            warn!(%err, "Cobalt status probe failed");
+            warn!(error = %ErrorChain(&err), "Cobalt status probe failed");
             root_cause(&err)
         });
         let cache = cache.map_err(|err| {
-            warn!(%err, "Media cache count failed");
+            warn!(error = %ErrorChain(&err), "Media cache count failed");
             err.to_string()
         });
 

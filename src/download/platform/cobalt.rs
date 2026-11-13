@@ -48,9 +48,13 @@ impl CobaltClient {
         let files = match response {
             CobaltResponse::Tunnel { url, filename }
             | CobaltResponse::Redirect { url, filename } => {
+                debug!("Cobalt resolved a single file");
                 vec![self.download_media(&tempdir, &url, &filename, 0).await?]
             }
-            CobaltResponse::Picker { picker } => self.download_picker(&tempdir, picker).await?,
+            CobaltResponse::Picker { picker } => {
+                debug!(items = picker.len(), "Cobalt resolved a picker");
+                self.download_picker(&tempdir, picker).await?
+            }
             CobaltResponse::LocalProcessing => return Err(DownloadError::CobaltLocalProcessing),
             CobaltResponse::Rejected { error } => {
                 return Err(DownloadError::CobaltRejected(error.code));
@@ -133,18 +137,20 @@ impl CobaltClient {
             .send()
             .await
             .map_err(DownloadError::CobaltRequest)?;
-        debug!(index, status = %response.status(), "Received Cobalt media response");
         let response = response
             .error_for_status()
             .map_err(DownloadError::CobaltRequest)?;
         let mut stream = response.bytes_stream();
         let mut file = File::create(&path).await?;
 
+        let mut bytes = 0_usize;
         while let Some(chunk) = stream.next().await {
-            file.write_all(&chunk.map_err(DownloadError::CobaltRequest)?)
-                .await?;
+            let chunk = chunk.map_err(DownloadError::CobaltRequest)?;
+            bytes = bytes.saturating_add(chunk.len());
+            file.write_all(&chunk).await?;
         }
         file.flush().await?;
+        debug!(index, bytes, "Downloaded Cobalt media item");
 
         Ok(path)
     }

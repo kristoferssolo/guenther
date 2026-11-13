@@ -6,7 +6,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["bingo", "llm-captions"]
+default = []
 bingo = ["dep:image", "dep:noto-sans-mono-bitmap"]
 voice-line-capture = []
 llm-captions = ["dep:base64"]

@@ -8,6 +8,7 @@ use crate::bingo::{
         render::{card_keyboard, render_card},
     },
 };
+use crate::telemetry::ErrorChain;
 use teloxide::{
     ApiError, RequestError,
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
@@ -71,7 +72,7 @@ pub async fn answer_callback(
                 .show_alert(true)
                 .await
             {
-                warn!(%error, "Could not answer a failed bingo callback");
+                warn!(error = %ErrorChain(&error), "Could not answer a failed bingo callback");
             }
             Err(error)
         }

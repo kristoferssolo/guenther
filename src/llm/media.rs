@@ -4,6 +4,7 @@ use crate::{
         error::{LlmError, Result},
         openrouter::ContentPart,
     },
+    telemetry::ErrorChain,
     utils::MediaKind,
 };
 use futures::future::try_join_all;
@@ -115,7 +116,11 @@ impl MediaTools {
         for ((number, item), plan) in (1_u32..).zip(media).zip(plans) {
             match self.prepare_item(number, item, plan, work_dir).await {
                 Ok(item_parts) => parts.extend(item_parts),
-                Err(err) => warn!(%err, item = number, "Skipping media item for the LLM caption"),
+                Err(err) => warn!(
+                    error = %ErrorChain(&err),
+                    item = number,
+                    "Skipping media item for the LLM caption"
+                ),
             }
         }
         parts

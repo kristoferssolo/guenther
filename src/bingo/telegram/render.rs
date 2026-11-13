@@ -5,6 +5,7 @@ use crate::bingo::{
     store::BingoStore,
     telegram::callback::format_callback,
 };
+use crate::telemetry::ErrorChain;
 use teloxide::{
     payloads::SendMessageSetters,
     prelude::{Bot, ChatId, Requester},
@@ -90,7 +91,7 @@ pub async fn send_card(bot: &Bot, chat_id: ChatId, card: &Card) -> Result<()> {
         .await;
     if let Err(error) = text_result {
         if let Err(error) = bot.delete_message(chat_id, photo.id).await {
-            warn!(%error, "Could not delete an orphaned bingo card image");
+            warn!(error = %ErrorChain(&error), "Could not delete an orphaned bingo card image");
         }
         return Err(error.into());
     }
