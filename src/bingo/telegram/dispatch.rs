@@ -20,6 +20,7 @@ use tracing::{Span, debug, info};
 
 #[tracing::instrument(
     name = "bingo.command",
+    level = "error",
     skip_all,
     fields(
         chat_id = message.chat.id.0,
