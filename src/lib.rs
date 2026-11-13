@@ -14,6 +14,7 @@ pub mod inline;
 pub mod llm;
 pub mod media_posts;
 pub mod purge;
+pub mod status;
 pub mod telegram_file;
 pub mod telemetry;
 pub mod utils;

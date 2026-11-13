@@ -185,6 +185,60 @@ impl MediaCache {
         .await?;
         Ok(result.rows_affected())
     }
+
+    /// Count cached links and media items per platform, known platforms first.
+    ///
+    /// Cache keys start with `<platform>:`; keys without a known platform
+    /// prefix are grouped under `platform: None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database query fails.
+    pub async fn platform_counts(&self) -> Result<Vec<CacheCount>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                substr(url, 1, instr(url, ':') - 1) AS "prefix!: String",
+                COUNT(DISTINCT url) AS "links!: i64",
+                COUNT(*) AS "items!: i64"
+            FROM
+                media_cache
+            GROUP BY
+                1
+            ORDER BY
+                1
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut counts = Vec::<CacheCount>::new();
+        for row in rows {
+            let platform = row.prefix.parse().ok();
+            match counts.iter_mut().find(|count| count.platform == platform) {
+                Some(count) => {
+                    count.links = count.links.saturating_add(row.links);
+                    count.items = count.items.saturating_add(row.items);
+                }
+                None => counts.push(CacheCount {
+                    platform,
+                    links: row.links,
+                    items: row.items,
+                }),
+            }
+        }
+        counts.sort_by_key(|count| count.platform.is_none());
+        Ok(counts)
+    }
+}
+
+/// Number of cached links and media items for one platform.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CacheCount {
+    /// `None` for keys without a known platform prefix.
+    pub platform: Option<Platform>,
+    pub links: i64,
+    pub items: i64,
 }
 
 /// Only `video` and `image` pass the table's `CHECK` constraint; anything else
@@ -290,6 +344,41 @@ mod tests {
         assert_ok_eq!(cache.clear().await, 4);
         assert_none!(assert_ok!(cache.get("tiktok:video:1").await));
         assert_none!(assert_ok!(cache.get("youtube:shorts:2").await));
+    }
+
+    #[tokio::test]
+    async fn counts_links_and_items_per_platform_prefix() {
+        let cache = cache().await;
+        let two = [media("a", MediaKind::Image), media("b", MediaKind::Video)];
+        let one = [media("c", MediaKind::Video)];
+        assert_ok!(cache.put("youtube:shorts:1", &one).await);
+        assert_ok!(cache.put("instagram:post:1", &two).await);
+        assert_ok!(cache.put("instagram:post:2", &one).await);
+        assert_ok!(cache.put("https://example.com/legacy", &one).await);
+        assert_ok!(cache.put("no-prefix", &one).await);
+
+        let counts = assert_ok!(cache.platform_counts().await);
+
+        assert_eq!(
+            counts,
+            [
+                CacheCount {
+                    platform: Some(Platform::Instagram),
+                    links: 2,
+                    items: 3,
+                },
+                CacheCount {
+                    platform: Some(Platform::Youtube),
+                    links: 1,
+                    items: 1,
+                },
+                CacheCount {
+                    platform: None,
+                    links: 2,
+                    items: 2,
+                },
+            ]
+        );
     }
 
     #[tokio::test]

@@ -45,4 +45,14 @@ impl Downloader {
             }
         }
     }
+
+    /// Ask the configured Cobalt instance for its version.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Cobalt is unreachable, times out, or replies with
+    /// something other than instance info.
+    pub async fn cobalt_version(&self) -> Result<String> {
+        self.cobalt.instance_version().await
+    }
 }
