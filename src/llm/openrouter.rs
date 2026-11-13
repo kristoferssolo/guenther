@@ -275,26 +275,26 @@ mod tests {
     fn response_without_text_is_empty() {
         for body in [
             json!({
-    "choices": []
-}),
+                "choices": []
+            }),
             json!({
-    "choices": [
-        {
-            "message": {
-                "content": null
-            }
-        }
-    ]
-}),
+                "choices": [
+                    {
+                        "message": {
+                            "content": null
+                        }
+                    }
+                ]
+            }),
             json!({
-    "choices": [
-        {
-            "message": {
-                "content": "  \n"
-            }
-        }
-    ]
-}),
+                "choices": [
+                    {
+                        "message": {
+                            "content": "  \n"
+                        }
+                    }
+                ]
+            }),
         ] {
             assert_matches!(parse(&body), Err(LlmError::EmptyResponse));
         }
