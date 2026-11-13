@@ -22,7 +22,7 @@ use teloxide::{
     prelude::*,
     types::{ChatId, InlineQuery, LinkPreviewOptions},
 };
-use tracing::{Instrument, Span, debug, error, info, info_span, warn};
+use tracing::{Instrument, Span, debug, error, error_span, info, warn};
 
 #[cfg(any(
     feature = "bingo",
@@ -202,8 +202,12 @@ fn enable_llm(
     ))
 }
 
+// Context spans use the `error` level so their fields stay on warnings and
+// errors under any `RUST_LOG` that keeps those events; the formatter does not
+// print span levels.
 #[tracing::instrument(
     name = "telegram.message",
+    level = "error",
     skip_all,
     fields(
         chat_id = msg.chat.id.0,
@@ -298,7 +302,12 @@ async fn message_handler(
     Ok(())
 }
 
-#[tracing::instrument(name = "telegram.inline_query", skip_all, fields(user_id = query.from.id.0))]
+#[tracing::instrument(
+    name = "telegram.inline_query",
+    level = "error",
+    skip_all,
+    fields(user_id = query.from.id.0)
+)]
 async fn inline_query_handler(
     bot: Bot,
     query: InlineQuery,
@@ -316,6 +325,7 @@ async fn inline_query_handler(
 #[cfg(feature = "bingo")]
 #[tracing::instrument(
     name = "telegram.callback",
+    level = "error",
     skip_all,
     fields(
         chat_id = query.regular_message().map(|message| message.chat.id.0),
@@ -344,7 +354,7 @@ async fn process_message(
     admin_chat_id: Option<ChatId>,
 ) {
     for link in handlers.extract(msg.text(), msg.caption()) {
-        let span = info_span!("media", platform = %link.platform, url = %link.original_url);
+        let span = error_span!("media", platform = %link.platform, url = %link.original_url);
         let handled = handlers
             .handle(bot, msg, &link, cache, media_posts)
             .instrument(span.clone())
