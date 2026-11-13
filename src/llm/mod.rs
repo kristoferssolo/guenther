@@ -1,8 +1,8 @@
 //! LLM-written media captions via `OpenRouter`.
 //!
-//! Media is always sent first with a `comments.txt` caption; a [`Captioner`]
-//! result only replaces that caption afterwards, so failures here never block
-//! delivery.
+//! Media waits a bounded time for a [`Captioner`] result. A late caption
+//! replaces the `comments.txt` caption the media went out with, and failures
+//! keep that static caption, so captioning never blocks delivery for long.
 
 mod error;
 mod media;
@@ -24,7 +24,7 @@ use crate::{
     },
     utils::MediaKind,
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tempfile::tempdir;
 use tracing::debug;
 
@@ -44,6 +44,7 @@ pub struct Captioner {
     client: OpenRouterClient,
     tools: MediaTools,
     comments: Arc<Comments>,
+    initial_wait: Duration,
 }
 
 impl Captioner {
@@ -57,7 +58,13 @@ impl Captioner {
             client: OpenRouterClient::new(&config.api_key, &config.model)?,
             tools: MediaTools::new(&config.ffmpeg, &config.ffprobe, config.video_input),
             comments,
+            initial_wait: config.caption_wait,
         })
+    }
+
+    /// How long media waits for a caption before it is sent with a static one.
+    pub const fn initial_wait(&self) -> Duration {
+        self.initial_wait
     }
 
     /// Number of leading media items the model will look at, so callers only

@@ -21,6 +21,7 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("OPENROUTER_API_KEY", None),
             ("OPENROUTER_MODEL", None),
             ("OPENROUTER_VIDEO_INPUT", None),
+            ("OPENROUTER_CAPTION_WAIT_SECS", None),
             ("FFMPEG_BIN", None),
             ("FFPROBE_BIN", None),
         ],
@@ -159,4 +160,25 @@ fn openrouter_debug_redacts_api_key() {
     let debug = format!("{openrouter:?}");
     assert!(!debug.contains("sk-or-secret"));
     assert!(debug.contains("z-ai/glm-5.3-flash"));
+}
+
+#[cfg(feature = "llm-captions")]
+#[rstest]
+#[case::unset(None, 8)]
+#[case::set(Some("5"), 5)]
+#[case::padded(Some(" 10 "), 10)]
+#[case::zero_sends_immediately(Some("0"), 0)]
+#[case::negative(Some("-1"), 8)]
+#[case::not_a_number(Some("soon"), 8)]
+fn openrouter_caption_wait(#[case] raw: Option<&str>, #[case] expected_secs: u64) {
+    let openrouter = config_with(&[
+        ("OPENROUTER_API_KEY", Some("sk-or-key")),
+        ("OPENROUTER_MODEL", Some("z-ai/glm-5.3-flash")),
+        ("OPENROUTER_CAPTION_WAIT_SECS", raw),
+    ])
+    .openrouter;
+    assert_eq!(
+        openrouter.map(|config| config.caption_wait),
+        Some(std::time::Duration::from_secs(expected_secs))
+    );
 }

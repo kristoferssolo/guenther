@@ -58,6 +58,7 @@ LLM captions (`llm-captions` feature only):
 
 - `OPENROUTER_API_KEY`: OpenRouter API key; LLM captions stay off unless this and `OPENROUTER_MODEL` are set
 - `OPENROUTER_MODEL`: OpenRouter model id with image input, for example `deepseek/deepseek-v4.1-flash` or `z-ai/glm-5.3-flash`
+- `OPENROUTER_CAPTION_WAIT_SECS`: how long media waits for the model's caption before it is sent with a static one; defaults to `8`, and `0` always sends immediately
 - `OPENROUTER_VIDEO_INPUT`: `true` sends videos up to 20 MiB to the model instead of extracted frames; needs a video-capable model such as `z-ai/glm-5.3-flash`
 - `FFPROBE_BIN`: override the `ffprobe` executable used to find frame timestamps
 
@@ -109,9 +110,10 @@ To enable LLM-written captions (also set the `OPENROUTER_*` variables):
 cargo run --features llm-captions
 ```
 
-Media is sent right away with a `comments.txt` caption, which is then edited
-into the model's caption once it answers; on any failure the static caption
-stays. The model gets the platform, the sender's first name and message, X post
+Media waits up to `OPENROUTER_CAPTION_WAIT_SECS` for the model's caption. If
+the caption is late, the media is sent with a `comments.txt` caption that is
+edited into the model's caption once it answers; on any failure the static
+caption stays. The model gets the platform, the sender's first name and message, X post
 text, and up to four images: photos as-is and three ffmpeg frames per video.
 Repeat links fetch their cached media back from Telegram for the same purpose.
 Requests ask OpenRouter to avoid providers that store or train on data.

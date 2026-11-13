@@ -13,6 +13,11 @@ use crate::{
         link::{extract_media_links, normalize_cache_key},
     },
 };
+#[cfg(feature = "llm-captions")]
+use crate::{
+    handler::caption::{CaptionJob, InitialCaption, JobMedia},
+    llm::Captioner,
+};
 use regex::{Error as RegexError, Regex};
 use std::{result::Result as StdResult, sync::Arc, time::Instant};
 use teloxide::{
@@ -21,14 +26,6 @@ use teloxide::{
 };
 use thiserror::Error;
 use tracing::{debug, info, warn};
-#[cfg(feature = "llm-captions")]
-use {
-    crate::{
-        handler::caption::{CaptionJob, JobMedia},
-        llm::Captioner,
-    },
-    teloxide::types::MessageId,
-};
 
 pub use crate::handler::link::MediaLink;
 
@@ -80,7 +77,8 @@ impl MediaHandlers {
         })
     }
 
-    /// Replace each sent static caption with an LLM-written one in the background.
+    /// Caption media with LLM-written lines, waiting a bounded time before
+    /// falling back to a static caption that is replaced later.
     #[cfg(feature = "llm-captions")]
     #[must_use]
     pub fn with_captioner(self, captioner: Captioner) -> Self {
@@ -136,14 +134,14 @@ impl MediaHandlers {
             }
         }
 
-        let download = self
-            .downloader
-            .download(link.platform, &link.original_url)
-            .await?;
+        let download = Arc::new(
+            self.downloader
+                .download(link.platform, &link.original_url)
+                .await?,
+        );
         let media_items = download.supported_media().await?;
         let source_text = download.source_text.as_deref();
         let media_count = media_items.len();
-        let base_caption = self.comments.build_caption();
         let include_source_text =
             should_include_source_text(link.platform, &media_items, source_text);
 
@@ -154,6 +152,22 @@ impl MediaHandlers {
             elapsed = ?started_at.elapsed(),
             "Prepared downloaded media"
         );
+
+        #[cfg(feature = "llm-captions")]
+        let (base_caption, late_caption) = self
+            .initial_caption(
+                bot,
+                msg,
+                link.platform,
+                JobMedia::Downloaded {
+                    download: Arc::clone(&download),
+                    items: media_items.clone(),
+                },
+            )
+            .await
+            .or_static(|| self.comments.build_caption());
+        #[cfg(not(feature = "llm-captions"))]
+        let base_caption = self.comments.build_caption();
 
         let caption = if include_source_text {
             compose_caption(&base_caption, source_text)
@@ -170,17 +184,16 @@ impl MediaHandlers {
         }
 
         #[cfg(feature = "llm-captions")]
-        self.spawn_caption(
-            bot,
-            msg,
-            link.platform,
-            sent.captioned,
-            JobMedia::Downloaded {
-                download,
-                items: media_items,
-                append_source_text: include_source_text,
-            },
-        );
+        if let Some(late_caption) = late_caption {
+            late_caption.apply_later(
+                bot.clone(),
+                msg.chat.id,
+                sent.captioned,
+                source_text
+                    .filter(|_| include_source_text)
+                    .map(str::to_owned),
+            );
+        }
 
         info!(
             platform = %link.platform,
@@ -217,12 +230,16 @@ impl MediaHandlers {
 
         let media_count = cached.len();
         #[cfg(feature = "llm-captions")]
-        let job_media = JobMedia::Cached(cached.clone());
+        let (caption, late_caption) = self
+            .initial_caption(bot, msg, link.platform, JobMedia::Cached(cached.clone()))
+            .await
+            .or_static(|| self.comments.build_caption());
+        #[cfg(not(feature = "llm-captions"))]
+        let caption = self.comments.build_caption();
         let inputs = cached
             .into_iter()
             .map(|item| (InputFile::file_id(FileId(item.file_id)), item.kind))
             .collect::<Vec<_>>();
-        let caption = self.comments.build_caption();
         #[cfg_attr(
             not(feature = "llm-captions"),
             expect(unused_variables, reason = "only LLM captions edit sent captions")
@@ -231,33 +248,35 @@ impl MediaHandlers {
         debug!(platform = %link.platform, media_count, "Sent cached media");
 
         #[cfg(feature = "llm-captions")]
-        self.spawn_caption(bot, msg, link.platform, sent.captioned, job_media);
+        if let Some(late_caption) = late_caption {
+            late_caption.apply_later(bot.clone(), msg.chat.id, sent.captioned, None);
+        }
         Ok(true)
     }
 
+    /// Start an LLM caption for `media` and wait the configured time for it.
     #[cfg(feature = "llm-captions")]
-    fn spawn_caption(
+    async fn initial_caption(
         &self,
         bot: &Bot,
         msg: &Message,
         platform: Platform,
-        message_ids: Vec<MessageId>,
         media: JobMedia,
-    ) {
+    ) -> InitialCaption {
         let Some(captioner) = &self.captioner else {
-            return;
+            return InitialCaption::Unavailable;
         };
         CaptionJob {
             captioner: captioner.clone(),
             bot: bot.clone(),
-            chat_id: msg.chat.id,
-            message_ids,
             platform,
             sender_name: msg.from.as_ref().map(|user| user.first_name.clone()),
             message_text: msg.text().or_else(|| msg.caption()).map(str::to_owned),
             media,
         }
-        .spawn();
+        .start()
+        .wait(captioner.initial_wait())
+        .await
     }
 }
 
