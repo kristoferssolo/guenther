@@ -1,0 +1,40 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            url AS \"url!\",\n            COUNT(*) AS \"count!: i64\",\n            MAX(id) AS \"latest_id!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (?2 IS NULL OR created_at >= ?2)\n        GROUP BY\n            cache_key\n        HAVING\n            COUNT(*) > 1\n        ORDER BY\n            COUNT(*) DESC,\n            MAX(id) DESC\n        LIMIT\n            ?3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "url!",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "name": "count!: i64",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": "Expression"
+      },
+      {
+        "name": "latest_id!: i64",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "215fcae3d01091925511ab650fc4b93eb016df0e22e118a611ffa7c05c5d0fc4"
+}

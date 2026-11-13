@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                SELECT\n                    chat_id,\n                    message_id,\n                    sender_id,\n                    sender_name,\n                    platform,\n                    cache_key,\n                    url,\n                    cache_hit AS \"cache_hit: bool\",\n                    created_at\n                FROM\n                    media_posts\n                ",
+  "describe": {
+    "columns": [
+      {
+        "name": "chat_id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "chat_id"
+          }
+        }
+      },
+      {
+        "name": "message_id",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "message_id"
+          }
+        }
+      },
+      {
+        "name": "sender_id",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "sender_id"
+          }
+        }
+      },
+      {
+        "name": "sender_name",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "sender_name"
+          }
+        }
+      },
+      {
+        "name": "platform",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "platform"
+          }
+        }
+      },
+      {
+        "name": "cache_key",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "cache_key"
+          }
+        }
+      },
+      {
+        "name": "url",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "name": "cache_hit: bool",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "cache_hit"
+          }
+        }
+      },
+      {
+        "name": "created_at",
+        "ordinal": 8,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f48565743e80b0025017e2763e2b4d7b5cff2401a25a6d1810cb752aba0f813e"
+}

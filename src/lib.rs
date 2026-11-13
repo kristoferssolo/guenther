@@ -11,6 +11,7 @@ pub mod handler;
 pub mod inline;
 #[cfg(feature = "llm-captions")]
 pub mod llm;
+pub mod media_posts;
 pub mod telemetry;
 pub mod utils;
 pub mod voice_lines;
