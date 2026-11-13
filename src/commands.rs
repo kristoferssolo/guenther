@@ -1,5 +1,8 @@
 #[cfg(feature = "bingo")]
-use crate::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
+use crate::{
+    bingo::{AdminCache, BingoError, BingoStore, answer_bingo},
+    telegram_file::TelegramFiles,
+};
 use crate::{
     comments::Comments,
     f1::{F1, ScheduleView},
@@ -109,6 +112,7 @@ pub async fn answer(
     media_posts: &MediaPosts,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
+    #[cfg(feature = "bingo")] telegram_files: &TelegramFiles,
 ) -> Result<(), CommandError> {
     let chat_id = message.chat.id;
     match cmd {
@@ -128,7 +132,15 @@ pub async fn answer(
         Command::Stats(input) => send_link_stats(bot, chat_id, media_posts, &input).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
-            answer_bingo(bot, message, bingo_store, admin_cache, &input).await?;
+            answer_bingo(
+                bot,
+                message,
+                bingo_store,
+                admin_cache,
+                telegram_files,
+                &input,
+            )
+            .await?;
             return Ok(());
         }
     };

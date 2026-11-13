@@ -4,7 +4,10 @@ mod dispatch;
 mod document;
 mod render;
 
-use crate::bingo::{error::Result, model::KnownUser, store::BingoStore};
+use crate::{
+    bingo::{error::Result, model::KnownUser, store::BingoStore},
+    telegram_file::TelegramFiles,
+};
 use teloxide::{prelude::*, types::Message};
 
 pub use crate::bingo::telegram::admin::AdminCache;
@@ -38,9 +41,10 @@ pub async fn answer_bingo(
     message: &Message,
     store: &BingoStore,
     admin_cache: &AdminCache,
+    files: &TelegramFiles,
     input: &str,
 ) -> Result<()> {
-    let result = dispatch::execute_bingo(bot, message, store, admin_cache, input).await;
+    let result = dispatch::execute_bingo(bot, message, store, admin_cache, files, input).await;
     match result {
         Ok(()) => Ok(()),
         Err(error) if error.is_user_facing() => {

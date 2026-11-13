@@ -1,3 +1,4 @@
+use crate::telegram_file::TelegramFileError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, BingoError>;
@@ -11,7 +12,7 @@ pub enum BingoError {
     Telegram(#[from] teloxide::RequestError),
 
     #[error("Telegram file download failed: {0}")]
-    Download(#[from] teloxide::DownloadError),
+    Download(#[from] TelegramFileError),
 
     #[error("Card image encoding failed: {0}")]
     Image(#[from] image::ImageError),

@@ -2,10 +2,13 @@ use claims::{assert_err, assert_ok_eq};
 use guenther::{
     config::{Config, Platform},
     db::DEFAULT_DATABASE_URL,
+    handler::UploadLimits,
 };
 use rstest::rstest;
+use std::path::Path;
 use strum::VariantArray;
 use temp_env::with_vars;
+use url::Url;
 
 const DEFAULT_COBALT_API_URL: &str = "http://127.0.0.1:9000/";
 
@@ -24,6 +27,9 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("OPENROUTER_CAPTION_WAIT_SECS", None),
             ("FFMPEG_BIN", None),
             ("FFPROBE_BIN", None),
+            ("TELEGRAM_API_URL", None),
+            ("TELEGRAM_API_LOCAL", None),
+            ("TELEGRAM_API_DIR", None),
         ],
         f,
     )
@@ -107,6 +113,94 @@ fn f1_utc_offset(#[case] raw: Option<&str>, #[case] expected_seconds: i32) {
     assert_eq!(offset.local_minus_utc(), expected_seconds);
 }
 
+#[rstest]
+#[case::defaults(None, None, "ffmpeg", "ffprobe")]
+#[case::set(
+    Some("/opt/ffmpeg"),
+    Some(" /opt/ffprobe "),
+    "/opt/ffmpeg",
+    "/opt/ffprobe"
+)]
+#[case::blank(Some(""), Some("  "), "ffmpeg", "ffprobe")]
+fn ffmpeg_binaries(
+    #[case] ffmpeg: Option<&str>,
+    #[case] ffprobe: Option<&str>,
+    #[case] expected_ffmpeg: &str,
+    #[case] expected_ffprobe: &str,
+) {
+    let config = config_with(&[("FFMPEG_BIN", ffmpeg), ("FFPROBE_BIN", ffprobe)]).ffmpeg;
+    assert_eq!(config.ffmpeg, Path::new(expected_ffmpeg));
+    assert_eq!(config.ffprobe, Path::new(expected_ffprobe));
+}
+
+#[rstest]
+#[case::unset(None, None)]
+#[case::local_server(
+    Some("http://telegram-bot-api:8081/"),
+    Some("http://telegram-bot-api:8081/")
+)]
+#[case::invalid(Some("not a url"), None)]
+#[case::empty(Some(" "), None)]
+fn telegram_api_url(#[case] raw: Option<&str>, #[case] expected: Option<&str>) {
+    let api_url = config_with(&[("TELEGRAM_API_URL", raw)]).telegram.api_url;
+    assert_eq!(api_url.as_ref().map(Url::as_str), expected);
+}
+
+#[rstest]
+#[case::cloud(None, None, UploadLimits::CLOUD)]
+#[case::proxy_or_cloud_mode_server(Some("http://telegram-bot-api:8081"), None, UploadLimits::CLOUD)]
+#[case::local_server(
+    Some("http://telegram-bot-api:8081"),
+    Some("true"),
+    UploadLimits::LOCAL
+)]
+#[case::local_flag_off(
+    Some("http://telegram-bot-api:8081"),
+    Some("false"),
+    UploadLimits::CLOUD
+)]
+#[case::local_flag_without_url(None, Some("true"), UploadLimits::CLOUD)]
+#[case::local_flag_with_invalid_url(Some("not a url"), Some("true"), UploadLimits::CLOUD)]
+fn upload_limits_need_an_explicit_local_server(
+    #[case] api_url: Option<&str>,
+    #[case] local: Option<&str>,
+    #[case] expected: UploadLimits,
+) {
+    let telegram =
+        config_with(&[("TELEGRAM_API_URL", api_url), ("TELEGRAM_API_LOCAL", local)]).telegram;
+    assert_eq!(telegram.is_local(), expected == UploadLimits::LOCAL);
+    assert_eq!(UploadLimits::for_telegram(&telegram), expected);
+}
+
+#[rstest]
+#[case::default(Some("true"), None, Some("/var/lib/telegram-bot-api"))]
+#[case::custom(Some("true"), Some("/srv/bot-api"), Some("/srv/bot-api"))]
+#[case::blank(Some("true"), Some(" "), Some("/var/lib/telegram-bot-api"))]
+#[case::cloud_mode_server(Some("false"), Some("/srv/bot-api"), None)]
+fn local_dir_is_set_only_in_local_mode(
+    #[case] local: Option<&str>,
+    #[case] dir: Option<&str>,
+    #[case] expected: Option<&str>,
+) {
+    let telegram = config_with(&[
+        ("TELEGRAM_API_URL", Some("http://telegram-bot-api:8081")),
+        ("TELEGRAM_API_LOCAL", local),
+        ("TELEGRAM_API_DIR", dir),
+    ])
+    .telegram;
+    assert_eq!(telegram.local_dir.as_deref(), expected.map(Path::new));
+}
+
+#[test]
+fn local_dir_needs_an_api_url() {
+    let telegram = config_with(&[
+        ("TELEGRAM_API_LOCAL", Some("true")),
+        ("TELEGRAM_API_DIR", Some("/srv/bot-api")),
+    ])
+    .telegram;
+    assert_eq!(telegram.local_dir, None);
+}
+
 #[cfg(feature = "llm-captions")]
 #[rstest]
 #[case::both_set(Some("sk-or-key"), Some(" z-ai/glm-5.3-flash "), true)]
@@ -126,8 +220,6 @@ fn openrouter_needs_key_and_model(
         assert_eq!(openrouter.api_key, "sk-or-key");
         assert_eq!(openrouter.model, "z-ai/glm-5.3-flash");
         assert!(!openrouter.video_input);
-        assert_eq!(openrouter.ffmpeg, std::path::Path::new("ffmpeg"));
-        assert_eq!(openrouter.ffprobe, std::path::Path::new("ffprobe"));
     }
 }
 

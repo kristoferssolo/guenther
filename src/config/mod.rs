@@ -1,17 +1,21 @@
 mod cobalt;
 mod f1;
+mod ffmpeg;
 #[cfg(feature = "llm-captions")]
 mod openrouter;
 mod platform;
+mod telegram;
 
 use std::env;
 use tracing::warn;
 
 pub use crate::config::cobalt::CobaltConfig;
 pub use crate::config::f1::F1Config;
+pub use crate::config::ffmpeg::FfmpegConfig;
 #[cfg(feature = "llm-captions")]
 pub use crate::config::openrouter::OpenRouterConfig;
 pub use crate::config::platform::{ParsePlatformError, Platform, PlatformConfig};
+pub use crate::config::telegram::TelegramConfig;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -20,6 +24,8 @@ pub struct Config {
     pub cobalt: CobaltConfig,
     pub platforms: PlatformConfig,
     pub f1: F1Config,
+    pub telegram: TelegramConfig,
+    pub ffmpeg: FfmpegConfig,
     /// LLM caption settings; `None` keeps the `comments.txt` captions.
     #[cfg(feature = "llm-captions")]
     pub openrouter: Option<OpenRouterConfig>,
@@ -40,6 +46,8 @@ impl Config {
             cobalt: CobaltConfig::from_env(),
             platforms: PlatformConfig::from_env(),
             f1: F1Config::from_env(),
+            telegram: TelegramConfig::from_env(),
+            ffmpeg: FfmpegConfig::from_env(),
             #[cfg(feature = "llm-captions")]
             openrouter: OpenRouterConfig::from_env(),
         }
@@ -61,6 +69,20 @@ fn env_var(key: &str) -> Option<String> {
         Err(env::VarError::NotUnicode(_)) => {
             warn!(key, "Environment variable is not valid Unicode");
             None
+        }
+    }
+}
+
+fn parse_flag(key: &str, raw: &str) -> bool {
+    match raw.to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => true,
+        "0" | "false" | "no" | "off" => false,
+        _ => {
+            warn!(
+                key,
+                raw, "Expected a boolean such as true or false; treating as false"
+            );
+            false
         }
     }
 }

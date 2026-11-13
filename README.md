@@ -16,6 +16,7 @@ It currently supports:
 - Reads links from message text and document or media captions, while ignoring duplicates
 - Serves repeat links instantly from Telegram's servers using cached `file_id`s
 - Records delivered links per chat and shows who shares what with `/stats`
+- Re-encodes videos and photos over Telegram's upload limit, and links to the source when they still do not fit
 - Uses random caption lines from `comments.txt`
 - Can optionally replace those captions with LLM-written ones that react to the media and the sender's message
 - Extracts post text from image-only X/Twitter posts when available
@@ -31,7 +32,7 @@ It currently supports:
 Guenther expects these services and tools at runtime:
 
 - [Cobalt](https://github.com/imputnet/cobalt) for social media downloads
-- `ffmpeg` (when creating/saving voice lines)
+- `ffmpeg` and `ffprobe` for shrinking oversized media, voice-line capture, and LLM caption frames
 - a Telegram bot token exposed as `TELOXIDE_TOKEN`
 - a SQLite database file (created automatically at `data/bingo.sqlite3` by default)
 
@@ -53,7 +54,11 @@ Optional:
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
 - `DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache and link stats
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
-- `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture or LLM captions
+- `FFMPEG_BIN`: override the `ffmpeg` executable
+- `FFPROBE_BIN`: override the `ffprobe` executable
+- `TELEGRAM_API_URL`: Bot API server to use instead of `https://api.telegram.org`, such as a proxy or a [local Bot API server](#local-bot-api-server); upload limits stay at the cloud values unless `TELEGRAM_API_LOCAL` is set
+- `TELEGRAM_API_LOCAL`: `true` when `TELEGRAM_API_URL` runs `telegram-bot-api --local`; raises the upload limit to 2000 MB and reads files from the server's data directory; ignored without `TELEGRAM_API_URL`
+- `TELEGRAM_API_DIR`: the local server's data directory (its `--dir`), mounted at the same path; defaults to `/var/lib/telegram-bot-api`; only used with `TELEGRAM_API_LOCAL`
 
 LLM captions (`llm-captions` feature only):
 
@@ -61,7 +66,6 @@ LLM captions (`llm-captions` feature only):
 - `OPENROUTER_MODEL`: OpenRouter model id with image input, for example `deepseek/deepseek-v4.1-flash` or `z-ai/glm-5.3-flash`
 - `OPENROUTER_CAPTION_WAIT_SECS`: how long media waits for the model's caption before it is sent with a static one; defaults to `8`, and `0` always sends immediately
 - `OPENROUTER_VIDEO_INPUT`: `true` sends videos up to 20 MiB to the model instead of extracted frames; needs a video-capable model such as `z-ai/glm-5.3-flash`
-- `FFPROBE_BIN`: override the `ffprobe` executable used to find frame timestamps
 
 Sample `.env`:
 
@@ -118,6 +122,29 @@ caption stays. The model gets the platform, the sender's first name and message,
 text, and up to four images: photos as-is and three ffmpeg frames per video.
 Repeat links fetch their cached media back from Telegram for the same purpose.
 Requests ask OpenRouter to avoid providers that store or train on data.
+
+### Large media
+
+The cloud Bot API accepts uploads up to 50 MB, and photos up to 10 MB. Before
+uploading, Guenther checks each downloaded file against these limits:
+
+- Oversized videos up to 10 minutes long are re-encoded with ffmpeg at a
+  bitrate computed from their ffprobe duration. Longer videos are not
+  transcoded. Only one transcode runs at a time.
+- Oversized photos are downscaled to at most 2560 px per side.
+- Items that still do not fit are left out. The chat gets a short notice with
+  the source link instead, and the rest of an album is still sent. Partial
+  deliveries are not cached, so repeat links send the notice again.
+
+A self-hosted [`telegram-bot-api`](https://github.com/tdlib/telegram-bot-api)
+server in `--local` mode raises the file limit to 2000 MB. Set
+`TELEGRAM_API_URL` to its address and `TELEGRAM_API_LOCAL=true`; see
+[Local Bot API server](#local-bot-api-server). In local mode `getFile` returns
+absolute paths on the server's filesystem instead of serving downloads, so
+Guenther reads those files directly. It needs read access to the server's
+data directory at the same path; Compose mounts it read-only. Guenther refuses
+local paths outside `TELEGRAM_API_DIR`, and all local paths when
+`TELEGRAM_API_LOCAL` is off.
 
 To enable F1 bingo:
 
@@ -197,8 +224,80 @@ The bot reads `.env` and mounts:
 - `comments.txt`
 - `voice_lines.toml`
 - a named `bingo-data` volume at `/app/data`
+- the local Bot API server's `telegram-bot-api-data` volume, read-only, at
+  `/var/lib/telegram-bot-api`
 
-The runtime image installs `ffmpeg` for optional voice-line capture.
+The runtime image installs `ffmpeg` and `ffprobe` for shrinking oversized
+media, voice-line capture, and LLM caption frames.
+
+### Local Bot API server
+
+`compose.yml` includes an optional `telegram-bot-api` service in `--local`
+mode behind the `local-bot-api` profile. The server writes files readable only
+by their owner, so it runs as Guenther's user (uid 1001) and a one-off
+`telegram-bot-api-init` service hands its data volume to that user. Without
+the profile neither service starts, and Guenther uses the cloud Bot API.
+
+To move the bot to the local server:
+
+1. Stop Guenther, so it stops polling the cloud Bot API:
+
+   ```bash
+   docker compose stop bot
+   ```
+
+2. Log the bot out of the cloud Bot API. Otherwise both servers may take its
+   updates.
+
+   ```bash
+   curl "https://api.telegram.org/bot$TELOXIDE_TOKEN/logOut"
+   ```
+
+3. Get an `api_id` and `api_hash` from <https://my.telegram.org> and add them
+   to `.env` with the server's address:
+
+   ```env
+   TELEGRAM_API_ID=123456
+   TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
+   TELEGRAM_API_URL=http://telegram-bot-api:8081
+   TELEGRAM_API_LOCAL=true
+   ```
+
+   Set `TELEGRAM_API_DIR` as well only if you change the server's `--dir`.
+
+4. Start the local server and Guenther with the profile:
+
+   ```bash
+   docker compose --profile local-bot-api up -d --build
+   ```
+
+To move back to the cloud Bot API:
+
+1. Stop Guenther, leaving the local server running:
+
+   ```bash
+   docker compose stop bot
+   ```
+
+2. Log the bot out of the local server, so it stops taking the bot's updates:
+
+   ```bash
+   docker compose --profile local-bot-api exec telegram-bot-api \
+     wget -qO- "http://127.0.0.1:8081/bot$TELOXIDE_TOKEN/logOut"
+   ```
+
+3. Remove `TELEGRAM_API_URL`, `TELEGRAM_API_LOCAL`, and `TELEGRAM_API_DIR`
+   from `.env`. Guenther otherwise keeps calling the stopped server and fails
+   to start.
+4. Stop the local server and start Guenther without the profile:
+
+   ```bash
+   docker compose --profile local-bot-api stop telegram-bot-api
+   docker compose up -d
+   ```
+
+The cloud Bot API refuses the bot for 10 minutes after its `logOut`, so wait
+that long before moving back right after a move to the local server.
 
 ### Build caching in Dokploy
 

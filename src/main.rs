@@ -7,7 +7,8 @@ use guenther::{
     db,
     download::platform::Downloader,
     f1::F1,
-    handler::{HandlerError, MediaHandlers, MediaLink},
+    ffmpeg::Ffmpeg,
+    handler::{HandlerError, MediaFitter, MediaHandlers, MediaLink, UploadLimits},
     inline::answer_inline_query,
     media_posts::MediaPosts,
     telemetry::setup_logger,
@@ -19,6 +20,12 @@ use tracing::{Span, error, info, warn};
 
 #[cfg(feature = "llm-captions")]
 use guenther::llm::Captioner;
+#[cfg(any(
+    feature = "bingo",
+    feature = "llm-captions",
+    feature = "voice-line-capture"
+))]
+use guenther::telegram_file::TelegramFiles;
 
 #[cfg(feature = "bingo")]
 use guenther::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
@@ -31,6 +38,8 @@ struct AppState {
     admin_chat_id: Option<ChatId>,
     voice_lines: VoiceLines,
     media_posts: MediaPosts,
+    #[cfg(feature = "bingo")]
+    telegram_files: TelegramFiles,
 }
 
 #[tokio::main]
@@ -49,16 +58,39 @@ async fn main() -> color_eyre::Result<()> {
     );
 
     let config = Config::from_env();
+    #[cfg(any(
+        feature = "bingo",
+        feature = "llm-captions",
+        feature = "voice-line-capture"
+    ))]
+    let telegram_files = TelegramFiles::from_config(&config.telegram);
     let voice_lines = VoiceLines::from_env();
+    #[cfg(feature = "voice-line-capture")]
+    let voice_lines = voice_lines.with_telegram_files(telegram_files.clone());
     let f1 = F1::new(config.f1)?;
 
-    let bot = Bot::from_env();
+    let mut bot = Bot::from_env();
+    if let Some(api_url) = config.telegram.api_url.clone() {
+        bot = bot.set_api_url(api_url);
+    }
+    let upload_limits = UploadLimits::for_telegram(&config.telegram);
     let bot_name: Arc<str> = bot.get_me().await?.username().into();
 
-    info!(name = %bot_name, "bot starting");
+    info!(
+        name = %bot_name,
+        api_host = bot.api_url().host_str(),
+        local_api = config.telegram.is_local(),
+        upload_limit = upload_limits.file,
+        "bot starting"
+    );
 
     let downloader = Downloader::new(config.cobalt.clone())?;
-    let handlers = MediaHandlers::new(&config.platforms, downloader, comments.clone())?;
+    let handlers = MediaHandlers::new(
+        &config.platforms,
+        downloader,
+        MediaFitter::new(Ffmpeg::new(&config.ffmpeg), upload_limits),
+        comments.clone(),
+    )?;
     #[cfg(feature = "llm-captions")]
     let handlers = match &config.openrouter {
         Some(openrouter) => {
@@ -67,7 +99,10 @@ async fn main() -> color_eyre::Result<()> {
                 video_input = openrouter.video_input,
                 "LLM captions enabled"
             );
-            handlers.with_captioner(Captioner::new(openrouter, comments.clone())?)
+            handlers.with_captioner(
+                Captioner::new(openrouter, Ffmpeg::new(&config.ffmpeg), comments.clone())?,
+                telegram_files.clone(),
+            )
         }
         None => handlers,
     };
@@ -103,6 +138,8 @@ async fn main() -> color_eyre::Result<()> {
         admin_chat_id: config.chat_id.map(ChatId),
         voice_lines,
         media_posts,
+        #[cfg(feature = "bingo")]
+        telegram_files,
     };
 
     #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
@@ -170,6 +207,8 @@ async fn message_handler(
                 &bingo_store,
                 #[cfg(feature = "bingo")]
                 &admin_cache,
+                #[cfg(feature = "bingo")]
+                &state.telegram_files,
             )
             .await
             {

@@ -1,15 +1,17 @@
-use crate::voice_lines::{
-    Result, VoiceLine, VoiceLines, VoiceLinesError, VoiceLinesFile, load_voice_lines_file,
-    save_voice_lines_file,
+use crate::{
+    telegram_file::TelegramFiles,
+    voice_lines::{
+        Result, VoiceLine, VoiceLines, VoiceLinesError, VoiceLinesFile, load_voice_lines_file,
+        save_voice_lines_file,
+    },
 };
 use std::path::Path;
 use teloxide::{
-    net::Download,
     prelude::*,
     types::{FileId, InputFile, Message},
 };
 use tempfile::tempdir;
-use tokio::{fs, process::Command};
+use tokio::process::Command;
 
 impl VoiceLines {
     /// Record an incoming voice or audio message as a new voice line.
@@ -37,8 +39,14 @@ impl VoiceLines {
                     return Ok(());
                 }
 
-                let line =
-                    convert_audio_to_voice_line(bot, msg.chat.id, audio, &self.ffmpeg).await?;
+                let line = convert_audio_to_voice_line(
+                    bot,
+                    &self.telegram_files,
+                    msg.chat.id,
+                    audio,
+                    &self.ffmpeg,
+                )
+                .await?;
 
                 if contains_line(&file, &line) {
                     return Ok(());
@@ -132,6 +140,7 @@ fn contains_audio_source(file: &VoiceLinesFile, audio: &AudioCapture) -> bool {
 
 async fn convert_audio_to_voice_line(
     bot: &Bot,
+    files: &TelegramFiles,
     chat_id: ChatId,
     audio: AudioCapture,
     ffmpeg: &Path,
@@ -145,12 +154,7 @@ async fn convert_audio_to_voice_line(
     let input_path = tempdir.path().join("input");
     let output_path = tempdir.path().join("voice.ogg");
 
-    let mut input_file = fs::File::create(&input_path)
-        .await
-        .map_err(VoiceLinesError::PrepareAudio)?;
-    bot.download_file(&source_file.path, &mut input_file)
-        .await?;
-    drop(input_file);
+    files.save(bot, &source_file.path, &input_path).await?;
 
     transcode_audio_to_voice(ffmpeg, &input_path, &output_path).await?;
 

@@ -1,13 +1,16 @@
-use crate::bingo::{
-    command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
-    error::{BingoError, Result},
-    model::KnownUser,
-    store::BingoStore,
-    telegram::{
-        admin::{AdminCache, is_chat_admin},
-        document::read_entry_file,
-        render::{HELP, send_card, send_cards, send_entries, send_games, send_text},
+use crate::{
+    bingo::{
+        command::{BingoCommand, CardAdmin, EntryAdmin, GameAdmin},
+        error::{BingoError, Result},
+        model::KnownUser,
+        store::BingoStore,
+        telegram::{
+            admin::{AdminCache, is_chat_admin},
+            document::read_entry_file,
+            render::{HELP, send_card, send_cards, send_entries, send_games, send_text},
+        },
     },
+    telegram_file::TelegramFiles,
 };
 use teloxide::{
     prelude::Bot,
@@ -30,6 +33,7 @@ pub async fn execute_bingo(
     message: &Message,
     store: &BingoStore,
     admin_cache: &AdminCache,
+    files: &TelegramFiles,
     input: &str,
 ) -> Result<()> {
     let command = BingoCommand::parse(input)?;
@@ -67,7 +71,9 @@ pub async fn execute_bingo(
             .await
         }
         BingoCommand::Game(command) => execute_game_admin(bot, message, store, command).await,
-        BingoCommand::Entry(command) => execute_entry_admin(bot, message, store, command).await,
+        BingoCommand::Entry(command) => {
+            execute_entry_admin(bot, message, store, files, command).await
+        }
         BingoCommand::Card(command) => {
             execute_card_admin(bot, message, store, admin_cache, command).await
         }
@@ -166,12 +172,13 @@ async fn execute_entry_admin(
     bot: &Bot,
     message: &Message,
     store: &BingoStore,
+    files: &TelegramFiles,
     command: EntryAdmin,
 ) -> Result<()> {
     let chat_id = message.chat.id;
     match command {
         EntryAdmin::Import { slug } => {
-            let entries = read_entry_file(bot, message).await?;
+            let entries = read_entry_file(bot, files, message).await?;
             let imported = store.import_entries(chat_id, &slug, &entries).await?;
             info!(game_slug = %slug, imported, "Imported bingo entries");
             send_text(

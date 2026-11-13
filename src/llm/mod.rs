@@ -17,6 +17,7 @@ pub use crate::llm::{
 use crate::{
     comments::Comments,
     config::{OpenRouterConfig, Platform},
+    ffmpeg::Ffmpeg,
     llm::{
         media::MediaTools,
         openrouter::{ContentPart, OpenRouterClient},
@@ -53,10 +54,10 @@ impl Captioner {
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built.
-    pub fn new(config: &OpenRouterConfig, comments: Arc<Comments>) -> Result<Self> {
+    pub fn new(config: &OpenRouterConfig, ffmpeg: Ffmpeg, comments: Arc<Comments>) -> Result<Self> {
         Ok(Self {
             client: OpenRouterClient::new(&config.api_key, &config.model)?,
-            tools: MediaTools::new(&config.ffmpeg, &config.ffprobe, config.video_input),
+            tools: MediaTools::new(ffmpeg, config.video_input),
             comments,
             initial_wait: config.caption_wait,
         })

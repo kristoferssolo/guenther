@@ -16,6 +16,9 @@ services:
       - ./voice_lines.toml:/app/voice_lines.toml:ro
       - ./comments.txt:/app/comments.txt:ro
       - bingo-data:/app/data
+      # A `--local` Bot API server returns absolute paths on this volume from
+      # getFile; empty and unused without the `local-bot-api` profile.
+      - telegram-bot-api-data:/var/lib/telegram-bot-api:ro
   cobalt:
     image: ghcr.io/imputnet/cobalt:11
     init: true
@@ -31,5 +34,38 @@ services:
       # Must exist before `up`, or Docker creates a directory here. Cobalt
       # rewrites refreshed cookies in place, so this cannot be mounted `:ro`.
       - ../files/cobalt-cookies.json:/cookies.json
+  # Optional local Bot API server for uploads up to 2000 MB. Starts only with
+  # `--profile local-bot-api`; set TELEGRAM_API_URL and TELEGRAM_API_LOCAL for
+  # the bot to use it.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    profiles: [local-bot-api]
+    restart: unless-stopped
+    depends_on:
+      telegram-bot-api-init:
+        condition: service_completed_successfully
+    # The server creates files only their owner can read, so it runs as the
+    # bot's uid from the Dockerfile. The image entrypoint would switch to its
+    # own user, so the server is started directly; it reads the API id and
+    # hash from the environment.
+    user: "1001:1001"
+    entrypoint: [telegram-bot-api]
+    command:
+      - --local
+      - --http-port=8081
+      - --dir=/var/lib/telegram-bot-api
+      - --temp-dir=/tmp
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
+  telegram-bot-api-init:
+    image: aiogram/telegram-bot-api:latest
+    profiles: [local-bot-api]
+    entrypoint: [chown, -R, "1001:1001", /var/lib/telegram-bot-api]
+    volumes:
+      - telegram-bot-api-data:/var/lib/telegram-bot-api
 volumes:
   bingo-data:
+  telegram-bot-api-data:
