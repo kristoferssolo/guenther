@@ -129,10 +129,12 @@ The same setup answers text replies to Guenther's own messages in character,
 as a reply to the user's message. The model gets Guenther's message text or
 caption, its photo or video fetched back from Telegram, and the replier's first
 name and text. Telegram only exposes the message that was replied to, so
-longer threads have no further context. Each chat gets at most one answer per
-`OPENROUTER_REPLY_COOLDOWN_SECS`; replies during the cooldown, replies from
-other bots, and model failures get no answer. A reply that also contains a
-supported link is handled as a media link instead.
+longer threads have no further context. A text message that mentions the
+bot's `@username` gets an answer the same way, from only the sender's name and
+text. Each chat gets at most one answer per `OPENROUTER_REPLY_COOLDOWN_SECS`;
+replies during the cooldown, replies from other bots, and model failures get no
+answer. A reply or mention that also contains a supported link is handled as a
+media link instead.
 
 ### Large media
 
