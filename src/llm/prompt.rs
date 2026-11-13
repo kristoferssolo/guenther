@@ -113,15 +113,16 @@ mod tests {
 
         assert_eq!(
             context.render(),
-            "Platform: twitter\n\
-             Sender: Kristofers\n\
-             Sender's message: look at this lol\n\
-             Post text: tweet text\n\
-             Media: 2 attachment(s) follow.\n\
-             \n\
-             Style examples (do not copy):\n\
-             - We look like wankers.\n\
-             - Box. Now.\n"
+            r"Platform: twitter
+Sender: Kristofers
+Sender's message: look at this lol
+Post text: tweet text
+Media: 2 attachment(s) follow.
+
+Style examples (do not copy):
+- We look like wankers.
+- Box. Now.
+"
         );
     }
 
@@ -138,7 +139,9 @@ mod tests {
 
         assert_eq!(
             context.render(),
-            "Platform: tiktok\nMedia: not available, react to the context only.\n"
+            r"Platform: tiktok
+Media: not available, react to the context only.
+"
         );
     }
 
