@@ -4,9 +4,12 @@ use crate::{
     telegram_file::TelegramFiles,
 };
 use crate::{
+    cache::MediaCache,
     comments::Comments,
     f1::{F1, ScheduleView},
+    handler::MediaHandlers,
     media_posts::{MediaPosts, StatsPeriod},
+    purge::purge,
 };
 use chrono::Utc;
 use strum::IntoStaticStr;
@@ -17,7 +20,7 @@ use teloxide::{
     utils::command::{BotCommands, ParseError},
 };
 use thiserror::Error;
-use tracing::warn;
+use tracing::{debug, warn};
 
 #[derive(Debug, Error)]
 pub enum CommandError {
@@ -61,6 +64,9 @@ pub enum Command {
     #[cfg(feature = "bingo")]
     #[command(parse_with = whole_argument)]
     Bingo(String),
+    /// Delete media cache entries by link, platform, or `all` (admin chat only)
+    #[command(parse_with = whole_argument, hide)]
+    Purge(String),
 }
 
 /// Pass the whole argument text through, like the default parser.
@@ -74,6 +80,20 @@ pub enum Command {
 )]
 const fn whole_argument(input: String) -> Result<(String,), ParseError> {
     Ok((input,))
+}
+
+/// Dependencies of the commands restricted to the admin chat.
+#[derive(Debug, Clone, Copy)]
+pub struct AdminContext<'a> {
+    /// The `CHAT_ID` admin chat; `None` disables admin commands.
+    pub chat_id: Option<ChatId>,
+    pub handlers: &'a MediaHandlers,
+    pub cache: &'a MediaCache,
+}
+
+/// Whether `chat_id` is the configured admin chat.
+pub fn is_admin_chat(chat_id: ChatId, admin_chat_id: Option<ChatId>) -> bool {
+    admin_chat_id == Some(chat_id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,6 +113,8 @@ pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
 
 /// Reply to a parsed bot command.
 ///
+/// Admin commands outside the admin chat are ignored without a reply.
+///
 /// # Errors
 ///
 /// Returns an error if a Telegram request fails or a bingo command fails.
@@ -110,6 +132,7 @@ pub async fn answer(
     comments: &Comments,
     f1: &F1,
     media_posts: &MediaPosts,
+    admin: AdminContext<'_>,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
     #[cfg(feature = "bingo")] telegram_files: &TelegramFiles,
@@ -142,6 +165,16 @@ pub async fn answer(
             )
             .await?;
             return Ok(());
+        }
+        Command::Purge(input) => {
+            if !is_admin_chat(chat_id, admin.chat_id) {
+                debug!("Ignoring /purge outside the admin chat");
+                return Ok(());
+            }
+            let reply = purge(&input, admin.handlers, admin.cache)
+                .await
+                .unwrap_or_else(|err| err.to_string());
+            bot.send_message(chat_id, reply).await?
         }
     };
 
@@ -211,6 +244,7 @@ async fn send_link_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::assert_matches;
 
     #[test]
@@ -236,6 +270,35 @@ mod tests {
             route_message(Some("/stats"), "guenther_bot"),
             RouteAction::HandleCommand(Command::Stats(String::new()))
         );
+    }
+
+    #[test]
+    fn purge_takes_the_whole_argument_text() {
+        assert_eq!(
+            route_message(Some("/purge https://x.com/a/status/1"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Purge("https://x.com/a/status/1".to_owned()))
+        );
+        assert_eq!(
+            route_message(Some("/purge"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Purge(String::new()))
+        );
+    }
+
+    #[test]
+    fn purge_is_hidden_from_help() {
+        assert!(!Command::descriptions().to_string().contains("purge"));
+    }
+
+    #[rstest]
+    #[case::admin_chat(ChatId(-100), Some(ChatId(-100)), true)]
+    #[case::other_chat(ChatId(42), Some(ChatId(-100)), false)]
+    #[case::no_admin_chat(ChatId(-100), None, false)]
+    fn admin_gate_matches_only_the_configured_chat(
+        #[case] chat_id: ChatId,
+        #[case] admin_chat_id: Option<ChatId>,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(is_admin_chat(chat_id, admin_chat_id), expected);
     }
 
     #[cfg(feature = "bingo")]

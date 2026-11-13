@@ -13,6 +13,7 @@ pub mod inline;
 #[cfg(feature = "llm-captions")]
 pub mod llm;
 pub mod media_posts;
+pub mod purge;
 pub mod telegram_file;
 pub mod telemetry;
 pub mod utils;

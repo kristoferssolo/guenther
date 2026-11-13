@@ -1,4 +1,4 @@
-use crate::utils::MediaKind;
+use crate::{config::Platform, utils::MediaKind};
 use sqlx::SqlitePool;
 use thiserror::Error;
 
@@ -122,11 +122,13 @@ impl MediaCache {
 
     /// Remove the cached media for `cache_key`, if any.
     ///
+    /// Returns the number of deleted rows, one per cached media item.
+    ///
     /// # Errors
     ///
     /// Returns an error when the database query fails.
-    pub async fn invalidate(&self, cache_key: &str) -> Result<()> {
-        sqlx::query!(
+    pub async fn invalidate(&self, cache_key: &str) -> Result<u64> {
+        let result = sqlx::query!(
             r#"
             DELETE FROM
                 media_cache
@@ -137,7 +139,51 @@ impl MediaCache {
         )
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected())
+    }
+
+    /// Remove every cached entry for `platform`.
+    ///
+    /// Returns the number of deleted rows, one per cached media item.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database query fails.
+    pub async fn invalidate_platform(&self, platform: Platform) -> Result<u64> {
+        // Every cache key starts with `{platform}:`, and platform names
+        // contain no `LIKE` wildcards.
+        let pattern = format!("{platform}:%");
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM
+                media_cache
+            WHERE
+                url LIKE ?
+            "#,
+            pattern
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Remove every cached entry.
+    ///
+    /// Returns the number of deleted rows, one per cached media item.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database query fails.
+    pub async fn clear(&self) -> Result<u64> {
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM
+                media_cache
+            "#
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
     }
 }
 
@@ -152,7 +198,7 @@ fn media_kind_from_db(kind: &str) -> Result<MediaKind> {
 mod tests {
     use super::*;
     use crate::db;
-    use claims::{assert_none, assert_ok, assert_some_eq};
+    use claims::{assert_none, assert_ok, assert_ok_eq, assert_some, assert_some_eq};
 
     async fn cache() -> MediaCache {
         let pool = assert_ok!(db::connect("sqlite::memory:").await);
@@ -197,12 +243,53 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn invalidate_removes_entry() {
+    async fn invalidate_removes_entry_and_counts_rows() {
         let cache = cache().await;
         let url = "https://example.com/c";
-        assert_ok!(cache.put(url, &[media("id", MediaKind::Video)]).await);
-        assert_ok!(cache.invalidate(url).await);
+        let items = [media("a", MediaKind::Video), media("b", MediaKind::Image)];
+        assert_ok!(cache.put(url, &items).await);
+        assert_ok!(cache.put("https://example.com/other", &items).await);
+
+        assert_ok_eq!(cache.invalidate(url).await, 2);
         assert_none!(assert_ok!(cache.get(url).await));
+        assert_ok_eq!(cache.invalidate(url).await, 0);
+        assert_some!(assert_ok!(cache.get("https://example.com/other").await));
+    }
+
+    #[tokio::test]
+    async fn invalidate_platform_removes_only_that_platform() {
+        let cache = cache().await;
+        let item = [media("id", MediaKind::Video)];
+        for key in [
+            "instagram:post:abc",
+            "instagram:url:https://instagram.com/x",
+            "tiktok:video:1",
+            "twitter:status:2",
+            "notinstagram:post:abc",
+        ] {
+            assert_ok!(cache.put(key, &item).await);
+        }
+
+        assert_ok_eq!(cache.invalidate_platform(Platform::Instagram).await, 2);
+        assert_none!(assert_ok!(cache.get("instagram:post:abc").await));
+        assert_none!(assert_ok!(
+            cache.get("instagram:url:https://instagram.com/x").await
+        ));
+        assert_some!(assert_ok!(cache.get("tiktok:video:1").await));
+        assert_some!(assert_ok!(cache.get("twitter:status:2").await));
+        assert_some!(assert_ok!(cache.get("notinstagram:post:abc").await));
+    }
+
+    #[tokio::test]
+    async fn clear_removes_everything() {
+        let cache = cache().await;
+        let items = [media("a", MediaKind::Video), media("b", MediaKind::Image)];
+        assert_ok!(cache.put("tiktok:video:1", &items).await);
+        assert_ok!(cache.put("youtube:shorts:2", &items).await);
+
+        assert_ok_eq!(cache.clear().await, 4);
+        assert_none!(assert_ok!(cache.get("tiktok:video:1").await));
+        assert_none!(assert_ok!(cache.get("youtube:shorts:2").await));
     }
 
     #[tokio::test]

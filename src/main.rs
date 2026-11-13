@@ -1,7 +1,7 @@
 use dotenvy::dotenv;
 use guenther::{
     cache::MediaCache,
-    commands::{RouteAction, answer, route_message},
+    commands::{AdminContext, RouteAction, answer, route_message},
     comments::{Comments, failure_comment},
     config::Config,
     db,
@@ -230,6 +230,11 @@ async fn message_handler(
                 &state.comments,
                 &state.f1,
                 &state.media_posts,
+                AdminContext {
+                    chat_id: state.admin_chat_id,
+                    handlers: &handlers,
+                    cache: &cache,
+                },
                 #[cfg(feature = "bingo")]
                 &bingo_store,
                 #[cfg(feature = "bingo")]
