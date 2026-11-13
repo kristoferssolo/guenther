@@ -15,7 +15,8 @@ pub enum InlineError {
     Telegram(#[from] RequestError),
 }
 
-/// Answer an inline query with the voice lines that match its text.
+/// Answer an inline query with the voice lines that match its text,
+/// returning how many were offered.
 ///
 /// # Errors
 ///
@@ -24,20 +25,21 @@ pub async fn answer_inline_query(
     bot: Bot,
     query: InlineQuery,
     voice_lines: &VoiceLines,
-) -> Result<(), InlineError> {
+) -> Result<usize, InlineError> {
     let results = voice_lines
         .search(&query.query)
         .await?
         .into_iter()
         .map(build_inline_result)
         .collect::<Vec<_>>();
+    let count = results.len();
 
     bot.answer_inline_query(query.id, results)
         .cache_time(0)
         .is_personal(true)
         .await?;
 
-    Ok(())
+    Ok(count)
 }
 
 fn build_inline_result(line: VoiceLine) -> InlineQueryResult {

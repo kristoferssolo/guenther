@@ -5,6 +5,7 @@ use crate::{
     handler::delivery::compose_caption,
     llm::{CaptionRequest, Captioner, LlmError, LocalMedia},
     telegram_file::{TelegramFileError, TelegramFiles},
+    telemetry::ErrorChain,
     utils::MediaKind,
 };
 use std::{
@@ -24,7 +25,7 @@ use tokio::{
     task::{JoinError, JoinHandle},
     time::timeout,
 };
-use tracing::{info, warn};
+use tracing::{Instrument, info, warn};
 
 #[derive(Debug, Error)]
 enum CaptionJobError {
@@ -73,9 +74,8 @@ impl CaptionJob {
     /// Start generating the caption in the background.
     pub(super) fn start(self) -> PendingCaption {
         PendingCaption {
-            platform: self.platform,
             started_at: Instant::now(),
-            handle: tokio::spawn(self.generate()),
+            handle: tokio::spawn(self.generate().in_current_span()),
         }
     }
 
@@ -144,7 +144,6 @@ impl InitialCaption {
 /// A caption still being generated. Dropping it cancels the generation.
 #[derive(Debug)]
 pub(super) struct PendingCaption {
-    platform: Platform,
     started_at: Instant,
     handle: JoinHandle<Result<String, CaptionJobError>>,
 }
@@ -153,11 +152,7 @@ impl PendingCaption {
     /// Wait up to `limit` for the caption.
     pub(super) async fn wait(mut self, limit: Duration) -> InitialCaption {
         let Ok(joined) = timeout(limit, &mut self.handle).await else {
-            info!(
-                platform = %self.platform,
-                ?limit,
-                "LLM caption is late; sending with a static caption"
-            );
+            info!(?limit, "LLM caption is late; sending with a static caption");
             return InitialCaption::Late(self);
         };
         match joined
@@ -166,7 +161,6 @@ impl PendingCaption {
         {
             Ok(line) => {
                 info!(
-                    platform = %self.platform,
                     elapsed = ?self.started_at.elapsed(),
                     "Sending media with LLM caption"
                 );
@@ -174,8 +168,8 @@ impl PendingCaption {
             }
             Err(err) => {
                 warn!(
-                    platform = %self.platform,
-                    %err,
+                    error = %ErrorChain(&err),
+                    elapsed = ?self.started_at.elapsed(),
                     "LLM caption failed; using a static caption"
                 );
                 InitialCaption::Unavailable
@@ -193,7 +187,7 @@ impl PendingCaption {
         message_ids: Vec<MessageId>,
         appended_text: Option<String>,
     ) {
-        tokio::spawn(async move {
+        let task = async move {
             let applied = async {
                 let line = (&mut self.handle).await??;
                 let caption = compose_caption(&line, appended_text.as_deref());
@@ -207,17 +201,17 @@ impl PendingCaption {
             .await;
             match applied {
                 Ok(()) => info!(
-                    platform = %self.platform,
                     elapsed = ?self.started_at.elapsed(),
                     "Replaced static caption with late LLM caption"
                 ),
                 Err(err) => warn!(
-                    platform = %self.platform,
-                    %err,
+                    error = %ErrorChain(&err),
+                    elapsed = ?self.started_at.elapsed(),
                     "Late LLM caption failed; keeping the static caption"
                 ),
             }
-        });
+        };
+        tokio::spawn(task.in_current_span());
     }
 }
 
@@ -244,7 +238,11 @@ pub(super) async fn fetch_cached(
                 kind: item.kind,
             }),
             Err(err) => {
-                warn!(%err, item = number, "Failed to fetch cached media for the model");
+                warn!(
+                    error = %ErrorChain(&err),
+                    item = number,
+                    "Failed to fetch cached media for the model"
+                );
             }
         }
     }
@@ -273,7 +271,6 @@ mod tests {
         generation: impl Future<Output = Result<String, CaptionJobError>> + Send + 'static,
     ) -> PendingCaption {
         PendingCaption {
-            platform: Platform::Twitter,
             started_at: Instant::now(),
             handle: tokio::spawn(generation),
         }

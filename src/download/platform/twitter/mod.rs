@@ -1,9 +1,12 @@
 mod syndication;
 
-use crate::download::{
-    DownloadResult,
-    error::{DownloadError, Result},
-    platform::cobalt::CobaltClient,
+use crate::{
+    download::{
+        DownloadResult,
+        error::{DownloadError, Result},
+        platform::cobalt::CobaltClient,
+    },
+    telemetry::ErrorChain,
 };
 use reqwest::Client;
 use tracing::warn;
@@ -55,7 +58,10 @@ impl TwitterClient {
                 result.source_text = match tweet {
                     Ok(payload) => syndication::parse_post_text_from_value(&payload),
                     Err(err) => {
-                        warn!(%err, "Could not fetch post text from Twitter syndication");
+                        warn!(
+                            error = %ErrorChain(&err),
+                            "Could not fetch post text from Twitter syndication"
+                        );
                         None
                     }
                 };
@@ -71,11 +77,17 @@ impl TwitterClient {
 
         match fallback {
             Ok(result) => {
-                warn!(%cobalt_error, "Cobalt could not fetch Twitter media; used image fallback");
+                warn!(
+                    cobalt_error = %ErrorChain(&cobalt_error),
+                    "Cobalt could not fetch Twitter media; used image fallback"
+                );
                 Ok(result)
             }
             Err(fallback_error) => {
-                warn!(%fallback_error, "Twitter image fallback was not applicable");
+                warn!(
+                    fallback_error = %ErrorChain(&fallback_error),
+                    "Twitter image fallback was not applicable"
+                );
                 Err(cobalt_error)
             }
         }

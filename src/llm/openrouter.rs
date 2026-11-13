@@ -5,7 +5,12 @@ use crate::{
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::{fmt, sync::Arc, time::Duration};
+use std::{
+    fmt,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tracing::info;
 
 const CHAT_COMPLETIONS_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -48,6 +53,7 @@ impl OpenRouterClient {
     /// errors, or replies without text.
     pub async fn complete(&self, system: &str, user: Vec<ContentPart>) -> Result<String> {
         let body = ChatRequest::new(&self.model, system, user);
+        let started_at = Instant::now();
         let response = self
             .http
             .post(CHAT_COMPLETIONS_URL)
@@ -65,7 +71,18 @@ impl OpenRouterClient {
             });
         }
 
-        response.json::<ChatResponse>().await?.into_text()
+        let response = response.json::<ChatResponse>().await?;
+        let usage = response.usage.as_ref();
+        info!(
+            model = response.model.as_deref(),
+            provider = response.provider.as_deref(),
+            prompt_tokens = usage.and_then(|usage| usage.prompt_tokens),
+            completion_tokens = usage.and_then(|usage| usage.completion_tokens),
+            cost = usage.and_then(|usage| usage.cost),
+            elapsed = ?started_at.elapsed(),
+            "LLM completion finished"
+        );
+        response.into_text()
     }
 }
 
@@ -173,6 +190,18 @@ struct ProviderPreferences {
 #[derive(Debug, Deserialize)]
 struct ChatResponse {
     choices: Vec<Choice>,
+    /// The model that answered, which may differ from the requested one.
+    model: Option<String>,
+    provider: Option<String>,
+    usage: Option<Usage>,
+}
+
+/// Token counts and the charged cost in credits.
+#[derive(Debug, Deserialize)]
+struct Usage {
+    prompt_tokens: Option<u64>,
+    completion_tokens: Option<u64>,
+    cost: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -212,7 +241,7 @@ impl ChatResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use claims::{assert_ok, assert_ok_eq};
+    use claims::{assert_ok, assert_ok_eq, assert_some};
     use serde_json::{Value, json};
     use std::assert_matches;
 
@@ -261,6 +290,29 @@ mod tests {
             "choices": [{ "message": { "role": "assistant", "content": "Box. Now." } }],
         });
         assert_ok_eq!(parse(&body), "Box. Now.");
+    }
+
+    #[test]
+    fn response_usage_is_read_for_logging() {
+        let body = json!({
+            "model": "z-ai/glm-5.3-flash",
+            "provider": "Z.AI",
+            "choices": [{ "message": { "role": "assistant", "content": "Box. Now." } }],
+            "usage": {
+                "prompt_tokens": 812,
+                "completion_tokens": 9,
+                "total_tokens": 821,
+                "cost": 0.000_42,
+            },
+        });
+        let response = assert_ok!(serde_json::from_value::<ChatResponse>(body));
+        let usage = assert_some!(response.usage);
+
+        assert_eq!(response.provider.as_deref(), Some("Z.AI"));
+        assert_eq!(
+            (usage.prompt_tokens, usage.completion_tokens, usage.cost),
+            (Some(812), Some(9), Some(0.000_42))
+        );
     }
 
     #[test]

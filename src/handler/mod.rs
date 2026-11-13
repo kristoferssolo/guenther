@@ -20,6 +20,7 @@ use crate::{
     },
     media_posts::MediaPosts,
     status::{MediaStats, ReelOutcome},
+    telemetry::ErrorChain,
 };
 #[cfg(feature = "llm-captions")]
 use crate::{
@@ -35,7 +36,7 @@ use teloxide::{
     types::{FileId, InputFile, Message},
 };
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 #[cfg(feature = "llm-captions")]
 pub use crate::handler::reply::{BotReply, ReplyResponder};
@@ -158,7 +159,7 @@ impl MediaHandlers {
             return Ok(());
         };
         if let Err(err) = posts.record_delivery(msg, link, cache_hit).await {
-            warn!(platform = %link.platform, %err, "Failed to record the media post");
+            warn!(error = %ErrorChain(&err), "Failed to record the media post");
         }
         Ok(())
     }
@@ -173,26 +174,25 @@ impl MediaHandlers {
         cache: &MediaCache,
     ) -> Result<Option<bool>> {
         let started_at = Instant::now();
-        info!(platform = %link.platform, "Handling media URL");
+        info!("Handling media URL");
         match self.try_send_cached(bot, msg, link, cache).await {
-            Ok(true) => {
+            Ok(Some(media_count)) => {
                 info!(
-                    platform = %link.platform,
+                    media_count,
                     cache_hit = true,
                     elapsed = ?started_at.elapsed(),
                     "Handled media URL"
                 );
                 return Ok(Some(true));
             }
-            Ok(false) => {}
+            Ok(None) => {}
             Err(err) => {
                 warn!(
-                    platform = %link.platform,
-                    %err,
+                    error = %ErrorChain(&err),
                     "Cached media send failed; invalidating entry and falling back to download"
                 );
                 if let Err(err) = cache.invalidate(&link.cache_key).await {
-                    warn!(platform = %link.platform, %err, "Failed to invalidate the cache entry");
+                    warn!(error = %ErrorChain(&err), "Failed to invalidate the cache entry");
                 }
             }
         }
@@ -218,6 +218,12 @@ impl MediaHandlers {
                 .await?,
         );
         let downloaded = download.supported_media().await?;
+        info!(
+            media_count = downloaded.len(),
+            has_source_text = download.source_text.is_some(),
+            elapsed = ?started_at.elapsed(),
+            "Downloaded media"
+        );
         if link.platform == Platform::Instagram && is_instagram_video_url(&link.original_url) {
             self.stats.record_instagram_reel(ReelOutcome::from_kinds(
                 downloaded.iter().map(|(_, kind)| *kind),
@@ -227,7 +233,6 @@ impl MediaHandlers {
         let fitted = self.fitter.fit(downloaded, download.tempdir.path()).await;
         if fitted.items.is_empty() {
             info!(
-                platform = %link.platform,
                 media_count = downloaded_count,
                 "All media is over the upload limit"
             );
@@ -239,14 +244,6 @@ impl MediaHandlers {
         let media_count = media_items.len();
         let include_source_text =
             should_include_source_text(link.platform, &media_items, source_text);
-
-        debug!(
-            platform = %link.platform,
-            media_count,
-            has_source_text = source_text.is_some(),
-            elapsed = ?started_at.elapsed(),
-            "Prepared downloaded media"
-        );
 
         #[cfg(feature = "llm-captions")]
         let (base_caption, late_caption) = self
@@ -292,11 +289,11 @@ impl MediaHandlers {
 
         let too_large = fitted
             .dropped
-            .saturating_add(rejected_as_too_large(failure, link.platform)?);
+            .saturating_add(rejected_as_too_large(failure)?);
         // A partial delivery is not cached, so repeat links send the notice again.
         if too_large == 0 {
             if let Err(err) = cache.put(&link.cache_key, &sent.cached).await {
-                warn!(platform = %link.platform, %err, "Failed to persist media file_ids");
+                warn!(error = %ErrorChain(&err), "Failed to persist media file_ids");
             }
         } else {
             let notice = send_too_large(bot, msg, link, too_large, downloaded_count).await;
@@ -305,13 +302,13 @@ impl MediaHandlers {
                 return Ok(false);
             }
             if let Err(err) = notice {
-                warn!(platform = %link.platform, %err, "Failed to send the too-large notice");
+                warn!(error = %ErrorChain(&err), "Failed to send the too-large notice");
             }
         }
 
         info!(
-            platform = %link.platform,
             media_count,
+            too_large,
             cache_hit = false,
             elapsed = ?started_at.elapsed(),
             "Handled media URL"
@@ -319,9 +316,10 @@ impl MediaHandlers {
         Ok(true)
     }
 
-    /// Send media from cached Telegram `file_id`s for a link's cache key.
+    /// Send media from cached Telegram `file_id`s for a link's cache key,
+    /// returning how many items were sent.
     ///
-    /// Returns `Ok(false)` when the key has no cache entry or the lookup
+    /// Returns `Ok(None)` when the key has no cache entry or the lookup
     /// fails; send failures propagate so the caller can invalidate the entry
     /// and fall back to a fresh download.
     async fn try_send_cached(
@@ -330,16 +328,16 @@ impl MediaHandlers {
         msg: &Message,
         link: &MediaLink,
         cache: &MediaCache,
-    ) -> Result<bool> {
+    ) -> Result<Option<usize>> {
         let cached = match cache.get(&link.cache_key).await {
             Ok(cached) => cached,
             Err(err) => {
-                warn!(platform = %link.platform, %err, "Media cache lookup failed");
-                return Ok(false);
+                warn!(error = %ErrorChain(&err), "Media cache lookup failed");
+                return Ok(None);
             }
         };
         let Some(cached) = cached else {
-            return Ok(false);
+            return Ok(None);
         };
 
         let media_count = cached.len();
@@ -361,13 +359,12 @@ impl MediaHandlers {
         let sent = send_media(bot, msg.chat.id, inputs, &caption)
             .await
             .complete()?;
-        debug!(platform = %link.platform, media_count, "Sent cached media");
 
         #[cfg(feature = "llm-captions")]
         if let Some(late_caption) = late_caption {
             late_caption.apply_later(bot.clone(), msg.chat.id, sent.captioned, None);
         }
-        Ok(true)
+        Ok(Some(media_count))
     }
 
     /// Start an LLM caption for `media` and wait the configured time for it.
@@ -427,7 +424,7 @@ impl Handler {
 
 /// Number of items Telegram rejected as too large, or the error that stopped
 /// the delivery otherwise.
-fn rejected_as_too_large(failure: Option<DeliveryFailure>, platform: Platform) -> Result<usize> {
+fn rejected_as_too_large(failure: Option<DeliveryFailure>) -> Result<usize> {
     match failure {
         None => Ok(0),
         Some(DeliveryFailure {
@@ -435,7 +432,6 @@ fn rejected_as_too_large(failure: Option<DeliveryFailure>, platform: Platform) -
             error: HandlerError::Telegram(RequestError::Api(ApiError::RequestEntityTooLarge)),
         }) => {
             warn!(
-                %platform,
                 unsent,
                 "Telegram rejected media under the expected upload limit"
             );

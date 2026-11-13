@@ -12,12 +12,17 @@ use guenther::{
     inline::answer_inline_query,
     media_posts::MediaPosts,
     status::BotStatus,
-    telemetry::setup_logger,
+    telemetry::{ErrorChain, setup_logger},
     voice_lines::VoiceLines,
 };
-use std::sync::Arc;
-use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
-use tracing::{Span, error, info, warn};
+use std::{sync::Arc, time::Instant};
+use teloxide::{
+    dispatching::UpdateFilterExt,
+    dptree,
+    prelude::*,
+    types::{ChatId, InlineQuery, LinkPreviewOptions},
+};
+use tracing::{Instrument, Span, debug, error, info, info_span, warn};
 
 #[cfg(any(
     feature = "bingo",
@@ -58,8 +63,12 @@ async fn main() -> color_eyre::Result<()> {
     let comments = Arc::new(
         Comments::load_from_file("comments.txt")
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to load comments.txt: {e}; using fallback comments");
+            .unwrap_or_else(|err| {
+                warn!(
+                    error = %ErrorChain(&err),
+                    path = "comments.txt",
+                    "Failed to load comments; using fallback comments"
+                );
                 Comments::default()
             }),
     );
@@ -86,10 +95,11 @@ async fn main() -> color_eyre::Result<()> {
 
     info!(
         name = %bot_name,
+        version = env!("CARGO_PKG_VERSION"),
         api_host = bot.api_url().host_str(),
         local_api = config.telegram.is_local(),
         upload_limit = upload_limits.file,
-        "bot starting"
+        "Bot starting"
     );
 
     let downloader = Downloader::new(config.cobalt.clone())?;
@@ -105,12 +115,12 @@ async fn main() -> color_eyre::Result<()> {
         .enabled_platforms()
         .map(|platform| platform.to_string())
         .collect::<Vec<_>>();
-    info!(?enabled_platforms, "platform handlers configured");
+    info!(?enabled_platforms, "Platform handlers configured");
 
     let pool = db::connect(&config.database_url).await?;
     let media_cache = MediaCache::new(pool.clone());
     let media_posts = MediaPosts::new(pool.clone());
-    info!("database initialized");
+    info!("Database ready");
     let status = Arc::new(BotStatus::new(handlers.clone(), media_cache.clone()));
 
     #[cfg(feature = "bingo")]
@@ -154,6 +164,7 @@ async fn main() -> color_eyre::Result<()> {
         .build()
         .dispatch()
         .await;
+    info!("Bot stopped");
 
     Ok(())
 }
@@ -169,6 +180,7 @@ fn enable_llm(
     bot_id: UserId,
 ) -> color_eyre::Result<(MediaHandlers, Option<ReplyResponder>)> {
     let Some(openrouter) = &config.openrouter else {
+        info!("LLM captions and replies disabled; OpenRouter is not configured");
         return Ok((handlers, None));
     };
     info!(
@@ -196,7 +208,7 @@ fn enable_llm(
     fields(
         chat_id = msg.chat.id.0,
         message_id = msg.id.0,
-        user_id = ?msg.from.as_ref().map(|user| user.id.0),
+        user_id = msg.from.as_ref().map(|user| user.id.0),
         route = tracing::field::Empty,
         command = tracing::field::Empty,
     )
@@ -213,21 +225,22 @@ async fn message_handler(
     let span = Span::current();
     #[cfg(feature = "voice-line-capture")]
     if let Err(err) = state.voice_lines.capture(&bot, &msg).await {
-        warn!(%err, "Failed to capture incoming voice line metadata");
+        warn!(error = %ErrorChain(&err), "Failed to capture incoming voice line metadata");
     }
 
     let text = msg.text().or_else(|| msg.caption()).map(str::to_owned);
 
     #[cfg(feature = "bingo")]
     if let Err(err) = observe_message_users(&bingo_store, &msg).await {
-        warn!(%err, "Failed to remember Telegram user for bingo");
+        warn!(error = %ErrorChain(&err), "Failed to remember Telegram user for bingo");
     }
 
     match route_message(text.as_deref(), &state.bot_name) {
         RouteAction::HandleCommand(cmd) => {
             span.record("route", "command");
             span.record("command", <&'static str>::from(&cmd));
-            if let Err(e) = answer(
+            let started_at = Instant::now();
+            let answered = answer(
                 &bot,
                 &msg,
                 cmd,
@@ -249,9 +262,10 @@ async fn message_handler(
                     telegram_files: &state.telegram_files,
                 },
             )
-            .await
-            {
-                error!(%e, "Failed to answer command");
+            .await;
+            match answered {
+                Ok(()) => info!(elapsed = ?started_at.elapsed(), "Handled command"),
+                Err(err) => error!(error = %ErrorChain(&err), "Failed to answer command"),
             }
         }
         RouteAction::HandleMessage => {
@@ -284,14 +298,19 @@ async fn message_handler(
     Ok(())
 }
 
+#[tracing::instrument(name = "telegram.inline_query", skip_all, fields(user_id = query.from.id.0))]
 async fn inline_query_handler(
     bot: Bot,
-    query: teloxide::types::InlineQuery,
+    query: InlineQuery,
     state: AppState,
 ) -> color_eyre::Result<()> {
-    answer_inline_query(bot, query, &state.voice_lines)
-        .await
-        .map_err(Into::into)
+    // Telegram sends a query per keystroke, so only failures are worth more
+    // than debug.
+    match answer_inline_query(bot, query, &state.voice_lines).await {
+        Ok(results) => debug!(results, "Answered inline query"),
+        Err(err) => warn!(error = %ErrorChain(&err), "Failed to answer inline query"),
+    }
+    Ok(())
 }
 
 #[cfg(feature = "bingo")]
@@ -299,8 +318,8 @@ async fn inline_query_handler(
     name = "telegram.callback",
     skip_all,
     fields(
-        chat_id = ?query.regular_message().map(|message| message.chat.id.0),
-        message_id = ?query.regular_message().map(|message| message.id.0),
+        chat_id = query.regular_message().map(|message| message.chat.id.0),
+        message_id = query.regular_message().map(|message| message.id.0),
         user_id = query.from.id.0,
     )
 )]
@@ -311,7 +330,7 @@ async fn bingo_callback_handler(
     admin_cache: AdminCache,
 ) -> color_eyre::Result<()> {
     if let Err(err) = answer_callback(&bot, &query, &bingo_store, &admin_cache).await {
-        error!(%err, "Failed to answer bingo callback");
+        error!(error = %ErrorChain(&err), "Failed to answer bingo callback");
     }
     Ok(())
 }
@@ -325,9 +344,16 @@ async fn process_message(
     admin_chat_id: Option<ChatId>,
 ) {
     for link in handlers.extract(msg.text(), msg.caption()) {
-        if let Err(err) = handlers.handle(bot, msg, &link, cache, media_posts).await {
+        let span = info_span!("media", platform = %link.platform, url = %link.original_url);
+        let handled = handlers
+            .handle(bot, msg, &link, cache, media_posts)
+            .instrument(span.clone())
+            .await;
+        if let Err(err) = handled {
             handlers.stats().record_failure(link.platform);
-            report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err).await;
+            report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err)
+                .instrument(span)
+                .await;
         }
     }
 }
@@ -339,13 +365,27 @@ async fn report_media_failure(
     link: &MediaLink,
     err: &HandlerError,
 ) {
-    error!(platform = %link.platform, %err, "Media handler failed");
+    // Rendered up front: the borrowed `dyn Error` is not `Send` across awaits.
+    let err = ErrorChain(err).to_string();
+    error!(error = %err, "Media handler failed");
     if let Err(err) = bot.send_message(chat_id, failure_comment()).await {
-        warn!(platform = %link.platform, %err, "Failed to send the failure reply");
+        warn!(error = %ErrorChain(&err), "Failed to send the failure reply");
     }
-    if let Some(admin_chat_id) = admin_chat_id
-        && let Err(err) = bot.send_message(admin_chat_id, err.to_string()).await
+    let Some(admin_chat_id) = admin_chat_id else {
+        return;
+    };
+    let report = format!("{} failed: {}\n{err}", link.platform, link.original_url);
+    if let Err(err) = bot
+        .send_message(admin_chat_id, report)
+        .link_preview_options(LinkPreviewOptions {
+            is_disabled: true,
+            url: None,
+            prefer_small_media: false,
+            prefer_large_media: false,
+            show_above_text: false,
+        })
+        .await
     {
-        warn!(platform = %link.platform, %err, "Failed to report the failure to the admin chat");
+        warn!(error = %ErrorChain(&err), "Failed to report the failure to the admin chat");
     }
 }

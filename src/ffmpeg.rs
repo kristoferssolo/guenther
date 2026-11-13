@@ -1,6 +1,6 @@
 //! Thin wrappers around the configured `ffmpeg` and `ffprobe` executables.
 
-use crate::config::FfmpegConfig;
+use crate::{config::FfmpegConfig, telemetry::ErrorChain};
 use std::{ffi::OsStr, io, path::Path, process::Output, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::{process::Command, time::timeout};
@@ -76,7 +76,7 @@ impl Ffmpeg {
             return None;
         };
         let output = output
-            .inspect_err(|err| warn!(%err, "Failed to run ffprobe"))
+            .inspect_err(|err| warn!(error = %ErrorChain(err), "Failed to run ffprobe"))
             .ok()?;
         if !output.status.success() {
             warn!(stderr = %stderr(&output), "ffprobe could not read the duration");

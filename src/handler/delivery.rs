@@ -11,7 +11,7 @@ use teloxide::{
     prelude::*,
     types::{ChatId, InputFile, InputMedia, InputMediaPhoto, InputMediaVideo, MessageId},
 };
-use tracing::info;
+use tracing::debug;
 
 /// Maximum number of items Telegram accepts in a single media group.
 const MEDIA_GROUP_LIMIT: usize = 10;
@@ -141,7 +141,11 @@ async fn send_album(
         .collect::<Vec<_>>();
 
     let messages = bot.send_media_group(chat_id, group).await?;
-    info!(media_count = messages.len(), "Album sent");
+    debug!(
+        media_count = messages.len(),
+        message_id = messages.first().map(|message| message.id.0),
+        "Sent album"
+    );
     Ok(SentMedia {
         cached: kinds
             .into_iter()
@@ -217,7 +221,7 @@ async fn send_single(
         MediaKind::Video => bot.send_video(chat_id, input).caption(caption).await?,
         MediaKind::Image => bot.send_photo(chat_id, input).caption(caption).await?,
     };
-    info!(message_id = message.id.to_string(), "{} sent", kind);
+    debug!(message_id = message.id.0, %kind, "Sent media");
     Ok(message)
 }
 

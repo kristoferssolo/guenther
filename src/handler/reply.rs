@@ -3,6 +3,7 @@ use crate::{
     handler::{caption::fetch_cached, delivery::extract_cached_media},
     llm::{Captioner, LlmError, ReplyRequest},
     telegram_file::TelegramFiles,
+    telemetry::ErrorChain,
     utils::MediaKind,
 };
 use std::{
@@ -121,7 +122,11 @@ impl ReplyResponder {
                 let started_at = Instant::now();
                 match send_answer(&bot, &captioner, &files, reply).await {
                     Ok(()) => info!(elapsed = ?started_at.elapsed(), "Sent in-character reply"),
-                    Err(err) => warn!(%err, "In-character reply failed"),
+                    Err(err) => warn!(
+                        error = %ErrorChain(&err),
+                        elapsed = ?started_at.elapsed(),
+                        "In-character reply failed"
+                    ),
                 }
             }
             .in_current_span(),

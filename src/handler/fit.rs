@@ -1,6 +1,7 @@
 use crate::{
     config::TelegramConfig,
     ffmpeg::{Ffmpeg, FfmpegError},
+    telemetry::ErrorChain,
     utils::MediaKind,
 };
 use std::{
@@ -214,7 +215,12 @@ impl MediaFitter {
                 Ok(Some(path)) => fitted.items.push((path, kind)),
                 Ok(None) => fitted.dropped = fitted.dropped.saturating_add(1),
                 Err(err) => {
-                    warn!(%err, item = number, %kind, "Failed to shrink oversized media");
+                    warn!(
+                        error = %ErrorChain(&err),
+                        item = number,
+                        %kind,
+                        "Failed to shrink oversized media"
+                    );
                     fitted.dropped = fitted.dropped.saturating_add(1);
                 }
             }
