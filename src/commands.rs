@@ -96,6 +96,21 @@ pub struct AdminContext<'a> {
     pub status: &'a BotStatus,
 }
 
+/// Everything commands borrow from the dispatcher.
+#[derive(Clone, Copy)]
+pub struct CommandContext<'a> {
+    pub comments: &'a Comments,
+    pub f1: &'a F1,
+    pub media_posts: &'a MediaPosts,
+    pub admin: AdminContext<'a>,
+    #[cfg(feature = "bingo")]
+    pub bingo_store: &'a BingoStore,
+    #[cfg(feature = "bingo")]
+    pub admin_cache: &'a AdminCache,
+    #[cfg(feature = "bingo")]
+    pub telegram_files: &'a TelegramFiles,
+}
+
 /// Whether `chat_id` is the configured admin chat.
 pub fn is_admin_chat(chat_id: ChatId, admin_chat_id: Option<ChatId>) -> bool {
     admin_chat_id == Some(chat_id)
@@ -123,25 +138,24 @@ pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
 /// # Errors
 ///
 /// Returns an error if a Telegram request fails or a bingo command fails.
-#[cfg_attr(
-    feature = "bingo",
-    expect(
-        clippy::too_many_arguments,
-        reason = "commands borrow their dependencies from the dispatcher"
-    )
-)]
 pub async fn answer(
     bot: &Bot,
     message: &Message,
     cmd: Command,
-    comments: &Comments,
-    f1: &F1,
-    media_posts: &MediaPosts,
-    admin: AdminContext<'_>,
-    #[cfg(feature = "bingo")] bingo_store: &BingoStore,
-    #[cfg(feature = "bingo")] admin_cache: &AdminCache,
-    #[cfg(feature = "bingo")] telegram_files: &TelegramFiles,
+    context: CommandContext<'_>,
 ) -> Result<(), CommandError> {
+    let CommandContext {
+        comments,
+        f1,
+        media_posts,
+        admin,
+        #[cfg(feature = "bingo")]
+        bingo_store,
+        #[cfg(feature = "bingo")]
+        admin_cache,
+        #[cfg(feature = "bingo")]
+        telegram_files,
+    } = context;
     let chat_id = message.chat.id;
     match cmd {
         Command::Help => {

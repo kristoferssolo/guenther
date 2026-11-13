@@ -1,7 +1,7 @@
 use dotenvy::dotenv;
 use guenther::{
     cache::MediaCache,
-    commands::{AdminContext, RouteAction, answer, route_message},
+    commands::{AdminContext, CommandContext, RouteAction, answer, route_message},
     comments::{Comments, failure_comment},
     config::Config,
     db,
@@ -231,21 +231,23 @@ async fn message_handler(
                 &bot,
                 &msg,
                 cmd,
-                &state.comments,
-                &state.f1,
-                &state.media_posts,
-                AdminContext {
-                    chat_id: state.admin_chat_id,
-                    handlers: &handlers,
-                    cache: &cache,
-                    status: &state.status,
+                CommandContext {
+                    comments: &state.comments,
+                    f1: &state.f1,
+                    media_posts: &state.media_posts,
+                    admin: AdminContext {
+                        chat_id: state.admin_chat_id,
+                        handlers: &handlers,
+                        cache: &cache,
+                        status: &state.status,
+                    },
+                    #[cfg(feature = "bingo")]
+                    bingo_store: &bingo_store,
+                    #[cfg(feature = "bingo")]
+                    admin_cache: &admin_cache,
+                    #[cfg(feature = "bingo")]
+                    telegram_files: &state.telegram_files,
                 },
-                #[cfg(feature = "bingo")]
-                &bingo_store,
-                #[cfg(feature = "bingo")]
-                &admin_cache,
-                #[cfg(feature = "bingo")]
-                &state.telegram_files,
             )
             .await
             {
