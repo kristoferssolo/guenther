@@ -9,6 +9,8 @@ pub mod download;
 pub mod f1;
 pub mod handler;
 pub mod inline;
+#[cfg(feature = "llm-captions")]
+pub mod llm;
 pub mod telemetry;
 pub mod utils;
 pub mod voice_lines;

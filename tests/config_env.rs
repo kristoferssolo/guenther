@@ -18,6 +18,11 @@ fn with_clean_config_env<T>(f: impl FnOnce() -> T) -> T {
             ("ENABLED_PLATFORMS", None),
             ("F1_UTC_OFFSET", None),
             ("DATABASE_URL", None),
+            ("OPENROUTER_API_KEY", None),
+            ("OPENROUTER_MODEL", None),
+            ("OPENROUTER_VIDEO_INPUT", None),
+            ("FFMPEG_BIN", None),
+            ("FFPROBE_BIN", None),
         ],
         f,
     )
@@ -99,4 +104,59 @@ fn platforms_parse_and_display_with_standard_traits() {
 fn f1_utc_offset(#[case] raw: Option<&str>, #[case] expected_seconds: i32) {
     let offset = config_with(&[("F1_UTC_OFFSET", raw)]).f1.utc_offset;
     assert_eq!(offset.local_minus_utc(), expected_seconds);
+}
+
+#[cfg(feature = "llm-captions")]
+#[rstest]
+#[case::both_set(Some("sk-or-key"), Some(" z-ai/glm-5.3-flash "), true)]
+#[case::missing_model(Some("sk-or-key"), None, false)]
+#[case::missing_key(None, Some("z-ai/glm-5.3-flash"), false)]
+#[case::blank_key(Some("  "), Some("z-ai/glm-5.3-flash"), false)]
+#[case::unset(None, None, false)]
+fn openrouter_needs_key_and_model(
+    #[case] key: Option<&str>,
+    #[case] model: Option<&str>,
+    #[case] enabled: bool,
+) {
+    let openrouter =
+        config_with(&[("OPENROUTER_API_KEY", key), ("OPENROUTER_MODEL", model)]).openrouter;
+    assert_eq!(openrouter.is_some(), enabled);
+    if let Some(openrouter) = openrouter {
+        assert_eq!(openrouter.api_key, "sk-or-key");
+        assert_eq!(openrouter.model, "z-ai/glm-5.3-flash");
+        assert!(!openrouter.video_input);
+        assert_eq!(openrouter.ffmpeg, std::path::Path::new("ffmpeg"));
+        assert_eq!(openrouter.ffprobe, std::path::Path::new("ffprobe"));
+    }
+}
+
+#[cfg(feature = "llm-captions")]
+#[rstest]
+#[case::true_word(Some("true"), true)]
+#[case::one(Some("1"), true)]
+#[case::upper_on(Some("ON"), true)]
+#[case::false_word(Some("false"), false)]
+#[case::garbage(Some("maybe"), false)]
+#[case::unset(None, false)]
+fn openrouter_video_input_flag(#[case] raw: Option<&str>, #[case] expected: bool) {
+    let openrouter = config_with(&[
+        ("OPENROUTER_API_KEY", Some("sk-or-key")),
+        ("OPENROUTER_MODEL", Some("z-ai/glm-5.3-flash")),
+        ("OPENROUTER_VIDEO_INPUT", raw),
+    ])
+    .openrouter;
+    assert_eq!(openrouter.map(|config| config.video_input), Some(expected));
+}
+
+#[cfg(feature = "llm-captions")]
+#[test]
+fn openrouter_debug_redacts_api_key() {
+    let openrouter = config_with(&[
+        ("OPENROUTER_API_KEY", Some("sk-or-secret")),
+        ("OPENROUTER_MODEL", Some("z-ai/glm-5.3-flash")),
+    ])
+    .openrouter;
+    let debug = format!("{openrouter:?}");
+    assert!(!debug.contains("sk-or-secret"));
+    assert!(debug.contains("z-ai/glm-5.3-flash"));
 }

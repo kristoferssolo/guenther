@@ -1,5 +1,7 @@
 mod cobalt;
 mod f1;
+#[cfg(feature = "llm-captions")]
+mod openrouter;
 mod platform;
 
 use std::env;
@@ -7,6 +9,8 @@ use tracing::warn;
 
 pub use crate::config::cobalt::CobaltConfig;
 pub use crate::config::f1::F1Config;
+#[cfg(feature = "llm-captions")]
+pub use crate::config::openrouter::OpenRouterConfig;
 pub use crate::config::platform::{ParsePlatformError, Platform, PlatformConfig};
 
 #[derive(Debug, Clone)]
@@ -16,6 +20,9 @@ pub struct Config {
     pub cobalt: CobaltConfig,
     pub platforms: PlatformConfig,
     pub f1: F1Config,
+    /// LLM caption settings; `None` keeps the `comments.txt` captions.
+    #[cfg(feature = "llm-captions")]
+    pub openrouter: Option<OpenRouterConfig>,
 }
 
 impl Config {
@@ -33,6 +40,8 @@ impl Config {
             cobalt: CobaltConfig::from_env(),
             platforms: PlatformConfig::from_env(),
             f1: F1Config::from_env(),
+            #[cfg(feature = "llm-captions")]
+            openrouter: OpenRouterConfig::from_env(),
         }
     }
 }

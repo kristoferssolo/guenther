@@ -9,8 +9,10 @@ license = "MIT OR Apache-2.0"
 default = ["bingo"]
 bingo = ["dep:image", "dep:noto-sans-mono-bitmap"]
 voice-line-capture = []
+llm-captions = ["dep:base64"]
 
 [dependencies]
+base64 = { version = "0.23", optional = true }
 chrono = "0.4"
 color-eyre = "0.6"
 dotenvy = "0.15"

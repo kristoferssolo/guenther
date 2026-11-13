@@ -9,32 +9,50 @@ use std::path::PathBuf;
 use teloxide::{
     Bot,
     prelude::*,
-    types::{ChatId, InputFile, InputMedia, InputMediaPhoto, InputMediaVideo},
+    types::{ChatId, InputFile, InputMedia, InputMediaPhoto, InputMediaVideo, MessageId},
 };
 use tracing::info;
 
 /// Maximum number of items Telegram accepts in a single media group.
 const MEDIA_GROUP_LIMIT: usize = 10;
 
+/// Media that reached the chat.
+#[derive(Debug)]
+pub(super) struct SentMedia {
+    /// Sent items mapped back to cache entries; items that Telegram did not
+    /// echo as a photo/video are skipped.
+    pub cached: Vec<CachedMedia>,
+    /// Messages carrying the caption: the single message, or the first item
+    /// of each album.
+    #[cfg_attr(
+        not(feature = "llm-captions"),
+        expect(dead_code, reason = "only LLM captions edit sent captions")
+    )]
+    pub captioned: Vec<MessageId>,
+}
+
 /// Send media, grouping multiple items into a single album message.
 ///
 /// Only the first item of each message carries the caption, so Telegram shows
-/// it once for the whole album. Returns the sent media mapped back to cache
-/// entries; items that Telegram did not echo as a photo/video are skipped.
+/// it once for the whole album.
 pub(super) async fn send_media(
     bot: &Bot,
     chat_id: ChatId,
     mut media_items: Vec<(InputFile, MediaKind)>,
     caption: &str,
-) -> Result<Vec<CachedMedia>> {
+) -> Result<SentMedia> {
     if media_items.len() == 1
         && let Some((input, kind)) = media_items.pop()
     {
         let message = send_single(bot, chat_id, input, kind, caption).await?;
-        return Ok(extract_cached_media(&message, kind).into_iter().collect());
+        return Ok(SentMedia {
+            cached: extract_cached_media(&message, kind).into_iter().collect(),
+            captioned: vec![message.id],
+        });
     }
 
     let mut cached = Vec::new();
+    let mut captioned = Vec::new();
     for album_len in album_sizes(media_items.len()) {
         let chunk = media_items.drain(..album_len).collect::<Vec<_>>();
         let group = chunk
@@ -48,6 +66,7 @@ pub(super) async fn send_media(
 
         let messages = bot.send_media_group(chat_id, group).await?;
         info!(media_count = messages.len(), "Album sent");
+        captioned.extend(messages.first().map(|message| message.id));
         cached.extend(
             chunk
                 .iter()
@@ -56,7 +75,7 @@ pub(super) async fn send_media(
         );
     }
 
-    Ok(cached)
+    Ok(SentMedia { cached, captioned })
 }
 
 /// Split `len` items into the fewest albums Telegram accepts, balancing their

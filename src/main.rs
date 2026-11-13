@@ -16,6 +16,9 @@ use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{Span, error, info, warn};
 
+#[cfg(feature = "llm-captions")]
+use guenther::llm::Captioner;
+
 #[cfg(feature = "bingo")]
 use guenther::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
 
@@ -54,6 +57,18 @@ async fn main() -> color_eyre::Result<()> {
 
     let downloader = Downloader::new(config.cobalt.clone())?;
     let handlers = MediaHandlers::new(&config.platforms, downloader, comments.clone())?;
+    #[cfg(feature = "llm-captions")]
+    let handlers = match &config.openrouter {
+        Some(openrouter) => {
+            info!(
+                model = %openrouter.model,
+                video_input = openrouter.video_input,
+                "LLM captions enabled"
+            );
+            handlers.with_captioner(Captioner::new(openrouter, comments.clone())?)
+        }
+        None => handlers,
+    };
     let enabled_platforms = handlers
         .enabled_platforms()
         .map(|platform| platform.to_string())
@@ -208,7 +223,7 @@ async fn process_message(
     admin_chat_id: Option<ChatId>,
 ) {
     for link in handlers.extract(msg.text(), msg.caption()) {
-        if let Err(err) = handlers.handle(bot, msg.chat.id, &link, cache).await {
+        if let Err(err) = handlers.handle(bot, msg, &link, cache).await {
             report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err).await;
         }
     }
