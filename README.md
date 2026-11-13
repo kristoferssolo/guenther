@@ -47,7 +47,7 @@ Required:
 
 Optional:
 
-- `CHAT_ID`: admin/debug chat that receives internal error messages
+- `CHAT_ID`: admin/debug chat that receives internal error messages and accepts admin commands such as `/purge`
 - `COBALT_API_URL`: Cobalt processing endpoint; defaults to `http://127.0.0.1:9000/`
 - `COBALT_API_KEY`: API key for a protected external Cobalt instance; omit for the private Compose service
 - `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
@@ -341,6 +341,19 @@ The bot currently exposes:
 - `/stats [week|month|year|all]`: show this chat's delivered links per sender and per platform, plus links shared more than once; defaults to `all`
 - `/bingo`: show F1 bingo help when built with the `bingo` feature
 
+Admin commands work only in the `CHAT_ID` chat. They are hidden from `/help`
+and silently ignored in every other chat, or everywhere when `CHAT_ID` is
+unset:
+
+- `/purge <url>`: delete the cached media for one link, matched by the same
+  normalized key the media handlers use, so tracking parameters and URL
+  variants do not matter. Links of disabled platforms are not recognized.
+- `/purge <platform>`: delete every cached entry for `instagram`, `tiktok`,
+  `twitter` (or `x`), or `youtube`
+- `/purge all`: clear the whole media cache
+
+The reply reports how many rows were deleted, one per cached media item.
+
 ## F1 Bingo
 
 Bingo games are isolated per Telegram chat. A chat can have several active
@@ -497,8 +510,8 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
   Instagram additionally requires account cookies in `cobalt-cookies.json`; see
   [Docker](#docker).
 - Cached entries record what was downloaded at the time. If Cobalt returned
-  cover images for reels, purge them so the next request re-downloads:
-  `DELETE FROM media_cache WHERE url LIKE 'instagram:%'`.
+  cover images for reels, send `/purge <url>` or `/purge instagram` in the
+  admin chat so the next request re-downloads.
 - Media sent for a previously seen link is reused from Telegram's servers via
   cached `file_id`s; captions are still generated per request. If a cached send
   fails, the entry is invalidated and the media is downloaded again.
