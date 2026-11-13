@@ -5,6 +5,8 @@ use crate::{
     f1::{F1, ScheduleView},
 };
 use strum::IntoStaticStr;
+#[cfg(feature = "bingo")]
+use teloxide::utils::command::ParseError;
 use teloxide::{RequestError, prelude::*, utils::command::BotCommands};
 use thiserror::Error;
 
@@ -45,7 +47,22 @@ pub enum Command {
     Standings,
     /// Manage and play F1 bingo
     #[cfg(feature = "bingo")]
+    #[command(parse_with = whole_argument)]
     Bingo(String),
+}
+
+/// Pass the whole argument text through, like the default parser.
+///
+/// The default parser calls `String::from_str` and converts its `Infallible`
+/// error, which Rust 1.100 reports as `unreachable_code` inside the
+/// `BotCommands` derive.
+#[cfg(feature = "bingo")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "BotCommands requires parsers to return a Result"
+)]
+const fn whole_argument(input: String) -> Result<(String,), ParseError> {
+    Ok((input,))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,5 +167,18 @@ mod tests {
             RouteAction::HandleMessage
         );
         assert_eq!(route_message(None, "guenther_bot"), RouteAction::Ignore);
+    }
+
+    #[cfg(feature = "bingo")]
+    #[test]
+    fn bingo_takes_the_whole_argument_text() {
+        assert_eq!(
+            route_message(Some("/bingo mark 12 Safety car"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Bingo("mark 12 Safety car".to_owned()))
+        );
+        assert_eq!(
+            route_message(Some("/bingo"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Bingo(String::new()))
+        );
     }
 }

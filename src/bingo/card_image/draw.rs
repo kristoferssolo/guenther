@@ -107,7 +107,7 @@ fn draw_character(
     else {
         return;
     };
-    for (source_y, row) in raster.raster().iter().enumerate() {
+    for (source_y, row) in raster.rows().enumerate() {
         for (source_x, &coverage) in row.iter().enumerate() {
             let Ok(source_x) = u32::try_from(source_x) else {
                 continue;

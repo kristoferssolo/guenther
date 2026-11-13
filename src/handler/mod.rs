@@ -1,3 +1,5 @@
+#[cfg(feature = "llm-captions")]
+mod caption;
 mod delivery;
 mod link;
 
@@ -11,11 +13,16 @@ use crate::{
         link::{extract_media_links, normalize_cache_key},
     },
 };
+#[cfg(feature = "llm-captions")]
+use crate::{
+    handler::caption::{CaptionJob, InitialCaption, JobMedia},
+    llm::Captioner,
+};
 use regex::{Error as RegexError, Regex};
 use std::{result::Result as StdResult, sync::Arc, time::Instant};
 use teloxide::{
     Bot, RequestError,
-    types::{ChatId, FileId, InputFile},
+    types::{FileId, InputFile, Message},
 };
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -45,6 +52,8 @@ pub struct MediaHandlers {
     handlers: Arc<[Handler]>,
     downloader: Downloader,
     comments: Arc<Comments>,
+    #[cfg(feature = "llm-captions")]
+    captioner: Option<Captioner>,
 }
 
 impl MediaHandlers {
@@ -63,7 +72,20 @@ impl MediaHandlers {
             handlers,
             downloader,
             comments,
+            #[cfg(feature = "llm-captions")]
+            captioner: None,
         })
+    }
+
+    /// Caption media with LLM-written lines, waiting a bounded time before
+    /// falling back to a static caption that is replaced later.
+    #[cfg(feature = "llm-captions")]
+    #[must_use]
+    pub fn with_captioner(self, captioner: Captioner) -> Self {
+        Self {
+            captioner: Some(captioner),
+            ..self
+        }
     }
 
     pub fn enabled_platforms(&self) -> impl Iterator<Item = Platform> + '_ {
@@ -74,7 +96,8 @@ impl MediaHandlers {
         extract_media_links(text, caption, &self.handlers)
     }
 
-    /// Reply in `chat_id` with the media behind `link`, preferring cached Telegram file ids.
+    /// Reply in the chat of `msg` with the media behind `link`, preferring
+    /// cached Telegram file ids.
     ///
     /// # Errors
     ///
@@ -82,13 +105,13 @@ impl MediaHandlers {
     pub async fn handle(
         &self,
         bot: &Bot,
-        chat_id: ChatId,
+        msg: &Message,
         link: &MediaLink,
         cache: &MediaCache,
     ) -> Result<()> {
         let started_at = Instant::now();
         info!(platform = %link.platform, "Handling media URL");
-        match self.try_send_cached(bot, chat_id, link, cache).await {
+        match self.try_send_cached(bot, msg, link, cache).await {
             Ok(true) => {
                 info!(
                     platform = %link.platform,
@@ -111,14 +134,14 @@ impl MediaHandlers {
             }
         }
 
-        let download = self
-            .downloader
-            .download(link.platform, &link.original_url)
-            .await?;
+        let download = Arc::new(
+            self.downloader
+                .download(link.platform, &link.original_url)
+                .await?,
+        );
         let media_items = download.supported_media().await?;
         let source_text = download.source_text.as_deref();
         let media_count = media_items.len();
-        let base_caption = self.comments.build_caption();
         let include_source_text =
             should_include_source_text(link.platform, &media_items, source_text);
 
@@ -130,18 +153,46 @@ impl MediaHandlers {
             "Prepared downloaded media"
         );
 
+        #[cfg(feature = "llm-captions")]
+        let (base_caption, late_caption) = self
+            .initial_caption(
+                bot,
+                msg,
+                link.platform,
+                JobMedia::Downloaded {
+                    download: Arc::clone(&download),
+                    items: media_items.clone(),
+                },
+            )
+            .await
+            .or_static(|| self.comments.build_caption());
+        #[cfg(not(feature = "llm-captions"))]
+        let base_caption = self.comments.build_caption();
+
         let caption = if include_source_text {
             compose_caption(&base_caption, source_text)
         } else {
             base_caption
         };
         let inputs = media_items
-            .into_iter()
-            .map(|(path, kind)| (InputFile::file(path), kind))
+            .iter()
+            .map(|(path, kind)| (InputFile::file(path), *kind))
             .collect::<Vec<_>>();
-        let cached = send_media(bot, chat_id, inputs, &caption).await?;
-        if let Err(err) = cache.put(&link.cache_key, &cached).await {
+        let sent = send_media(bot, msg.chat.id, inputs, &caption).await?;
+        if let Err(err) = cache.put(&link.cache_key, &sent.cached).await {
             warn!(platform = %link.platform, %err, "Failed to persist media file_ids");
+        }
+
+        #[cfg(feature = "llm-captions")]
+        if let Some(late_caption) = late_caption {
+            late_caption.apply_later(
+                bot.clone(),
+                msg.chat.id,
+                sent.captioned,
+                source_text
+                    .filter(|_| include_source_text)
+                    .map(str::to_owned),
+            );
         }
 
         info!(
@@ -162,7 +213,7 @@ impl MediaHandlers {
     async fn try_send_cached(
         &self,
         bot: &Bot,
-        chat_id: ChatId,
+        msg: &Message,
         link: &MediaLink,
         cache: &MediaCache,
     ) -> Result<bool> {
@@ -178,14 +229,54 @@ impl MediaHandlers {
         };
 
         let media_count = cached.len();
+        #[cfg(feature = "llm-captions")]
+        let (caption, late_caption) = self
+            .initial_caption(bot, msg, link.platform, JobMedia::Cached(cached.clone()))
+            .await
+            .or_static(|| self.comments.build_caption());
+        #[cfg(not(feature = "llm-captions"))]
+        let caption = self.comments.build_caption();
         let inputs = cached
             .into_iter()
             .map(|item| (InputFile::file_id(FileId(item.file_id)), item.kind))
             .collect::<Vec<_>>();
-        let caption = self.comments.build_caption();
-        send_media(bot, chat_id, inputs, &caption).await?;
+        #[cfg_attr(
+            not(feature = "llm-captions"),
+            expect(unused_variables, reason = "only LLM captions edit sent captions")
+        )]
+        let sent = send_media(bot, msg.chat.id, inputs, &caption).await?;
         debug!(platform = %link.platform, media_count, "Sent cached media");
+
+        #[cfg(feature = "llm-captions")]
+        if let Some(late_caption) = late_caption {
+            late_caption.apply_later(bot.clone(), msg.chat.id, sent.captioned, None);
+        }
         Ok(true)
+    }
+
+    /// Start an LLM caption for `media` and wait the configured time for it.
+    #[cfg(feature = "llm-captions")]
+    async fn initial_caption(
+        &self,
+        bot: &Bot,
+        msg: &Message,
+        platform: Platform,
+        media: JobMedia,
+    ) -> InitialCaption {
+        let Some(captioner) = &self.captioner else {
+            return InitialCaption::Unavailable;
+        };
+        CaptionJob {
+            captioner: captioner.clone(),
+            bot: bot.clone(),
+            platform,
+            sender_name: msg.from.as_ref().map(|user| user.first_name.clone()),
+            message_text: msg.text().or_else(|| msg.caption()).map(str::to_owned),
+            media,
+        }
+        .start()
+        .wait(captioner.initial_wait())
+        .await
     }
 }
 

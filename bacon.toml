@@ -1,0 +1,66 @@
+# Bacon configuration; see https://dystroy.org/bacon/config/
+# `just run` starts the `run-long` job.
+
+default_job = "clippy-all"
+env.CARGO_TERM_COLOR = "always"
+
+[jobs.check]
+command = ["cargo", "check", "--all-targets", "--all-features"]
+need_stdout = false
+
+# Same lints as `just clippy` and the CI "all features" job.
+[jobs.clippy-all]
+command = ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+need_stdout = false
+
+# Catches code that only compiles with some features enabled.
+[jobs.clippy-default]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+need_stdout = false
+
+[jobs.clippy-llm]
+command = [
+    "cargo", "clippy", "--all-targets",
+    "--no-default-features", "--features", "llm-captions",
+    "--", "-D", "warnings",
+]
+need_stdout = false
+
+[jobs.nextest]
+command = [
+    "cargo", "nextest", "run", "--all-features",
+    "--hide-progress-bar", "--failure-output", "final",
+]
+need_stdout = true
+analyzer = "nextest"
+
+[jobs.doc]
+command = ["cargo", "doc", "--no-deps", "--all-features"]
+env.RUSTDOCFLAGS = "-D warnings"
+need_stdout = false
+
+# Runs the bot with default features and restarts it on every change.
+[jobs.run-long]
+command = ["cargo", "run"]
+need_stdout = true
+allow_warnings = true
+background = false
+on_change_strategy = "kill_then_restart"
+scroll_anchor = "auto"
+watch = ["migrations", "comments.txt", ".env"]
+
+# Like `run-long`, with LLM captions; needs the `OPENROUTER_*` variables.
+[jobs.run-llm]
+command = ["cargo", "run", "--features", "bingo,llm-captions"]
+need_stdout = true
+allow_warnings = true
+background = false
+on_change_strategy = "kill_then_restart"
+scroll_anchor = "auto"
+watch = ["migrations", "comments.txt", ".env"]
+
+[keybindings]
+c = "job:clippy-all"
+t = "job:nextest"
+d = "job:doc"
+r = "job:run-long"

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM rust:1.94.0-slim-trixie AS builder-rs
+FROM rust:1.99.1-slim-trixie AS builder-rs
 ARG RUST_FEATURES=""
 WORKDIR /app
 

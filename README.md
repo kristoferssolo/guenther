@@ -16,6 +16,7 @@ It currently supports:
 - Reads links from message text and document or media captions, while ignoring duplicates
 - Serves repeat links instantly from Telegram's servers using cached `file_id`s
 - Uses random caption lines from `comments.txt`
+- Can optionally replace those captions with LLM-written ones that react to the media and the sender's message
 - Extracts post text from image-only X/Twitter posts when available
 - Uses a private Cobalt instance for media from every supported platform
 - Reads Cobalt account cookies from `cobalt-cookies.json`, which Instagram now requires for reel video
@@ -51,7 +52,15 @@ Optional:
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
 - `DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
-- `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture
+- `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture or LLM captions
+
+LLM captions (`llm-captions` feature only):
+
+- `OPENROUTER_API_KEY`: OpenRouter API key; LLM captions stay off unless this and `OPENROUTER_MODEL` are set
+- `OPENROUTER_MODEL`: OpenRouter model id with image input, for example `deepseek/deepseek-v4.1-flash` or `z-ai/glm-5.3-flash`
+- `OPENROUTER_CAPTION_WAIT_SECS`: how long media waits for the model's caption before it is sent with a static one; defaults to `8`, and `0` always sends immediately
+- `OPENROUTER_VIDEO_INPUT`: `true` sends videos up to 20 MiB to the model instead of extracted frames; needs a video-capable model such as `z-ai/glm-5.3-flash`
+- `FFPROBE_BIN`: override the `ffprobe` executable used to find frame timestamps
 
 Sample `.env`:
 
@@ -95,6 +104,20 @@ To enable automatic voice-line capture:
 cargo run --features voice-line-capture
 ```
 
+To enable LLM-written captions (also set the `OPENROUTER_*` variables):
+
+```bash
+cargo run --features llm-captions
+```
+
+Media waits up to `OPENROUTER_CAPTION_WAIT_SECS` for the model's caption. If
+the caption is late, the media is sent with a `comments.txt` caption that is
+edited into the model's caption once it answers; on any failure the static
+caption stays. The model gets the platform, the sender's first name and message, X post
+text, and up to four images: photos as-is and three ffmpeg frames per video.
+Repeat links fetch their cached media back from Telegram for the same purpose.
+Requests ask OpenRouter to avoid providers that store or train on data.
+
 To enable F1 bingo:
 
 ```bash
@@ -127,6 +150,12 @@ Build the Compose bot with bingo enabled:
 
 ```bash
 RUST_FEATURES=--features=bingo docker compose up --build
+```
+
+Build with LLM captions as well:
+
+```bash
+RUST_FEATURES="--features=bingo,llm-captions" docker compose up --build
 ```
 
 The Compose setup starts a private Cobalt sidecar that is reachable only from

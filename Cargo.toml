@@ -6,11 +6,13 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [features]
-default = ["bingo"]
+default = ["bingo", "llm-captions"]
 bingo = ["dep:image", "dep:noto-sans-mono-bitmap"]
 voice-line-capture = []
+llm-captions = ["dep:base64"]
 
 [dependencies]
+base64 = { version = "0.23", optional = true }
 chrono = "0.4"
 color-eyre = "0.6"
 dotenvy = "0.15"
@@ -19,7 +21,7 @@ infer = "0.22"
 image = { version = "0.25", default-features = false, features = [
   "png",
 ], optional = true }
-noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = [
+noto-sans-mono-bitmap = { version = "0.4", default-features = false, features = [
   "bold",
   "regular",
   "size_16",
@@ -60,6 +62,7 @@ tokio = { version = "1", features = [
   "process",
   "rt-multi-thread",
   "sync",
+  "time",
 ] }
 toml = "1.1"
 tracing = "0.1"
@@ -68,14 +71,13 @@ url = "2.5"
 
 [dev-dependencies]
 claims = "0.8"
-rstest = "0.27"
+rstest = "0.28"
 temp-env = "0.3"
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 must_use_candidate = "allow"
-# DENY PANICS:
 unwrap_used = "deny"
 expect_used = "deny"
 indexing_slicing = "deny"

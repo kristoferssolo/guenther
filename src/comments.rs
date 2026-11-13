@@ -80,6 +80,14 @@ impl Comments {
             .map_or(DEFAULT_COMMENT, AsRef::as_ref)
     }
 
+    /// Pick up to `amount` distinct random lines, in random order.
+    pub fn sample(&self, amount: usize) -> Vec<&str> {
+        self.lines
+            .sample(&mut rng(), amount)
+            .map(String::as_str)
+            .collect()
+    }
+
     /// Build a caption by picking a random comment and truncating if necessary.
     pub fn build_caption(&self) -> String {
         truncate_with_ellipsis(self.pick(), TELEGRAM_CAPTION_LIMIT)
