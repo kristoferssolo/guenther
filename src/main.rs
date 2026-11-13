@@ -33,7 +33,7 @@ use guenther::telegram_file::TelegramFiles;
 #[cfg(feature = "llm-captions")]
 use guenther::{handler::ReplyResponder, llm::Captioner};
 #[cfg(feature = "llm-captions")]
-use teloxide::types::UserId;
+use teloxide::types::Me;
 
 #[cfg(feature = "bingo")]
 use guenther::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
@@ -110,7 +110,7 @@ async fn main() -> color_eyre::Result<()> {
         comments.clone(),
     )?;
     #[cfg(feature = "llm-captions")]
-    let (handlers, replies) = enable_llm(handlers, &config, &comments, &telegram_files, me.id)?;
+    let (handlers, replies) = enable_llm(handlers, &config, &comments, &telegram_files, &me)?;
     let enabled_platforms = handlers
         .enabled_platforms()
         .map(|platform| platform.to_string())
@@ -177,7 +177,7 @@ fn enable_llm(
     config: &Config,
     comments: &Arc<Comments>,
     files: &TelegramFiles,
-    bot_id: UserId,
+    me: &Me,
 ) -> color_eyre::Result<(MediaHandlers, Option<ReplyResponder>)> {
     let Some(openrouter) = &config.openrouter else {
         info!("LLM captions and replies disabled; OpenRouter is not configured");
@@ -193,7 +193,8 @@ fn enable_llm(
     let replies = ReplyResponder::new(
         captioner.clone(),
         files.clone(),
-        bot_id,
+        me.id,
+        me.username().into(),
         openrouter.reply_cooldown,
     );
     Ok((
