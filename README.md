@@ -15,6 +15,7 @@ It currently supports:
 - Handles multiple supported links in one message in their order of appearance
 - Reads links from message text and document or media captions, while ignoring duplicates
 - Serves repeat links instantly from Telegram's servers using cached `file_id`s
+- Records delivered links per chat and shows who shares what with `/stats`
 - Uses random caption lines from `comments.txt`
 - Can optionally replace those captions with LLM-written ones that react to the media and the sender's message
 - Extracts post text from image-only X/Twitter posts when available
@@ -50,7 +51,7 @@ Optional:
 - `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
 - `ENABLED_PLATFORMS`: comma-separated platforms to enable; defaults to all platforms
 - `F1_UTC_OFFSET`: offset for F1 schedule output, for example `+3` or `+03:00`
-- `DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache
+- `DATABASE_URL`: SQLx SQLite URL; defaults to `sqlite://data/bingo.sqlite3`; also stores the media `file_id` cache and link stats
 - `VOICE_LINES_PATH`: override the path to `voice_lines.toml`
 - `FFMPEG_BIN`: override the `ffmpeg` executable when using voice-line capture or LLM captions
 
@@ -126,9 +127,10 @@ cargo run --features bingo
 
 The SQLite database is always opened at startup and applies its schema through
 embedded migrations. Besides F1 bingo, it stores the media `file_id` cache that
-lets repeat links be served from Telegram's servers without re-downloading. The
-`bingo` Cargo feature only gates the bingo commands, card rendering, and
-callback-query handler.
+lets repeat links be served from Telegram's servers without re-downloading, and
+the `media_posts` log of delivered links behind `/stats`. The `bingo` Cargo
+feature only gates the bingo commands, card rendering, and callback-query
+handler.
 
 ## Docker
 
@@ -226,6 +228,7 @@ The bot currently exposes:
 - `/race`: show the next F1 race sessions, including the sprint when available
 - `/countdown`: show how long until the next F1 session of the upcoming race weekend starts
 - `/standings`: show the current F1 driver and constructor standings
+- `/stats [week|month|year|all]`: show this chat's delivered links per sender and per platform, plus links shared more than once; defaults to `all`
 - `/bingo`: show F1 bingo help when built with the `bingo` feature
 
 ## F1 Bingo
@@ -389,6 +392,10 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 - Media sent for a previously seen link is reused from Telegram's servers via
   cached `file_id`s; captions are still generated per request. If a cached send
   fails, the entry is invalidated and the media is downloaded again.
+- Every delivered link is recorded in `media_posts` with its chat, source
+  message, sender id and name, platform, cache key, URL, time, and whether it
+  was a cache hit. Failed links are not recorded. To forget a chat's history:
+  `DELETE FROM media_posts WHERE chat_id = <chat id>`.
 - X/Twitter post text and the image-only fallback use its public syndication endpoint.
 - Do not point `COBALT_API_URL` at `api.cobalt.tools`; hosted Cobalt instances are not intended for third-party projects without permission.
 - Guenther is intended for self-hosting.

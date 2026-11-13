@@ -3,12 +3,18 @@ use crate::bingo::{AdminCache, BingoError, BingoStore, answer_bingo};
 use crate::{
     comments::Comments,
     f1::{F1, ScheduleView},
+    media_posts::{MediaPosts, StatsPeriod},
 };
+use chrono::Utc;
 use strum::IntoStaticStr;
-#[cfg(feature = "bingo")]
-use teloxide::utils::command::ParseError;
-use teloxide::{RequestError, prelude::*, utils::command::BotCommands};
+use teloxide::{
+    RequestError,
+    prelude::*,
+    types::LinkPreviewOptions,
+    utils::command::{BotCommands, ParseError},
+};
 use thiserror::Error;
+use tracing::warn;
 
 #[derive(Debug, Error)]
 pub enum CommandError {
@@ -45,6 +51,9 @@ pub enum Command {
     /// Show the current F1 driver and constructor standings
     #[command()]
     Standings,
+    /// Show link stats for this chat: /stats [week|month|year|all]
+    #[command(parse_with = whole_argument)]
+    Stats(String),
     /// Manage and play F1 bingo
     #[cfg(feature = "bingo")]
     #[command(parse_with = whole_argument)]
@@ -56,7 +65,6 @@ pub enum Command {
 /// The default parser calls `String::from_str` and converts its `Infallible`
 /// error, which Rust 1.100 reports as `unreachable_code` inside the
 /// `BotCommands` derive.
-#[cfg(feature = "bingo")]
 #[expect(
     clippy::unnecessary_wraps,
     reason = "BotCommands requires parsers to return a Result"
@@ -85,12 +93,20 @@ pub fn route_message(text: Option<&str>, bot_name: &str) -> RouteAction {
 /// # Errors
 ///
 /// Returns an error if a Telegram request fails or a bingo command fails.
+#[cfg_attr(
+    feature = "bingo",
+    expect(
+        clippy::too_many_arguments,
+        reason = "commands borrow their dependencies from the dispatcher"
+    )
+)]
 pub async fn answer(
     bot: &Bot,
     message: &Message,
     cmd: Command,
     comments: &Comments,
     f1: &F1,
+    media_posts: &MediaPosts,
     #[cfg(feature = "bingo")] bingo_store: &BingoStore,
     #[cfg(feature = "bingo")] admin_cache: &AdminCache,
 ) -> Result<(), CommandError> {
@@ -109,6 +125,7 @@ pub async fn answer(
         Command::Race => send_f1_schedule(bot, chat_id, ScheduleView::Race, f1).await?,
         Command::Countdown => send_f1_countdown(bot, chat_id, f1).await?,
         Command::Standings => send_f1_standings(bot, chat_id, f1).await?,
+        Command::Stats(input) => send_link_stats(bot, chat_id, media_posts, &input).await?,
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
             answer_bingo(bot, message, bingo_store, admin_cache, &input).await?;
@@ -151,6 +168,34 @@ async fn send_f1_standings(bot: &Bot, chat_id: ChatId, f1: &F1) -> ResponseResul
     bot.send_message(chat_id, message).await
 }
 
+async fn send_link_stats(
+    bot: &Bot,
+    chat_id: ChatId,
+    media_posts: &MediaPosts,
+    input: &str,
+) -> ResponseResult<Message> {
+    let message = match StatsPeriod::from_argument(input) {
+        Ok(period) => match media_posts.stats(chat_id, period, Utc::now()).await {
+            Ok(stats) => stats.to_string(),
+            Err(err) => {
+                warn!(%err, "Failed to load link stats");
+                format!("Failed to load link stats: {err}")
+            }
+        },
+        Err(_) => "Usage: /stats [week|month|year|all]".to_owned(),
+    };
+
+    bot.send_message(chat_id, message)
+        .link_preview_options(LinkPreviewOptions {
+            is_disabled: true,
+            url: None,
+            prefer_small_media: false,
+            prefer_large_media: false,
+            show_above_text: false,
+        })
+        .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,6 +212,18 @@ mod tests {
             RouteAction::HandleMessage
         );
         assert_eq!(route_message(None, "guenther_bot"), RouteAction::Ignore);
+    }
+
+    #[test]
+    fn stats_takes_an_optional_period() {
+        assert_eq!(
+            route_message(Some("/stats month"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Stats("month".to_owned()))
+        );
+        assert_eq!(
+            route_message(Some("/stats"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Stats(String::new()))
+        );
     }
 
     #[cfg(feature = "bingo")]

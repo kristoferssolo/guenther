@@ -1,0 +1,33 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            platform,\n            COUNT(*) AS \"count!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (?2 IS NULL OR created_at >= ?2)\n        GROUP BY\n            platform\n        ORDER BY\n            COUNT(*) DESC,\n            platform\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "platform",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "media_posts",
+            "name": "platform"
+          }
+        }
+      },
+      {
+        "name": "count!: i64",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c28d3a91e39e900d3e96eff8e9bbd0f855a9490c66e2c6e15f03b4d7f0682cd1"
+}

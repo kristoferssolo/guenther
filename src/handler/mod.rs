@@ -12,6 +12,7 @@ use crate::{
         delivery::{compose_caption, send_media, should_include_source_text},
         link::{extract_media_links, normalize_cache_key},
     },
+    media_posts::MediaPosts,
 };
 #[cfg(feature = "llm-captions")]
 use crate::{
@@ -97,7 +98,7 @@ impl MediaHandlers {
     }
 
     /// Reply in the chat of `msg` with the media behind `link`, preferring
-    /// cached Telegram file ids.
+    /// cached Telegram file ids, and record the delivery in `posts`.
     ///
     /// # Errors
     ///
@@ -108,7 +109,23 @@ impl MediaHandlers {
         msg: &Message,
         link: &MediaLink,
         cache: &MediaCache,
+        posts: &MediaPosts,
     ) -> Result<()> {
+        let cache_hit = self.deliver(bot, msg, link, cache).await?;
+        if let Err(err) = posts.record_delivery(msg, link, cache_hit).await {
+            warn!(platform = %link.platform, %err, "Failed to record the media post");
+        }
+        Ok(())
+    }
+
+    /// Send the media behind `link`, returning whether it came from the cache.
+    async fn deliver(
+        &self,
+        bot: &Bot,
+        msg: &Message,
+        link: &MediaLink,
+        cache: &MediaCache,
+    ) -> Result<bool> {
         let started_at = Instant::now();
         info!(platform = %link.platform, "Handling media URL");
         match self.try_send_cached(bot, msg, link, cache).await {
@@ -119,7 +136,7 @@ impl MediaHandlers {
                     elapsed = ?started_at.elapsed(),
                     "Handled media URL"
                 );
-                return Ok(());
+                return Ok(true);
             }
             Ok(false) => {}
             Err(err) => {
@@ -202,7 +219,7 @@ impl MediaHandlers {
             elapsed = ?started_at.elapsed(),
             "Handled media URL"
         );
-        Ok(())
+        Ok(false)
     }
 
     /// Send media from cached Telegram `file_id`s for a link's cache key.

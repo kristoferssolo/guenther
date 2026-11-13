@@ -9,6 +9,7 @@ use guenther::{
     f1::F1,
     handler::{HandlerError, MediaHandlers, MediaLink},
     inline::answer_inline_query,
+    media_posts::MediaPosts,
     telemetry::setup_logger,
     voice_lines::VoiceLines,
 };
@@ -29,6 +30,7 @@ struct AppState {
     f1: F1,
     admin_chat_id: Option<ChatId>,
     voice_lines: VoiceLines,
+    media_posts: MediaPosts,
 }
 
 #[tokio::main]
@@ -77,6 +79,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let pool = db::connect(&config.database_url).await?;
     let media_cache = MediaCache::new(pool.clone());
+    let media_posts = MediaPosts::new(pool.clone());
     info!("database initialized");
 
     #[cfg(feature = "bingo")]
@@ -99,6 +102,7 @@ async fn main() -> color_eyre::Result<()> {
         f1,
         admin_chat_id: config.chat_id.map(ChatId),
         voice_lines,
+        media_posts,
     };
 
     #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
@@ -161,6 +165,7 @@ async fn message_handler(
                 cmd,
                 &state.comments,
                 &state.f1,
+                &state.media_posts,
                 #[cfg(feature = "bingo")]
                 &bingo_store,
                 #[cfg(feature = "bingo")]
@@ -173,7 +178,15 @@ async fn message_handler(
         }
         RouteAction::HandleMessage => {
             span.record("route", "message");
-            process_message(&bot, &msg, &handlers, &cache, state.admin_chat_id).await;
+            process_message(
+                &bot,
+                &msg,
+                &handlers,
+                &cache,
+                &state.media_posts,
+                state.admin_chat_id,
+            )
+            .await;
         }
         RouteAction::Ignore => {
             span.record("route", "ignored");
@@ -220,10 +233,11 @@ async fn process_message(
     msg: &Message,
     handlers: &MediaHandlers,
     cache: &MediaCache,
+    media_posts: &MediaPosts,
     admin_chat_id: Option<ChatId>,
 ) {
     for link in handlers.extract(msg.text(), msg.caption()) {
-        if let Err(err) = handlers.handle(bot, msg, &link, cache).await {
+        if let Err(err) = handlers.handle(bot, msg, &link, cache, media_posts).await {
             report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err).await;
         }
     }

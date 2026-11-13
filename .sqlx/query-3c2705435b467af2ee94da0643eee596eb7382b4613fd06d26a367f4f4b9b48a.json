@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO\n                media_posts (\n                    chat_id,\n                    message_id,\n                    sender_id,\n                    sender_name,\n                    platform,\n                    cache_key,\n                    url,\n                    cache_hit,\n                    created_at\n                )\n            VALUES\n                (?, ?, ?, ?, ?, ?, ?, ?, ?)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "3c2705435b467af2ee94da0643eee596eb7382b4613fd06d26a367f4f4b9b48a"
+}
