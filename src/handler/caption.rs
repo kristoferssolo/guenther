@@ -229,7 +229,7 @@ impl Drop for PendingCaption {
 
 /// Download cached media back from Telegram, skipping items that fail (the
 /// cloud Bot API refuses files over 20 MB).
-async fn fetch_cached(
+pub(super) async fn fetch_cached(
     bot: &Bot,
     files: &TelegramFiles,
     items: impl IntoIterator<Item = CachedMedia>,
@@ -244,7 +244,7 @@ async fn fetch_cached(
                 kind: item.kind,
             }),
             Err(err) => {
-                warn!(%err, item = number, "Failed to fetch cached media for the LLM caption");
+                warn!(%err, item = number, "Failed to fetch cached media for the model");
             }
         }
     }

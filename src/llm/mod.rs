@@ -1,4 +1,4 @@
-//! LLM-written media captions via `OpenRouter`.
+//! LLM-written media captions and in-character replies via `OpenRouter`.
 //!
 //! Media waits a bounded time for a [`Captioner`] result. A late caption
 //! replaces the `comments.txt` caption the media went out with, and failures
@@ -19,9 +19,12 @@ use crate::{
     config::{OpenRouterConfig, Platform},
     ffmpeg::Ffmpeg,
     llm::{
-        media::MediaTools,
+        media::{LabeledPart, MediaTools},
         openrouter::{ContentPart, OpenRouterClient},
-        prompt::{PromptContext, STYLE_EXAMPLE_COUNT, SYSTEM_PROMPT, sanitize_caption},
+        prompt::{
+            PromptContext, REPLY_SYSTEM_PROMPT, ReplyContext, STYLE_EXAMPLE_COUNT, SYSTEM_PROMPT,
+            sanitize_caption,
+        },
     },
     utils::MediaKind,
 };
@@ -37,6 +40,17 @@ pub struct CaptionRequest {
     pub message_text: Option<String>,
     pub source_text: Option<String>,
     pub media: Vec<LocalMedia>,
+}
+
+/// Everything the model sees about a chat member's reply to Guenther.
+#[derive(Debug, Clone)]
+pub struct ReplyRequest {
+    /// Text or caption of Guenther's message that was replied to.
+    pub bot_message: Option<String>,
+    /// Media of Guenther's message that was replied to.
+    pub media: Vec<LocalMedia>,
+    pub replier_name: Option<String>,
+    pub reply_text: String,
 }
 
 /// Writes captions in Guenther's voice from post context and media.
@@ -96,7 +110,40 @@ impl Captioner {
             visual_count: visuals.len(),
         };
 
-        let mut parts = vec![ContentPart::text(context.render())];
+        self.complete(SYSTEM_PROMPT, context.render(), visuals)
+            .await
+    }
+
+    /// Ask the model for Guenther's one-line answer to a reply.
+    ///
+    /// Media items that cannot be prepared are skipped; the request still
+    /// goes out with the remaining context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails or the answer is not usable.
+    pub async fn reply(&self, request: &ReplyRequest) -> Result<String> {
+        let work_dir = tempdir()?;
+        let visuals = self.tools.prepare(&request.media, work_dir.path()).await;
+        let style_examples = self.comments.sample(STYLE_EXAMPLE_COUNT);
+        let context = ReplyContext {
+            bot_message: request.bot_message.as_deref(),
+            replier_name: request.replier_name.as_deref(),
+            reply_text: &request.reply_text,
+            style_examples: &style_examples,
+            visual_count: visuals.len(),
+        };
+        self.complete(REPLY_SYSTEM_PROMPT, context.render(), visuals)
+            .await
+    }
+
+    async fn complete(
+        &self,
+        system: &str,
+        context: String,
+        visuals: Vec<LabeledPart>,
+    ) -> Result<String> {
+        let mut parts = vec![ContentPart::text(context)];
         for visual in visuals {
             parts.push(ContentPart::text(visual.label));
             parts.push(visual.part);
@@ -105,9 +152,9 @@ impl Captioner {
         debug!(
             model = self.client.model(),
             part_count = parts.len(),
-            "Requesting LLM caption"
+            "Requesting LLM completion"
         );
-        let reply = self.client.complete(SYSTEM_PROMPT, parts).await?;
+        let reply = self.client.complete(system, parts).await?;
         sanitize_caption(&reply).ok_or(LlmError::UnusableCaption(reply))
     }
 }

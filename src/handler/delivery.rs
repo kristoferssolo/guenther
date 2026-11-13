@@ -187,7 +187,7 @@ fn into_input_media(input: InputFile, kind: MediaKind, caption: Option<String>) 
 
 /// Map a sent message back to a cacheable media item, or `None` when the
 /// message carries no matching photo/video.
-fn extract_cached_media(message: &Message, kind: MediaKind) -> Option<CachedMedia> {
+pub(super) fn extract_cached_media(message: &Message, kind: MediaKind) -> Option<CachedMedia> {
     match kind {
         MediaKind::Video => message.video().map(|video| CachedMedia {
             kind: MediaKind::Video,

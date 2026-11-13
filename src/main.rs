@@ -18,14 +18,16 @@ use std::sync::Arc;
 use teloxide::{dispatching::UpdateFilterExt, dptree, prelude::*, types::ChatId};
 use tracing::{Span, error, info, warn};
 
-#[cfg(feature = "llm-captions")]
-use guenther::llm::Captioner;
 #[cfg(any(
     feature = "bingo",
     feature = "llm-captions",
     feature = "voice-line-capture"
 ))]
 use guenther::telegram_file::TelegramFiles;
+#[cfg(feature = "llm-captions")]
+use guenther::{handler::ReplyResponder, llm::Captioner};
+#[cfg(feature = "llm-captions")]
+use teloxide::types::UserId;
 
 #[cfg(feature = "bingo")]
 use guenther::bingo::{AdminCache, BingoStore, answer_callback, observe_message_users};
@@ -40,6 +42,9 @@ struct AppState {
     media_posts: MediaPosts,
     #[cfg(feature = "bingo")]
     telegram_files: TelegramFiles,
+    /// In-character replies; `None` when `OpenRouter` is not configured.
+    #[cfg(feature = "llm-captions")]
+    replies: Option<ReplyResponder>,
 }
 
 #[tokio::main]
@@ -74,7 +79,8 @@ async fn main() -> color_eyre::Result<()> {
         bot = bot.set_api_url(api_url);
     }
     let upload_limits = UploadLimits::for_telegram(&config.telegram);
-    let bot_name: Arc<str> = bot.get_me().await?.username().into();
+    let me = bot.get_me().await?;
+    let bot_name: Arc<str> = me.username().into();
 
     info!(
         name = %bot_name,
@@ -92,20 +98,7 @@ async fn main() -> color_eyre::Result<()> {
         comments.clone(),
     )?;
     #[cfg(feature = "llm-captions")]
-    let handlers = match &config.openrouter {
-        Some(openrouter) => {
-            info!(
-                model = %openrouter.model,
-                video_input = openrouter.video_input,
-                "LLM captions enabled"
-            );
-            handlers.with_captioner(
-                Captioner::new(openrouter, Ffmpeg::new(&config.ffmpeg), comments.clone())?,
-                telegram_files.clone(),
-            )
-        }
-        None => handlers,
-    };
+    let (handlers, replies) = enable_llm(handlers, &config, &comments, &telegram_files, me.id)?;
     let enabled_platforms = handlers
         .enabled_platforms()
         .map(|platform| platform.to_string())
@@ -140,6 +133,8 @@ async fn main() -> color_eyre::Result<()> {
         media_posts,
         #[cfg(feature = "bingo")]
         telegram_files,
+        #[cfg(feature = "llm-captions")]
+        replies,
     };
 
     #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
@@ -157,6 +152,38 @@ async fn main() -> color_eyre::Result<()> {
         .await;
 
     Ok(())
+}
+
+/// Attach LLM captions to `handlers` and build in-character replies when
+/// `OpenRouter` is configured.
+#[cfg(feature = "llm-captions")]
+fn enable_llm(
+    handlers: MediaHandlers,
+    config: &Config,
+    comments: &Arc<Comments>,
+    files: &TelegramFiles,
+    bot_id: UserId,
+) -> color_eyre::Result<(MediaHandlers, Option<ReplyResponder>)> {
+    let Some(openrouter) = &config.openrouter else {
+        return Ok((handlers, None));
+    };
+    info!(
+        model = %openrouter.model,
+        video_input = openrouter.video_input,
+        reply_cooldown = ?openrouter.reply_cooldown,
+        "LLM captions and replies enabled"
+    );
+    let captioner = Captioner::new(openrouter, Ffmpeg::new(&config.ffmpeg), comments.clone())?;
+    let replies = ReplyResponder::new(
+        captioner.clone(),
+        files.clone(),
+        bot_id,
+        openrouter.reply_cooldown,
+    );
+    Ok((
+        handlers.with_captioner(captioner, files.clone()),
+        Some(replies),
+    ))
 }
 
 #[tracing::instrument(
@@ -216,6 +243,16 @@ async fn message_handler(
             }
         }
         RouteAction::HandleMessage => {
+            // Supported links take precedence over an in-character reply.
+            #[cfg(feature = "llm-captions")]
+            if let Some(replies) = &state.replies
+                && let Some(reply) = replies.detect(&msg)
+                && handlers.extract(msg.text(), msg.caption()).is_empty()
+            {
+                span.record("route", "reply");
+                replies.answer(&bot, reply);
+                return Ok(());
+            }
             span.record("route", "message");
             process_message(
                 &bot,
