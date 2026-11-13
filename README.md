@@ -19,6 +19,7 @@ It currently supports:
 - Re-encodes videos and photos over Telegram's upload limit, and links to the source when they still do not fit
 - Uses random caption lines from `comments.txt`
 - Can optionally replace those captions with LLM-written ones that react to the media and the sender's message
+- Can optionally answer in character when someone replies to one of its messages
 - Extracts post text from image-only X/Twitter posts when available
 - Uses a private Cobalt instance for media from every supported platform
 - Reads Cobalt account cookies from `cobalt-cookies.json`, which Instagram now requires for reel video
@@ -60,11 +61,12 @@ Optional:
 - `TELEGRAM_API_LOCAL`: `true` when `TELEGRAM_API_URL` runs `telegram-bot-api --local`; raises the upload limit to 2000 MB and reads files from the server's data directory; ignored without `TELEGRAM_API_URL`
 - `TELEGRAM_API_DIR`: the local server's data directory (its `--dir`), mounted at the same path; defaults to `/var/lib/telegram-bot-api`; only used with `TELEGRAM_API_LOCAL`
 
-LLM captions (`llm-captions` feature only):
+LLM captions and replies (`llm-captions` feature only):
 
-- `OPENROUTER_API_KEY`: OpenRouter API key; LLM captions stay off unless this and `OPENROUTER_MODEL` are set
+- `OPENROUTER_API_KEY`: OpenRouter API key; LLM captions and replies stay off unless this and `OPENROUTER_MODEL` are set
 - `OPENROUTER_MODEL`: OpenRouter model id with image input, for example `deepseek/deepseek-v4.1-flash` or `z-ai/glm-5.3-flash`
 - `OPENROUTER_CAPTION_WAIT_SECS`: how long media waits for the model's caption before it is sent with a static one; defaults to `8`, and `0` always sends immediately
+- `OPENROUTER_REPLY_COOLDOWN_SECS`: minimum time between two in-character replies in one chat; defaults to `30`, and `0` disables the limit
 - `OPENROUTER_VIDEO_INPUT`: `true` sends videos up to 20 MiB to the model instead of extracted frames; needs a video-capable model such as `z-ai/glm-5.3-flash`
 
 Sample `.env`:
@@ -122,6 +124,15 @@ caption stays. The model gets the platform, the sender's first name and message,
 text, and up to four images: photos as-is and three ffmpeg frames per video.
 Repeat links fetch their cached media back from Telegram for the same purpose.
 Requests ask OpenRouter to avoid providers that store or train on data.
+
+The same setup answers text replies to Guenther's own messages in character,
+as a reply to the user's message. The model gets Guenther's message text or
+caption, its photo or video fetched back from Telegram, and the replier's first
+name and text. Telegram only exposes the message that was replied to, so
+longer threads have no further context. Each chat gets at most one answer per
+`OPENROUTER_REPLY_COOLDOWN_SECS`; replies during the cooldown, replies from
+other bots, and model failures get no answer. A reply that also contains a
+supported link is handled as a media link instead.
 
 ### Large media
 

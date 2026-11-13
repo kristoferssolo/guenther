@@ -3,8 +3,9 @@ use std::{fmt, time::Duration};
 use tracing::warn;
 
 const DEFAULT_CAPTION_WAIT: Duration = Duration::from_secs(8);
+const DEFAULT_REPLY_COOLDOWN: Duration = Duration::from_secs(30);
 
-/// `OpenRouter` settings for LLM-written media captions.
+/// `OpenRouter` settings for LLM-written media captions and replies.
 #[derive(Clone)]
 pub struct OpenRouterConfig {
     pub api_key: String,
@@ -15,6 +16,8 @@ pub struct OpenRouterConfig {
     /// How long media waits for the LLM caption before going out with a
     /// static caption that is edited later.
     pub caption_wait: Duration,
+    /// Minimum time between two in-character replies in one chat.
+    pub reply_cooldown: Duration,
 }
 
 impl OpenRouterConfig {
@@ -46,8 +49,8 @@ impl OpenRouterConfig {
             model,
             video_input: get_string_from_env("OPENROUTER_VIDEO_INPUT")
                 .is_some_and(|raw| parse_flag("OPENROUTER_VIDEO_INPUT", &raw)),
-            caption_wait: get_string_from_env("OPENROUTER_CAPTION_WAIT_SECS")
-                .map_or(DEFAULT_CAPTION_WAIT, |raw| parse_wait(&raw)),
+            caption_wait: env_secs("OPENROUTER_CAPTION_WAIT_SECS", DEFAULT_CAPTION_WAIT),
+            reply_cooldown: env_secs("OPENROUTER_REPLY_COOLDOWN_SECS", DEFAULT_REPLY_COOLDOWN),
         })
     }
 }
@@ -59,19 +62,24 @@ impl fmt::Debug for OpenRouterConfig {
             .field("model", &self.model)
             .field("video_input", &self.video_input)
             .field("caption_wait", &self.caption_wait)
+            .field("reply_cooldown", &self.reply_cooldown)
             .finish()
     }
 }
 
-fn parse_wait(raw: &str) -> Duration {
+fn env_secs(key: &str, default: Duration) -> Duration {
+    let Some(raw) = get_string_from_env(key) else {
+        return default;
+    };
     raw.parse().map_or_else(
         |_| {
             warn!(
+                key,
                 raw,
-                default_secs = DEFAULT_CAPTION_WAIT.as_secs(),
-                "OPENROUTER_CAPTION_WAIT_SECS is not a whole number of seconds; using the default"
+                default_secs = default.as_secs(),
+                "Expected a whole number of seconds; using the default"
             );
-            DEFAULT_CAPTION_WAIT
+            default
         },
         Duration::from_secs,
     )

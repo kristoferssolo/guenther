@@ -3,6 +3,8 @@ mod caption;
 mod delivery;
 mod fit;
 mod link;
+#[cfg(feature = "llm-captions")]
+mod reply;
 
 use crate::{
     cache::MediaCache,
@@ -34,6 +36,8 @@ use teloxide::{
 use thiserror::Error;
 use tracing::{debug, info, warn};
 
+#[cfg(feature = "llm-captions")]
+pub use crate::handler::reply::{BotReply, ReplyResponder};
 pub use crate::handler::{
     fit::{MediaFitter, UploadLimits},
     link::MediaLink,
