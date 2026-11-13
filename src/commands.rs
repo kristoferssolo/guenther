@@ -10,6 +10,7 @@ use crate::{
     handler::MediaHandlers,
     media_posts::{MediaPosts, StatsPeriod},
     purge::purge,
+    status::BotStatus,
 };
 use chrono::Utc;
 use strum::IntoStaticStr;
@@ -60,6 +61,9 @@ pub enum Command {
     /// Show link stats for this chat: /stats [week|month|year|all]
     #[command(parse_with = whole_argument)]
     Stats(String),
+    /// Show bot health; admin chat only
+    #[command(hide)]
+    Status,
     /// Manage and play F1 bingo
     #[cfg(feature = "bingo")]
     #[command(parse_with = whole_argument)]
@@ -89,6 +93,7 @@ pub struct AdminContext<'a> {
     pub chat_id: Option<ChatId>,
     pub handlers: &'a MediaHandlers,
     pub cache: &'a MediaCache,
+    pub status: &'a BotStatus,
 }
 
 /// Whether `chat_id` is the configured admin chat.
@@ -153,6 +158,14 @@ pub async fn answer(
         Command::Countdown => send_f1_countdown(bot, chat_id, f1).await?,
         Command::Standings => send_f1_standings(bot, chat_id, f1).await?,
         Command::Stats(input) => send_link_stats(bot, chat_id, media_posts, &input).await?,
+        Command::Status => {
+            if !is_admin_chat(chat_id, admin.chat_id) {
+                debug!("Ignoring /status outside the admin chat");
+                return Ok(());
+            }
+            bot.send_message(chat_id, admin.status.report().await)
+                .await?
+        }
         #[cfg(feature = "bingo")]
         Command::Bingo(input) => {
             answer_bingo(
@@ -287,6 +300,15 @@ mod tests {
     #[test]
     fn purge_is_hidden_from_help() {
         assert!(!Command::descriptions().to_string().contains("purge"));
+    }
+
+    #[test]
+    fn status_is_routed_but_hidden_from_help() {
+        assert_eq!(
+            route_message(Some("/status"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Status)
+        );
+        assert!(!Command::descriptions().to_string().contains("status"));
     }
 
     #[rstest]

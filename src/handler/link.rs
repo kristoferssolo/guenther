@@ -67,6 +67,13 @@ fn instagram_media_key(url: &Url) -> Option<String> {
     Some(format!("instagram:post:{identifier}"))
 }
 
+/// Whether `original_url` is an Instagram reel or TV post, which should
+/// arrive as video.
+pub fn is_instagram_video_url(original_url: &str) -> bool {
+    Url::parse(original_url)
+        .is_ok_and(|url| matches!(path_segments(&url).next(), Some("reel" | "tv")))
+}
+
 fn tiktok_video_key(url: &Url) -> Option<String> {
     let mut segments = path_segments(url);
     if let (Some(user), Some("video"), Some(identifier)) =
@@ -128,6 +135,7 @@ mod tests {
         ffmpeg::Ffmpeg,
     };
     use claims::assert_ok;
+    use rstest::rstest;
 
     fn handlers() -> MediaHandlers {
         let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
@@ -254,5 +262,15 @@ mod tests {
         );
 
         assert_eq!(links, Vec::<MediaLink>::new());
+    }
+
+    #[rstest]
+    #[case::reel("https://www.instagram.com/reel/ABC123/?utm_source=share", true)]
+    #[case::tv("https://instagr.am/tv/ABC123", true)]
+    #[case::post("https://www.instagram.com/p/ABC123/", false)]
+    #[case::profile_post("https://www.instagram.com/f1/p/ABC123", false)]
+    #[case::not_a_url("reel/ABC123", false)]
+    fn detects_instagram_video_urls(#[case] url: &str, #[case] expected: bool) {
+        assert_eq!(is_instagram_video_url(url), expected);
     }
 }

@@ -7,7 +7,7 @@ use crate::{
 };
 use futures::{StreamExt, TryStreamExt, stream};
 use reqwest::{
-    Client,
+    Client, RequestBuilder, Response,
     header::{ACCEPT, AUTHORIZATION},
 };
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ use tokio::{fs::File, io::AsyncWriteExt};
 use tracing::debug;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_mins(5);
+/// Keeps `/status` responsive when Cobalt hangs.
+const INSTANCE_INFO_TIMEOUT: Duration = Duration::from_secs(5);
 /// Caps parallel requests to Cobalt and the source site for large carousels.
 const PICKER_CONCURRENCY: usize = 4;
 
@@ -66,15 +68,32 @@ impl CobaltClient {
         })
     }
 
+    /// Return the instance version from the info `GET` on the API root.
+    pub(super) async fn instance_version(&self) -> Result<String> {
+        let request = self
+            .http
+            .get(&self.config.api_url)
+            .header(ACCEPT, "application/json")
+            .timeout(INSTANCE_INFO_TIMEOUT);
+        let info = self
+            .authorize(request)
+            .send()
+            .await
+            .and_then(Response::error_for_status)
+            .map_err(DownloadError::CobaltRequest)?
+            .json::<InstanceInfo>()
+            .await
+            .map_err(DownloadError::CobaltRequest)?;
+        Ok(info.cobalt.version)
+    }
+
     async fn request_download(&self, source_url: &str) -> Result<CobaltResponse> {
-        let mut request = self
+        let request = self
             .http
             .post(&self.config.api_url)
             .header(ACCEPT, "application/json")
             .json(&CobaltRequest::new(source_url));
-        if let Some(api_key) = &self.config.api_key {
-            request = request.header(AUTHORIZATION, format!("Api-Key {api_key}"));
-        }
+        let request = self.authorize(request);
 
         debug!("Requesting Cobalt download");
         let response = request.send().await.map_err(DownloadError::CobaltRequest)?;
@@ -128,6 +147,13 @@ impl CobaltClient {
         file.flush().await?;
 
         Ok(path)
+    }
+
+    fn authorize(&self, request: RequestBuilder) -> RequestBuilder {
+        match &self.config.api_key {
+            Some(api_key) => request.header(AUTHORIZATION, format!("Api-Key {api_key}")),
+            None => request,
+        }
     }
 }
 
@@ -184,6 +210,16 @@ struct PickerItem {
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 struct CobaltApiError {
     code: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct InstanceInfo {
+    cobalt: InstanceDetails,
+}
+
+#[derive(Debug, Deserialize)]
+struct InstanceDetails {
+    version: String,
 }
 
 fn safe_filename(suggested: &str, index: usize) -> String {
@@ -251,6 +287,51 @@ mod tests {
             path.len()
         );
         assert_ok!(reader.get_mut().write_all(response.as_bytes()).await);
+    }
+
+    /// Answers one request with `body` and returns its lowercased header lines.
+    async fn serve_instance_info(listener: TcpListener, body: &'static str) -> Vec<String> {
+        let (socket, _) = assert_ok!(listener.accept().await);
+        let mut reader = BufReader::new(socket);
+        let mut headers = Vec::new();
+        loop {
+            let mut line = String::new();
+            let read = assert_ok!(reader.read_line(&mut line).await);
+            if read == 0 || line == "\r\n" {
+                break;
+            }
+            headers.push(line.trim_end().to_ascii_lowercase());
+        }
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        assert_ok!(reader.get_mut().write_all(response.as_bytes()).await);
+        headers
+    }
+
+    #[tokio::test]
+    async fn reads_instance_version_with_api_key() {
+        let listener = assert_ok!(TcpListener::bind("127.0.0.1:0").await);
+        let address = assert_ok!(listener.local_addr());
+        let server = tokio::spawn(serve_instance_info(
+            listener,
+            r#"{"cobalt":{"version":"11.0.2","url":"http://cobalt/"},"git":{"commit":"abc"}}"#,
+        ));
+        let client = assert_ok!(CobaltClient::new(CobaltConfig {
+            api_url: format!("http://{address}/"),
+            api_key: Some("secret".into()),
+        }));
+
+        assert_ok_eq!(client.instance_version().await, "11.0.2");
+
+        let headers = assert_ok!(server.await);
+        assert_some!(headers.first().filter(|line| line.starts_with("get / ")));
+        assert!(
+            headers
+                .iter()
+                .any(|line| line == "authorization: api-key secret")
+        );
     }
 
     #[test]

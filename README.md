@@ -47,7 +47,7 @@ Required:
 
 Optional:
 
-- `CHAT_ID`: admin/debug chat that receives internal error messages and accepts admin commands such as `/purge`
+- `CHAT_ID`: admin/debug chat that receives internal error messages and accepts admin commands such as `/purge` and `/status`
 - `COBALT_API_URL`: Cobalt processing endpoint; defaults to `http://127.0.0.1:9000/`
 - `COBALT_API_KEY`: API key for a protected external Cobalt instance; omit for the private Compose service
 - `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
@@ -340,6 +340,13 @@ The bot currently exposes:
 - `/standings`: show the current F1 driver and constructor standings
 - `/stats [week|month|year|all]`: show this chat's delivered links per sender and per platform, plus links shared more than once; defaults to `all`
 - `/bingo`: show F1 bingo help when built with the `bingo` feature
+- `/status`: show bot health in the admin chat (`CHAT_ID`), one fact per line:
+  version, uptime, compiled features, enabled platforms, Cobalt reachability and
+  version, LLM caption model, `media_cache` links and items per platform, media
+  failures per platform since startup, and whether the latest Instagram reel
+  download since startup was a video or image-only (expired cookies). It is
+  hidden from `/help` and ignored in every other chat, or everywhere when
+  `CHAT_ID` is unset.
 
 Admin commands work only in the `CHAT_ID` chat. They are hidden from `/help`
 and silently ignored in every other chat, or everywhere when `CHAT_ID` is

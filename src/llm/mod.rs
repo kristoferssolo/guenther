@@ -77,6 +77,11 @@ impl Captioner {
         })
     }
 
+    /// The `OpenRouter` model id that writes the captions.
+    pub fn model(&self) -> &str {
+        self.client.model()
+    }
+
     /// How long media waits for a caption before it is sent with a static one.
     pub const fn initial_wait(&self) -> Duration {
         self.initial_wait

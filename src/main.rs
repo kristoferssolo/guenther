@@ -11,6 +11,7 @@ use guenther::{
     handler::{HandlerError, MediaFitter, MediaHandlers, MediaLink, UploadLimits},
     inline::answer_inline_query,
     media_posts::MediaPosts,
+    status::BotStatus,
     telemetry::setup_logger,
     voice_lines::VoiceLines,
 };
@@ -45,6 +46,7 @@ struct AppState {
     /// In-character replies; `None` when `OpenRouter` is not configured.
     #[cfg(feature = "llm-captions")]
     replies: Option<ReplyResponder>,
+    status: Arc<BotStatus>,
 }
 
 #[tokio::main]
@@ -109,6 +111,7 @@ async fn main() -> color_eyre::Result<()> {
     let media_cache = MediaCache::new(pool.clone());
     let media_posts = MediaPosts::new(pool.clone());
     info!("database initialized");
+    let status = Arc::new(BotStatus::new(handlers.clone(), media_cache.clone()));
 
     #[cfg(feature = "bingo")]
     let bingo_store = BingoStore::new(pool);
@@ -135,6 +138,7 @@ async fn main() -> color_eyre::Result<()> {
         telegram_files,
         #[cfg(feature = "llm-captions")]
         replies,
+        status,
     };
 
     #[cfg_attr(not(feature = "bingo"), allow(unused_mut))]
@@ -234,6 +238,7 @@ async fn message_handler(
                     chat_id: state.admin_chat_id,
                     handlers: &handlers,
                     cache: &cache,
+                    status: &state.status,
                 },
                 #[cfg(feature = "bingo")]
                 &bingo_store,
@@ -319,6 +324,7 @@ async fn process_message(
 ) {
     for link in handlers.extract(msg.text(), msg.caption()) {
         if let Err(err) = handlers.handle(bot, msg, &link, cache, media_posts).await {
+            handlers.stats().record_failure(link.platform);
             report_media_failure(bot, msg.chat.id, admin_chat_id, &link, &err).await;
         }
     }

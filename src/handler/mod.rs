@@ -16,9 +16,10 @@ use crate::{
             Delivery, DeliveryFailure, compose_caption, send_media, should_include_source_text,
             too_large_notice,
         },
-        link::{extract_media_links, normalize_cache_key},
+        link::{extract_media_links, is_instagram_video_url, normalize_cache_key},
     },
     media_posts::MediaPosts,
+    status::{MediaStats, ReelOutcome},
 };
 #[cfg(feature = "llm-captions")]
 use crate::{
@@ -67,6 +68,7 @@ pub struct MediaHandlers {
     downloader: Downloader,
     fitter: MediaFitter,
     comments: Arc<Comments>,
+    stats: MediaStats,
     #[cfg(feature = "llm-captions")]
     captioner: Option<Captioner>,
     #[cfg(feature = "llm-captions")]
@@ -91,6 +93,7 @@ impl MediaHandlers {
             downloader,
             fitter,
             comments,
+            stats: MediaStats::default(),
             #[cfg(feature = "llm-captions")]
             captioner: None,
             #[cfg(feature = "llm-captions")]
@@ -113,6 +116,21 @@ impl MediaHandlers {
 
     pub fn enabled_platforms(&self) -> impl Iterator<Item = Platform> + '_ {
         self.handlers.iter().map(Handler::platform)
+    }
+
+    pub const fn downloader(&self) -> &Downloader {
+        &self.downloader
+    }
+
+    /// Media health counters since startup.
+    pub const fn stats(&self) -> &MediaStats {
+        &self.stats
+    }
+
+    /// The `OpenRouter` model, or `None` when LLM captions are not configured.
+    #[cfg(feature = "llm-captions")]
+    pub fn llm_model(&self) -> Option<&str> {
+        self.captioner.as_ref().map(Captioner::model)
     }
 
     pub fn extract(&self, text: Option<&str>, caption: Option<&str>) -> Vec<MediaLink> {
@@ -200,6 +218,11 @@ impl MediaHandlers {
                 .await?,
         );
         let downloaded = download.supported_media().await?;
+        if link.platform == Platform::Instagram && is_instagram_video_url(&link.original_url) {
+            self.stats.record_instagram_reel(ReelOutcome::from_kinds(
+                downloaded.iter().map(|(_, kind)| *kind),
+            ));
+        }
         let downloaded_count = downloaded.len();
         let fitted = self.fitter.fit(downloaded, download.tempdir.path()).await;
         if fitted.items.is_empty() {

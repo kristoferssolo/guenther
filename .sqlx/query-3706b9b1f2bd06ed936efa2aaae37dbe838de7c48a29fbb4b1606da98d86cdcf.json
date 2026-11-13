@@ -1,0 +1,35 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                substr(url, 1, instr(url, ':') - 1) AS \"prefix!: String\",\n                COUNT(DISTINCT url) AS \"links!: i64\",\n                COUNT(*) AS \"items!: i64\"\n            FROM\n                media_cache\n            GROUP BY\n                1\n            ORDER BY\n                1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "prefix!: String",
+        "ordinal": 0,
+        "type_info": "Null",
+        "origin": "Expression"
+      },
+      {
+        "name": "links!: i64",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": "Expression"
+      },
+      {
+        "name": "items!: i64",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3706b9b1f2bd06ed936efa2aaae37dbe838de7c48a29fbb4b1606da98d86cdcf"
+}
