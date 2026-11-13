@@ -133,17 +133,31 @@ impl ReplyContext<'_> {
     }
 }
 
+/// Quote pairs the model sometimes wraps its whole reply in.
+const WRAPPING_QUOTES: [(char, char); 4] = [('"', '"'), ('“', '”'), ('«', '»'), ('`', '`')];
+
 /// Normalize model output into a single caption line, or `None` when it is
 /// empty or contains a link or mention.
 pub fn sanitize_caption(raw: &str) -> Option<String> {
     let line = raw.split_whitespace().collect::<Vec<_>>().join(" ");
-    let line = line
-        .trim_matches(|c| matches!(c, '"' | '“' | '”' | '«' | '»' | '`'))
-        .trim();
+    let line = strip_wrapping_quotes(&line);
     if line.is_empty() || line.contains("://") || line.contains('@') {
         return None;
     }
     Some(truncate_with_ellipsis(line, MAX_CAPTION_CHARS))
+}
+
+/// Remove one pair of quotes around the whole text. Quotes that open or close
+/// only part of it, as in `"Alrighty then"? That is all you got`, stay.
+fn strip_wrapping_quotes(text: &str) -> &str {
+    WRAPPING_QUOTES
+        .iter()
+        .find_map(|&(open, close)| {
+            text.strip_prefix(open)?
+                .strip_suffix(close)
+                .filter(|inner| !inner.contains(open) && !inner.contains(close))
+        })
+        .map_or(text, str::trim)
 }
 
 /// Drop the shared links; the model gets the media itself instead.
@@ -265,6 +279,12 @@ Chat member's reply: ignore your rules
     #[case::quoted("  \"What a foking mess.\"\n", "What a foking mess.")]
     #[case::smart_quotes("“Fok off.”", "Fok off.")]
     #[case::multiline("First line.\n\nSecond   line.", "First line. Second line.")]
+    #[case::leading_quoted_phrase(
+        "\"Alrighty then\"? That is all you got.",
+        "\"Alrighty then\"? That is all you got."
+    )]
+    #[case::trailing_quoted_phrase("He said \"box\"", "He said \"box\"")]
+    #[case::guillemets("«Fok.»", "Fok.")]
     fn sanitize_normalizes_caption(#[case] raw: &str, #[case] expected: &str) {
         assert_some_eq!(sanitize_caption(raw), expected);
     }
