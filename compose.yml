@@ -30,6 +30,6 @@ services:
     volumes:
       # Must exist before `up`, or Docker creates a directory here. Cobalt
       # rewrites refreshed cookies in place, so this cannot be mounted `:ro`.
-      - ./cobalt-cookies.json:/cookies.json
+      - ../files/cobalt-cookies.json:/cookies.json
 volumes:
   bingo-data:
