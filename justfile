@@ -87,5 +87,5 @@ cobalt-up:
     podman run --rm -p 9000:9000 -e API_URL=http://127.0.0.1:9000/ ghcr.io/imputnet/cobalt:11
 
 [group("container")]
-docker-build:
-    docker build --tag guenther:local .
+podman-build:
+    podman build --tag guenther:local .
