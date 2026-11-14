@@ -199,7 +199,7 @@ pub async fn answer(
                 debug!("Ignoring /purge outside the admin chat");
                 return Ok(());
             }
-            let reply = purge(&input, admin.handlers, admin.cache)
+            let reply = purge(&input, admin.handlers.links(), admin.cache)
                 .await
                 .unwrap_or_else(|err| err.to_string());
             bot.send_message(chat_id, reply).await?

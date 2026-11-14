@@ -1,7 +1,7 @@
 use crate::{
     cache::{CacheError, MediaCache},
     config::Platform,
-    handler::MediaHandlers,
+    handler::LinkExtractor,
     telemetry::ErrorChain,
 };
 use std::fmt::{self, Display, Formatter};
@@ -35,7 +35,7 @@ pub enum PurgeTarget {
 impl PurgeTarget {
     /// Parse a `/purge` argument: `all`, a platform name, or one media link.
     ///
-    /// Links are normalized to their cache key with the enabled `handlers`, so
+    /// Links are normalized to their cache key with the enabled `links`, so
     /// links of disabled platforms are unsupported; their platform name still
     /// works.
     ///
@@ -43,7 +43,7 @@ impl PurgeTarget {
     ///
     /// Returns an error when the argument is empty, or is not `all`, a
     /// platform name, or exactly one supported link.
-    pub fn parse(input: &str, handlers: &MediaHandlers) -> Result<Self, PurgeError> {
+    pub fn parse(input: &str, links: &LinkExtractor) -> Result<Self, PurgeError> {
         let input = input.trim();
         if input.is_empty() {
             return Err(PurgeError::MissingTarget);
@@ -59,7 +59,7 @@ impl PurgeTarget {
         if input.contains(char::is_whitespace) {
             return Err(PurgeError::UnsupportedTarget(input.to_owned()));
         }
-        match handlers.extract(Some(input), None).as_slice() {
+        match links.extract(Some(input), None).as_slice() {
             [link] => Ok(Self::CacheKey(link.cache_key.clone())),
             _ => Err(PurgeError::UnsupportedTarget(input.to_owned())),
         }
@@ -96,10 +96,10 @@ impl Display for PurgeTarget {
 /// Returns an error when the argument is invalid or the database query fails.
 pub async fn purge(
     input: &str,
-    handlers: &MediaHandlers,
+    links: &LinkExtractor,
     cache: &MediaCache,
 ) -> Result<String, PurgeError> {
-    let target = PurgeTarget::parse(input, handlers)?;
+    let target = PurgeTarget::parse(input, links)?;
     let deleted = target.purge(cache).await.inspect_err(
         |err| error!(error = %ErrorChain(err), %target, "Failed to purge the media cache"),
     )?;
@@ -121,28 +121,13 @@ fn platform_names() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        cache::CachedMedia,
-        comments::Comments,
-        config::{CobaltConfig, FfmpegConfig, PlatformConfig},
-        db,
-        download::platform::Downloader,
-        ffmpeg::Ffmpeg,
-        handler::{MediaFitter, UploadLimits},
-        utils::MediaKind,
-    };
+    use crate::{cache::CachedMedia, config::PlatformConfig, db, utils::MediaKind};
     use claims::{assert_none, assert_ok, assert_ok_eq, assert_some};
     use rstest::rstest;
-    use std::{assert_matches, sync::Arc};
+    use std::assert_matches;
 
-    fn handlers() -> MediaHandlers {
-        let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
-        assert_ok!(MediaHandlers::new(
-            &PlatformConfig::default(),
-            downloader,
-            MediaFitter::new(Ffmpeg::new(&FfmpegConfig::default()), UploadLimits::CLOUD),
-            Arc::new(Comments::default()),
-        ))
+    fn links() -> LinkExtractor {
+        assert_ok!(LinkExtractor::new(&PlatformConfig::default()))
     }
 
     async fn cache() -> MediaCache {
@@ -170,7 +155,7 @@ mod tests {
         PurgeTarget::CacheKey("twitter:status:123".to_owned())
     )]
     fn parses_targets(#[case] input: &str, #[case] expected: PurgeTarget) {
-        assert_ok_eq!(PurgeTarget::parse(input, &handlers()), expected);
+        assert_ok_eq!(PurgeTarget::parse(input, &links()), expected);
     }
 
     #[rstest]
@@ -178,7 +163,7 @@ mod tests {
     #[case::blank("   ")]
     fn rejects_missing_targets(#[case] input: &str) {
         assert_matches!(
-            PurgeTarget::parse(input, &handlers()),
+            PurgeTarget::parse(input, &links()),
             Err(PurgeError::MissingTarget)
         );
     }
@@ -191,7 +176,7 @@ mod tests {
     #[case::duplicate_links("https://x.com/a/status/1 https://twitter.com/a/status/1")]
     #[case::link_with_text("https://x.com/a/status/1 please")]
     fn rejects_unsupported_targets(#[case] input: &str) {
-        let err = PurgeTarget::parse(input, &handlers());
+        let err = PurgeTarget::parse(input, &links());
         assert_matches!(&err, Err(PurgeError::UnsupportedTarget(target)) if target == input);
     }
 
@@ -211,7 +196,7 @@ mod tests {
         );
         assert_ok!(cache.put("tiktok:video:1", &[video("c")]).await);
 
-        let reply = purge("https://instagram.com/p/abc/", &handlers(), &cache).await;
+        let reply = purge("https://instagram.com/p/abc/", &links(), &cache).await;
 
         assert_ok_eq!(
             reply,
@@ -228,13 +213,13 @@ mod tests {
     #[case::youtube(Platform::Youtube, "https://youtube.com/shorts/abc")]
     #[tokio::test]
     async fn platform_purge_matches_normalized_keys(#[case] platform: Platform, #[case] url: &str) {
-        let handlers = handlers();
+        let links = links();
         let cache = cache().await;
-        let links = handlers.extract(Some(url), None);
-        let cache_key = &assert_some!(links.first()).cache_key;
+        let extracted = links.extract(Some(url), None);
+        let cache_key = &assert_some!(extracted.first()).cache_key;
         assert_ok!(cache.put(cache_key, &[video("a")]).await);
 
-        let reply = purge(&platform.to_string(), &handlers, &cache).await;
+        let reply = purge(&platform.to_string(), &links, &cache).await;
 
         assert_ok_eq!(reply, format!("Deleted 1 cached media row for {platform}."));
         assert_none!(assert_ok!(cache.get(cache_key).await));

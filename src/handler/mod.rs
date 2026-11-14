@@ -16,7 +16,7 @@ use crate::{
             Delivery, DeliveryFailure, compose_caption, send_media, should_include_source_text,
             too_large_notice,
         },
-        link::{LinkExtractor, is_instagram_video_url},
+        link::is_instagram_video_url,
     },
     media_posts::MediaPosts,
     status::{MediaStats, ReelOutcome},
@@ -42,7 +42,7 @@ use tracing::{info, warn};
 pub use crate::handler::reply::{BotReply, ReplyResponder};
 pub use crate::handler::{
     fit::{MediaFitter, UploadLimits},
-    link::MediaLink,
+    link::{LinkExtractor, MediaLink},
 };
 
 #[derive(Debug, Error)]
@@ -110,6 +110,10 @@ impl MediaHandlers {
 
     pub fn enabled_platforms(&self) -> impl Iterator<Item = Platform> + '_ {
         self.links.platforms()
+    }
+
+    pub const fn links(&self) -> &LinkExtractor {
+        &self.links
     }
 
     pub const fn downloader(&self) -> &Downloader {
