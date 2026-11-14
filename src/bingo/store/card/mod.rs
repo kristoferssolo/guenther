@@ -1,3 +1,4 @@
+mod load;
 mod queries;
 
 use crate::bingo::{
@@ -8,10 +9,13 @@ use crate::bingo::{
     },
     store::{
         BingoStore,
-        card::queries::{
-            NewCell, announce_bingo, card_id_in, card_not_found, delete_or_reject_existing,
-            fetch_active_entry, fetch_card, find_card_id, insert_card, insert_cell,
-            reset_card_state, toggle_cell_mark, update_cell,
+        card::{
+            load::{card_not_found, fetch_card},
+            queries::{
+                NewCell, announce_bingo, card_id_in, delete_or_reject_existing, fetch_active_entry,
+                find_card_id, insert_card, insert_cell, reset_card_state, toggle_cell_mark,
+                update_cell,
+            },
         },
         validation::{ensure_active, ensure_editable},
     },

@@ -1,7 +1,18 @@
 use std::{ffi::OsStr, path::Path};
 use strum::{Display, EnumString, IntoStaticStr};
+use teloxide::types::LinkPreviewOptions;
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::warn;
+
+/// Link preview options that suppress the preview, for replies whose links
+/// should stay plain text
+pub const NO_LINK_PREVIEW: LinkPreviewOptions = LinkPreviewOptions {
+    is_disabled: true,
+    url: None,
+    prefer_small_media: false,
+    prefer_large_media: false,
+    show_above_text: false,
+};
 
 pub const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp"];
 pub const IMAGE_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp"];

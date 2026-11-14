@@ -51,25 +51,24 @@ mod tests {
         BingoStore::new(pool)
     }
 
-    async fn setup_card(store: &BingoStore, owner: &KnownUser) -> Card {
-        assert_ok!(store.observe_user(CHAT_ID, owner).await);
-        assert_ok!(
-            store
-                .create_game(CHAT_ID, "season", "Season", owner.user_id)
-                .await
-        );
-        assert_ok!(
-            store
-                .set_game_state(CHAT_ID, "season", GameState::Active)
-                .await
-        );
+    /// Create an active game with enough entries for a card, named
+    /// `Entry 0` onward
+    async fn setup_active_game(store: &BingoStore, slug: &str, created_by: UserId) {
+        assert_ok!(store.create_game(CHAT_ID, slug, slug, created_by).await);
+        assert_ok!(store.set_game_state(CHAT_ID, slug, GameState::Active).await);
         for index in 0..REQUIRED_ENTRIES {
             assert_ok!(
                 store
-                    .add_entry(CHAT_ID, None, &format!("Entry {index}"))
+                    .add_entry(CHAT_ID, Some(slug), &format!("Entry {index}"))
                     .await
             );
         }
+    }
+
+    /// Generate a card for `owner` in a new default `season` game
+    async fn setup_card(store: &BingoStore, owner: &KnownUser) -> Card {
+        assert_ok!(store.observe_user(CHAT_ID, owner).await);
+        setup_active_game(store, "season", owner.user_id).await;
         assert_ok!(store.generate_card(CHAT_ID, None, owner, false).await)
     }
 
@@ -102,46 +101,13 @@ mod tests {
         let second_owner = user(20, "second");
         assert_ok!(store.observe_user(CHAT_ID, &first_owner).await);
         assert_ok!(store.observe_user(CHAT_ID, &second_owner).await);
-        assert_ok!(
-            store
-                .create_game(CHAT_ID, "season", "Season", first_owner.user_id)
-                .await
-        );
-        assert_ok!(
-            store
-                .set_game_state(CHAT_ID, "season", GameState::Active)
-                .await
-        );
-        for index in 0..REQUIRED_ENTRIES {
-            assert_ok!(
-                store
-                    .add_entry(CHAT_ID, Some("season"), &format!("Season entry {index}"))
-                    .await
-            );
-        }
+        setup_active_game(&store, "season", first_owner.user_id).await;
         let first_card = assert_ok!(
             store
                 .generate_card(CHAT_ID, Some("season"), &first_owner, false)
                 .await
         );
-
-        assert_ok!(
-            store
-                .create_game(CHAT_ID, "sprint", "Sprint", first_owner.user_id)
-                .await
-        );
-        assert_ok!(
-            store
-                .set_game_state(CHAT_ID, "sprint", GameState::Active)
-                .await
-        );
-        for index in 0..REQUIRED_ENTRIES {
-            assert_ok!(
-                store
-                    .add_entry(CHAT_ID, Some("sprint"), &format!("Sprint entry {index}"))
-                    .await
-            );
-        }
+        setup_active_game(&store, "sprint", first_owner.user_id).await;
         let second_card = assert_ok!(
             store
                 .generate_card(CHAT_ID, Some("sprint"), &second_owner, false)

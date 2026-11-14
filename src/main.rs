@@ -13,6 +13,7 @@ use guenther::{
     media_posts::MediaPosts,
     status::BotStatus,
     telemetry::{ErrorChain, setup_logger},
+    utils::NO_LINK_PREVIEW,
     voice_lines::VoiceLines,
 };
 use std::{sync::Arc, time::Instant};
@@ -20,7 +21,7 @@ use teloxide::{
     dispatching::UpdateFilterExt,
     dptree,
     prelude::*,
-    types::{ChatId, InlineQuery, LinkPreviewOptions},
+    types::{ChatId, InlineQuery},
 };
 use tracing::{Instrument, Span, debug, error, error_span, info, warn};
 
@@ -388,13 +389,7 @@ async fn report_media_failure(
     let report = format!("{} failed: {}\n{err}", link.platform, link.original_url);
     if let Err(err) = bot
         .send_message(admin_chat_id, report)
-        .link_preview_options(LinkPreviewOptions {
-            is_disabled: true,
-            url: None,
-            prefer_small_media: false,
-            prefer_large_media: false,
-            show_above_text: false,
-        })
+        .link_preview_options(NO_LINK_PREVIEW)
         .await
     {
         warn!(error = %ErrorChain(&err), "Failed to report the failure to the admin chat");

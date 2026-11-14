@@ -16,7 +16,7 @@ use crate::{
             Delivery, DeliveryFailure, compose_caption, send_media, should_include_source_text,
             too_large_notice,
         },
-        link::{extract_media_links, is_instagram_video_url, normalize_cache_key},
+        link::is_instagram_video_url,
     },
     media_posts::MediaPosts,
     status::{MediaStats, ReelOutcome},
@@ -28,7 +28,7 @@ use crate::{
     llm::Captioner,
     telegram_file::TelegramFiles,
 };
-use regex::{Error as RegexError, Regex};
+use regex::Error as RegexError;
 use std::{result::Result as StdResult, sync::Arc, time::Instant};
 use teloxide::{
     ApiError, Bot, RequestError,
@@ -42,7 +42,7 @@ use tracing::{info, warn};
 pub use crate::handler::reply::{BotReply, ReplyResponder};
 pub use crate::handler::{
     fit::{MediaFitter, UploadLimits},
-    link::MediaLink,
+    link::{LinkExtractor, MediaLink},
 };
 
 #[derive(Debug, Error)]
@@ -56,16 +56,10 @@ pub enum HandlerError {
 
 type Result<T> = StdResult<T, HandlerError>;
 
-#[derive(Debug, Clone)]
-struct Handler {
-    platform: Platform,
-    regex: Regex,
-}
-
 /// Matches supported URLs and dispatches them to the configured downloader.
 #[derive(Debug, Clone)]
 pub struct MediaHandlers {
-    handlers: Arc<[Handler]>,
+    links: LinkExtractor,
     downloader: Downloader,
     fitter: MediaFitter,
     comments: Arc<Comments>,
@@ -88,9 +82,8 @@ impl MediaHandlers {
         fitter: MediaFitter,
         comments: Arc<Comments>,
     ) -> StdResult<Self, RegexError> {
-        let handlers = create_handlers(platforms)?;
         Ok(Self {
-            handlers,
+            links: LinkExtractor::new(platforms)?,
             downloader,
             fitter,
             comments,
@@ -116,7 +109,11 @@ impl MediaHandlers {
     }
 
     pub fn enabled_platforms(&self) -> impl Iterator<Item = Platform> + '_ {
-        self.handlers.iter().map(Handler::platform)
+        self.links.platforms()
+    }
+
+    pub const fn links(&self) -> &LinkExtractor {
+        &self.links
     }
 
     pub const fn downloader(&self) -> &Downloader {
@@ -135,7 +132,7 @@ impl MediaHandlers {
     }
 
     pub fn extract(&self, text: Option<&str>, caption: Option<&str>) -> Vec<MediaLink> {
-        extract_media_links(text, caption, &self.handlers)
+        self.links.extract(text, caption)
     }
 
     /// Reply in the chat of `msg` with the media behind `link`, preferring
@@ -394,34 +391,6 @@ impl MediaHandlers {
     }
 }
 
-impl Handler {
-    fn new(platform: Platform, regex_pattern: &str) -> StdResult<Self, RegexError> {
-        let regex = Regex::new(regex_pattern)?;
-        Ok(Self { platform, regex })
-    }
-
-    const fn platform(&self) -> Platform {
-        self.platform
-    }
-
-    fn try_extract_all(&self, text: &str, source_offset: usize) -> Vec<MediaLink> {
-        self.regex
-            .captures_iter(text)
-            .filter_map(|captures| {
-                let matched = captures.name("url").or_else(|| captures.get(0))?;
-                let original_url = matched.as_str().to_owned();
-                let cache_key = normalize_cache_key(self.platform, &original_url);
-                Some(MediaLink {
-                    platform: self.platform,
-                    original_url,
-                    cache_key,
-                    source_position: source_offset.saturating_add(matched.start()),
-                })
-            })
-            .collect()
-    }
-}
-
 /// Number of items Telegram rejected as too large, or the error that stopped
 /// the delivery otherwise.
 fn rejected_as_too_large(failure: Option<DeliveryFailure>) -> Result<usize> {
@@ -456,128 +425,4 @@ async fn send_too_large(
     )
     .await?;
     Ok(())
-}
-
-fn create_handlers(platforms: &PlatformConfig) -> StdResult<Arc<[Handler]>, RegexError> {
-    let handlers = [
-        Handler::new(
-            Platform::Instagram,
-            r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|(?:[A-Za-z0-9._]+/)?p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
-        ),
-        Handler::new(
-            Platform::Youtube,
-            r"https?://(?:www\.)?youtube\.com\/shorts\/[A-Za-z0-9_-]+(?:\?[^\s]*)?",
-        ),
-        Handler::new(
-            Platform::Twitter,
-            r"https?://(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)/status/(\d{1,20})",
-        ),
-        Handler::new(
-            Platform::Tiktok,
-            r"https?://(?:(?:www\.)?tiktok\.com/@[A-Za-z0-9._-]+/video/\d+(?:\?[^\s]*)?|(?:vm|vt|tt|tik)\.tiktok\.com/[A-Za-z0-9_-]+[/?#]?)",
-        ),
-    ]
-    .into_iter()
-    .collect::<StdResult<Vec<_>, _>>()?;
-    Ok(handlers
-        .into_iter()
-        .filter(|handler| platforms.is_enabled(handler.platform()))
-        .collect::<Vec<_>>()
-        .into())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        config::{CobaltConfig, FfmpegConfig},
-        ffmpeg::Ffmpeg,
-    };
-    use claims::{assert_ok, assert_some};
-
-    fn all_handlers() -> MediaHandlers {
-        let downloader = assert_ok!(Downloader::new(CobaltConfig::default()));
-        assert_ok!(MediaHandlers::new(
-            &PlatformConfig::default(),
-            downloader,
-            MediaFitter::new(Ffmpeg::new(&FfmpegConfig::default()), UploadLimits::CLOUD),
-            Arc::new(Comments::default()),
-        ))
-    }
-
-    fn instagram_handler(handlers: &MediaHandlers) -> &Handler {
-        assert_some!(
-            handlers
-                .handlers
-                .iter()
-                .find(|handler| handler.platform() == Platform::Instagram)
-        )
-    }
-
-    fn original_urls(handler: &Handler, text: &str) -> Vec<String> {
-        handler
-            .try_extract_all(text, 0)
-            .into_iter()
-            .map(|link| link.original_url)
-            .collect()
-    }
-
-    #[test]
-    fn extracts_tiktok_profile_video_url_with_query() {
-        let handlers = all_handlers();
-        let handler = assert_some!(
-            handlers
-                .handlers
-                .iter()
-                .find(|handler| handler.platform() == Platform::Tiktok)
-        );
-        let url = "https://www.tiktok.com/@apple/video/7673917526358641950?is_from_webapp=1&sender_device=pc";
-
-        let links = handler.try_extract_all(url, 0);
-        assert_eq!(
-            links.first().map(|link| link.original_url.as_str()),
-            Some(url)
-        );
-    }
-    #[test]
-    fn extracts_instagram_post_urls() {
-        let handlers = all_handlers();
-        let handler = instagram_handler(&handlers);
-
-        for url in [
-            "https://instagram.com/p/ABC123",
-            "https://instagr.am/p/ABC123",
-            "https://www.instagram.com/f1/p/DcyZobPjRyI/",
-            "https://www.instagram.com/p/Dfevru5oYgb/?xtok=dHpmODA1ampua2lp",
-        ] {
-            assert_eq!(original_urls(handler, url), [url]);
-        }
-    }
-    #[test]
-    fn existing_instagram_reel_and_tv_urls_still_match_with_query_and_fragment() {
-        let handlers = all_handlers();
-        let handler = instagram_handler(&handlers);
-
-        for url in [
-            "https://www.instagram.com/reel/ABC123/?utm_source=share#carousel",
-            "https://instagr.am/tv/ABC123?utm_source=share#tv",
-        ] {
-            assert_eq!(original_urls(handler, url), [url]);
-        }
-    }
-    #[test]
-    fn rejects_non_instagram_paths_and_malformed_urls() {
-        let handlers = all_handlers();
-        let handler = instagram_handler(&handlers);
-
-        for url in [
-            "https://www.instagram.com/photographer",
-            "https://www.instagram.com/stories/photographer/123",
-            "https://www.instagram.com/accounts/login",
-            "https://www.instagram.com/reel/",
-            "https://www.instagram.com/tv/ABC123/extra",
-        ] {
-            assert_eq!(original_urls(handler, url), Vec::<String>::new());
-        }
-    }
 }
