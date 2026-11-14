@@ -12,13 +12,13 @@ use crate::{
     purge::purge,
     status::BotStatus,
     telemetry::ErrorChain,
+    utils::NO_LINK_PREVIEW,
 };
 use chrono::Utc;
 use strum::IntoStaticStr;
 use teloxide::{
     RequestError,
     prelude::*,
-    types::LinkPreviewOptions,
     utils::command::{BotCommands, ParseError},
 };
 use thiserror::Error;
@@ -259,13 +259,7 @@ async fn send_link_stats(
     };
 
     bot.send_message(chat_id, message)
-        .link_preview_options(LinkPreviewOptions {
-            is_disabled: true,
-            url: None,
-            prefer_small_media: false,
-            prefer_large_media: false,
-            show_above_text: false,
-        })
+        .link_preview_options(NO_LINK_PREVIEW)
         .await
 }
 
