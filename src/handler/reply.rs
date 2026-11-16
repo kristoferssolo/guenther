@@ -84,9 +84,12 @@ impl BotReply {
     /// Only the immediate parent is available, since Telegram does not nest
     /// `reply_to_message`; [`ReplyThreads`] recovers the rest of the thread.
     ///
-    /// The first link of the message is read before answering. A mention
-    /// without one falls back to the message it replies to, so
-    /// `@bot thoughts?` on someone else's link reads that link.
+    /// A mention in reply to someone else's message asks for an analysis of
+    /// that message, like `/analysis`, but the answer replies to the mention.
+    ///
+    /// The first link of the message is read before answering. An analysis
+    /// without one falls back to the analysed message, so `@bot thoughts?`
+    /// on someone else's link reads that link.
     pub fn detect(msg: &Message, bot_id: UserId, bot_name: &str) -> Option<Self> {
         let sender = msg.from.as_ref().filter(|user| !user.is_bot)?;
         let reply_text = msg.text().filter(|text| !text.trim().is_empty())?;
@@ -97,19 +100,24 @@ impl BotReply {
             .filter(|parent| parent.forum_topic_created().is_none());
         let bot_parent =
             replied_to.filter(|parent| parent.from.as_ref().is_some_and(|user| user.id == bot_id));
-        let target = match bot_parent {
-            Some(parent) => ReplyTarget::Thread(BotMessage {
+        let target = match (bot_parent, replied_to) {
+            (Some(parent), _) => ReplyTarget::Thread(BotMessage {
                 message_id: parent.id,
                 text: message_text(parent),
                 media: extract_cached_media(parent, MediaKind::Video)
                     .or_else(|| extract_cached_media(parent, MediaKind::Image)),
             }),
-            None if mentions(msg, bot_name) => ReplyTarget::Mention,
-            None => return None,
+            (None, _) if !mentions(msg, bot_name) => return None,
+            (None, Some(subject)) => ReplyTarget::Analysis {
+                subject: AnalysedMessage::new(subject, bot_id),
+                request_id: msg.id,
+                request_text: reply_text.to_owned(),
+            },
+            (None, None) => ReplyTarget::Mention,
         };
         let link = first_link(msg).or_else(|| {
             replied_to
-                .filter(|_| target == ReplyTarget::Mention)
+                .filter(|_| matches!(target, ReplyTarget::Analysis { .. }))
                 .and_then(first_link)
         });
         Some(Self {
@@ -133,18 +141,6 @@ impl BotReply {
         let subject = msg
             .reply_to_message()
             .filter(|parent| parent.forum_topic_created().is_none())?;
-        let speaker = match &subject.from {
-            Some(user) if user.id == bot_id => Speaker::Guenther,
-            Some(user) => Speaker::Member(user.first_name.clone()),
-            None => Speaker::Member(
-                subject
-                    .sender_chat
-                    .as_ref()
-                    .and_then(|chat| chat.title())
-                    .unwrap_or("Someone")
-                    .to_owned(),
-            ),
-        };
         Some(Self {
             chat_id: msg.chat.id,
             message_id: subject.id,
@@ -152,14 +148,7 @@ impl BotReply {
             replier_name: sender.first_name.clone(),
             reply_text: question.trim().to_owned(),
             target: ReplyTarget::Analysis {
-                subject: AnalysedMessage {
-                    message_id: subject.id,
-                    message: ThreadMessage {
-                        speaker,
-                        text: message_text(subject),
-                    },
-                    media: analysed_media(subject),
-                },
+                subject: AnalysedMessage::new(subject, bot_id),
                 request_id: msg.id,
                 request_text: format!("/analysis {}", question.trim())
                     .trim_end()
@@ -213,6 +202,32 @@ impl BotReply {
             answer_text: text,
             media,
             at: Utc::now(),
+        }
+    }
+}
+
+impl AnalysedMessage {
+    /// `msg` with its text and media, attributed to Guenther when `bot_id`
+    /// sent it.
+    fn new(msg: &Message, bot_id: UserId) -> Self {
+        let speaker = match &msg.from {
+            Some(user) if user.id == bot_id => Speaker::Guenther,
+            Some(user) => Speaker::Member(user.first_name.clone()),
+            None => Speaker::Member(
+                msg.sender_chat
+                    .as_ref()
+                    .and_then(|chat| chat.title())
+                    .unwrap_or("Someone")
+                    .to_owned(),
+            ),
+        };
+        Self {
+            message_id: msg.id,
+            message: ThreadMessage {
+                speaker,
+                text: message_text(msg),
+            },
+            media: analysed_media(msg),
         }
     }
 }
@@ -591,8 +606,15 @@ mod tests {
     #[rstest]
     #[case::standalone("u here @guenther_steiner_bot ?", 7, json!({}))]
     #[case::any_case("@Guenther_Steiner_Bot box?", 0, json!({}))]
-    #[case::in_reply_to_another_user("@guenther_steiner_bot thoughts?", 0, json!({
-        "reply_to_message": bot_message(&json!({ "from": user(8, false), "text": "Box. Now." })),
+    #[case::plain_message_in_a_topic("@guenther_steiner_bot box?", 0, json!({
+        "message_thread_id": 5,
+        "is_topic_message": true,
+        "reply_to_message": bot_message(&json!({
+            "message_id": 5,
+            "message_thread_id": 5,
+            "is_topic_message": true,
+            "forum_topic_created": { "name": "Race day", "icon_color": 7_322_096 },
+        })),
     }))]
     fn detects_mention_of_the_bot(#[case] text: &str, #[case] offset: usize, #[case] extra: Value) {
         let mut content = json!({
@@ -604,6 +626,43 @@ mod tests {
 
         let reply = assert_some!(BotReply::detect(&msg, BOT_ID, BOT_NAME));
         assert_eq!(reply.target, ReplyTarget::Mention);
+    }
+
+    #[test]
+    fn mention_in_reply_to_a_members_photo_analyses_it() {
+        let msg = message(
+            &person(),
+            &json!({
+                "text": "@guenther_steiner_bot thoughts?",
+                "entities": [{ "type": "mention", "offset": 0, "length": 21 }],
+                "reply_to_message": bot_message(&json!({
+                    "from": { "id": 8, "is_bot": false, "first_name": "Janis" },
+                    "photo": [{ "file_id": "p", "file_unique_id": "p", "file_size": 1, "width": 90, "height": 60 }],
+                })),
+            }),
+        );
+
+        let reply = assert_some!(BotReply::detect(&msg, BOT_ID, BOT_NAME));
+
+        assert_eq!(reply.message_id, MessageId(2));
+        assert_eq!(
+            reply.target,
+            ReplyTarget::Analysis {
+                subject: AnalysedMessage {
+                    message_id: MessageId(1),
+                    message: ThreadMessage {
+                        speaker: Speaker::Member("Janis".to_owned()),
+                        text: None,
+                    },
+                    media: Some(CachedMedia {
+                        kind: MediaKind::Image,
+                        file_id: "p".to_owned(),
+                    }),
+                },
+                request_id: MessageId(2),
+                request_text: "@guenther_steiner_bot thoughts?".to_owned(),
+            }
+        );
     }
 
     fn url_entity(offset: usize, length: usize) -> Value {
