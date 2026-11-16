@@ -94,6 +94,8 @@ const fn is_public_v6(ip: Ipv6Addr) -> bool {
         || (first & 0xfe00) == 0xfc00
         // fe80::/10, link-local.
         || (first & 0xffc0) == 0xfe80
+        // fec0::/10, deprecated site-local.
+        || (first & 0xffc0) == 0xfec0
         // 2001:db8::/32, documentation.
         || (first == 0x2001 && second == 0x0db8))
 }
@@ -125,6 +127,7 @@ mod tests {
     #[case::v6_loopback("::1")]
     #[case::v6_unique_local("fd00::1")]
     #[case::v6_link_local("fe80::1")]
+    #[case::v6_site_local("fec0::1")]
     #[case::mapped_loopback("::ffff:127.0.0.1")]
     #[case::nat64_private("64:ff9b::a00:1")]
     fn rejects_non_public_addresses(#[case] ip: &str) {
