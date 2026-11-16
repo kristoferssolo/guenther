@@ -14,6 +14,8 @@ pub mod inline;
 pub mod llm;
 pub mod media_posts;
 pub mod purge;
+#[cfg(feature = "llm-captions")]
+pub mod reply_threads;
 pub mod status;
 pub mod telegram_file;
 pub mod telemetry;

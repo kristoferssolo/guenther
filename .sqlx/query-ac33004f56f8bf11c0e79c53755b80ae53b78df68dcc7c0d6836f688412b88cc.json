@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO\n            reply_messages (\n                chat_id,\n                message_id,\n                parent_message_id,\n                member_name,\n                text,\n                media_kind,\n                media_file_id,\n                created_at\n            )\n        VALUES\n            (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (chat_id, message_id) DO\n        UPDATE\n        SET\n            text = excluded.text\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "ac33004f56f8bf11c0e79c53755b80ae53b78df68dcc7c0d6836f688412b88cc"
+}

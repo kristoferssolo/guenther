@@ -6,7 +6,7 @@ pub use crate::media_posts::{
     report::{LinkStats, ShareCount},
 };
 
-use crate::handler::MediaLink;
+use crate::{db, handler::MediaLink};
 use chrono::{DateTime, Utc};
 use sqlx::{SqliteConnection, SqlitePool};
 use teloxide::types::{Chat, ChatId, Message, MessageId};
@@ -90,7 +90,7 @@ impl MediaPosts {
         let chat_id = post.chat_id.0;
         let message_id = i64::from(post.message_id.0);
         let platform = post.link.platform.to_string();
-        let created_at = db_timestamp(post.shared_at);
+        let created_at = db::timestamp(post.shared_at);
         sqlx::query!(
             r#"
             INSERT INTO
@@ -148,7 +148,7 @@ impl MediaPosts {
         period: StatsPeriod,
         now: DateTime<Utc>,
     ) -> Result<LinkStats> {
-        let since = period.since(now).map(db_timestamp);
+        let since = period.since(now).map(db::timestamp);
         let mut transaction = self.pool.begin().await?;
         let senders = top_senders(&mut transaction, chat_id, since.as_deref()).await?;
         let platforms = platform_counts(&mut transaction, chat_id, since.as_deref()).await?;
@@ -290,15 +290,10 @@ fn chat_name(chat: &Chat) -> String {
         .to_owned()
 }
 
-/// Match SQLite's `CURRENT_TIMESTAMP` format so text comparisons order by time.
-fn db_timestamp(time: DateTime<Utc>) -> String {
-    time.format("%Y-%m-%d %H:%M:%S").to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::Platform, db};
+    use crate::config::Platform;
     use chrono::TimeZone;
     use claims::{assert_ok, assert_ok_eq, assert_some};
     use serde_json::json;

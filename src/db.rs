@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use sqlx::{
     SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
@@ -48,6 +49,12 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool> {
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(pool)
+}
+
+/// Format `time` like SQLite's `CURRENT_TIMESTAMP`, so text comparisons of
+/// stored timestamps order by time.
+pub fn timestamp(time: DateTime<Utc>) -> String {
+    time.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
 async fn create_database_parent(database_url: &str) -> Result<()> {

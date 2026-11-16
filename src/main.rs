@@ -32,7 +32,9 @@ use tracing::{Instrument, Span, debug, error, error_span, info, warn};
 ))]
 use guenther::telegram_file::TelegramFiles;
 #[cfg(feature = "llm-captions")]
-use guenther::{handler::ReplyResponder, llm::Captioner};
+use guenther::{handler::ReplyResponder, llm::Captioner, reply_threads::ReplyThreads};
+#[cfg(feature = "llm-captions")]
+use sqlx::SqlitePool;
 #[cfg(feature = "llm-captions")]
 use teloxide::types::Me;
 
@@ -103,6 +105,11 @@ async fn main() -> color_eyre::Result<()> {
         "Bot starting"
     );
 
+    let pool = db::connect(&config.database_url).await?;
+    let media_cache = MediaCache::new(pool.clone());
+    let media_posts = MediaPosts::new(pool.clone());
+    info!("Database ready");
+
     let downloader = Downloader::new(config.cobalt.clone())?;
     let handlers = MediaHandlers::new(
         &config.platforms,
@@ -111,17 +118,14 @@ async fn main() -> color_eyre::Result<()> {
         comments.clone(),
     )?;
     #[cfg(feature = "llm-captions")]
-    let (handlers, replies) = enable_llm(handlers, &config, &comments, &telegram_files, &me)?;
+    let (handlers, replies) =
+        enable_llm(handlers, &config, &comments, &telegram_files, &pool, &me)?;
     let enabled_platforms = handlers
         .enabled_platforms()
         .map(|platform| platform.to_string())
         .collect::<Vec<_>>();
     info!(?enabled_platforms, "Platform handlers configured");
 
-    let pool = db::connect(&config.database_url).await?;
-    let media_cache = MediaCache::new(pool.clone());
-    let media_posts = MediaPosts::new(pool.clone());
-    info!("Database ready");
     let status = Arc::new(BotStatus::new(handlers.clone(), media_cache.clone()));
 
     #[cfg(feature = "bingo")]
@@ -178,6 +182,7 @@ fn enable_llm(
     config: &Config,
     comments: &Arc<Comments>,
     files: &TelegramFiles,
+    pool: &SqlitePool,
     me: &Me,
 ) -> color_eyre::Result<(MediaHandlers, Option<ReplyResponder>)> {
     let Some(openrouter) = &config.openrouter else {
@@ -194,6 +199,7 @@ fn enable_llm(
     let replies = ReplyResponder::new(
         captioner.clone(),
         files.clone(),
+        ReplyThreads::new(pool.clone()),
         me.id,
         me.username().into(),
         openrouter.reply_cooldown,
