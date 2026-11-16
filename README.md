@@ -133,7 +133,14 @@ answer the same way, from only the sender's name and text. Telegram only
 exposes the message that was replied to, so the bot stores each exchange in
 the `reply_messages` table. A reply to one of its answers sends the model the
 last 12 messages of that thread and the media that started it. Stored messages
-are dropped after 14 days. Each chat gets at most one answer per `OPENROUTER_REPLY_COOLDOWN_SECS`;
+are dropped after 14 days.
+
+When the reply or mention contains a link, or a mention replies to someone
+else's message with one, the bot reads the first linked page: its title,
+description, site name, and up to 4000 characters of article paragraphs. Only
+public `http(s)` addresses are fetched, also after redirects, so chat links
+cannot reach the bot's own network. Pages that fail to load are passed on as
+unreadable. Each chat gets at most one answer per `OPENROUTER_REPLY_COOLDOWN_SECS`;
 replies during the cooldown, replies from other bots, and model failures get no
 answer. A reply or mention that also contains a supported link is handled as a
 media link instead.

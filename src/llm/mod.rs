@@ -27,10 +27,12 @@ use crate::{
         },
     },
     utils::MediaKind,
+    web_page::WebPage,
 };
 use std::{sync::Arc, time::Duration};
 use tempfile::tempdir;
 use tracing::debug;
+use url::Url;
 
 /// Everything the model sees about one shared link.
 #[derive(Debug, Clone)]
@@ -58,6 +60,14 @@ pub struct ThreadMessage {
     pub text: Option<String>,
 }
 
+/// A web page linked in the conversation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkedPage {
+    pub url: Url,
+    /// `None` when the page could not be read.
+    pub page: Option<WebPage>,
+}
+
 /// Everything the model sees about a chat member's reply to Guenther.
 #[derive(Debug, Clone)]
 pub struct ReplyRequest {
@@ -68,6 +78,8 @@ pub struct ReplyRequest {
     pub media: Vec<LocalMedia>,
     pub replier_name: Option<String>,
     pub reply_text: String,
+    /// The page the chat member linked, if any.
+    pub linked_page: Option<LinkedPage>,
 }
 
 /// Writes captions in Guenther's voice from post context and media.
@@ -152,6 +164,7 @@ impl Captioner {
             thread: &request.thread,
             replier_name: request.replier_name.as_deref(),
             reply_text: &request.reply_text,
+            linked_page: request.linked_page.as_ref(),
             style_examples: &style_examples,
             visual_count: visuals.len(),
         };

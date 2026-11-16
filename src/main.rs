@@ -32,7 +32,9 @@ use tracing::{Instrument, Span, debug, error, error_span, info, warn};
 ))]
 use guenther::telegram_file::TelegramFiles;
 #[cfg(feature = "llm-captions")]
-use guenther::{handler::ReplyResponder, llm::Captioner, reply_threads::ReplyThreads};
+use guenther::{
+    handler::ReplyResponder, llm::Captioner, reply_threads::ReplyThreads, web_page::PageFetcher,
+};
 #[cfg(feature = "llm-captions")]
 use sqlx::SqlitePool;
 #[cfg(feature = "llm-captions")]
@@ -200,6 +202,7 @@ fn enable_llm(
         captioner.clone(),
         files.clone(),
         ReplyThreads::new(pool.clone()),
+        PageFetcher::new()?,
         me.id,
         me.username().into(),
         openrouter.reply_cooldown,

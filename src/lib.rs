@@ -21,3 +21,5 @@ pub mod telegram_file;
 pub mod telemetry;
 pub mod utils;
 pub mod voice_lines;
+#[cfg(feature = "llm-captions")]
+pub mod web_page;
