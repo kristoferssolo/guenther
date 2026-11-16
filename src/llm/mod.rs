@@ -70,16 +70,28 @@ pub struct LinkedPage {
     pub page: Option<WebPage>,
 }
 
+/// What a chat member's message to Guenther responds to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Conversation {
+    /// Earlier messages of the thread, oldest first, ending with Guenther's
+    /// message that was replied to.
+    Thread(Vec<ThreadMessage>),
+    /// A mention of Guenther outside of a thread.
+    Mention,
+    /// A chat message the member asked Guenther to analyse with `/analysis`.
+    Analysis(ThreadMessage),
+}
+
 /// Everything the model sees about a chat member's reply to Guenther.
 #[derive(Debug, Clone)]
 pub struct ReplyRequest {
-    /// Earlier messages of the thread, oldest first, ending with Guenther's
-    /// message that was replied to. Empty for a mention.
-    pub thread: Vec<ThreadMessage>,
-    /// Media Guenther posted when the thread started.
+    pub conversation: Conversation,
+    /// Media Guenther posted when the thread started, or the media of the
+    /// analysed message.
     pub media: Vec<LocalMedia>,
     pub replier_id: Option<UserId>,
     pub replier_name: Option<String>,
+    /// The member's message, or the question asked with `/analysis`.
     pub reply_text: String,
     /// The page the chat member linked, if any.
     pub linked_page: Option<LinkedPage>,
@@ -178,7 +190,7 @@ impl Captioner {
         let visuals = self.tools.prepare(&request.media, work_dir.path()).await;
         let style_examples = self.comments.sample(STYLE_EXAMPLE_COUNT);
         let context = ReplyContext {
-            thread: &request.thread,
+            conversation: &request.conversation,
             replier_name: request.replier_name.as_deref(),
             replier_is_owner: self.is_owner(request.replier_id),
             reply_text: &request.reply_text,

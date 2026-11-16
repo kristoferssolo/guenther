@@ -276,6 +276,8 @@ async fn message_handler(
                         cache: &cache,
                         status: &state.status,
                     },
+                    #[cfg(feature = "llm-captions")]
+                    replies: state.replies.as_ref(),
                     #[cfg(feature = "bingo")]
                     bingo_store: &bingo_store,
                     #[cfg(feature = "bingo")]
