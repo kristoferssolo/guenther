@@ -2,7 +2,7 @@ use crate::{
     cache::CachedMedia,
     handler::{caption::fetch_cached, delivery::extract_cached_media},
     llm::{Captioner, Conversation, LinkedPage, LlmError, ReplyRequest, Speaker, ThreadMessage},
-    reply_threads::{BotMessage, Exchange, ReplyThreads, Thread},
+    reply_threads::{BotMessage, Exchange, Parent, ReplyThreads, Thread},
     telegram_file::TelegramFiles,
     telemetry::ErrorChain,
     utils::MediaKind,
@@ -58,8 +58,14 @@ enum ReplyTarget {
     /// The bot's message that was replied to.
     Thread(BotMessage),
     Mention,
-    /// The message that `/analysis` replied to.
-    Analysis(AnalysedMessage),
+    Analysis {
+        /// The message that `/analysis` replied to.
+        subject: AnalysedMessage,
+        /// The `/analysis` message itself.
+        request_id: MessageId,
+        /// The request as remembered in the thread, with its question.
+        request_text: String,
+    },
 }
 
 /// A chat message the bot is asked to analyse.
@@ -145,63 +151,69 @@ impl BotReply {
             replier_id: sender.id,
             replier_name: sender.first_name.clone(),
             reply_text: question.trim().to_owned(),
-            target: ReplyTarget::Analysis(AnalysedMessage {
-                message_id: subject.id,
-                message: ThreadMessage {
-                    speaker,
-                    text: message_text(subject),
+            target: ReplyTarget::Analysis {
+                subject: AnalysedMessage {
+                    message_id: subject.id,
+                    message: ThreadMessage {
+                        speaker,
+                        text: message_text(subject),
+                    },
+                    media: analysed_media(subject),
                 },
-                media: analysed_media(subject),
-            }),
+                request_id: msg.id,
+                request_text: format!("/analysis {}", question.trim())
+                    .trim_end()
+                    .to_owned(),
+            },
             link: first_link(msg).or_else(|| first_link(subject)),
         })
     }
 
     /// The exchange to remember once `answer` was sent with `text`, so
-    /// replies to the answer keep its context. `None` for an analysis of the
-    /// bot's own message, which has no member message to store.
+    /// replies to the answer keep its context. An analysis is remembered as
+    /// the analysed message, the `/analysis` request, and the answer.
     fn exchange<'a>(
         &'a self,
         answer: &'a Message,
         text: &'a str,
         media: Option<&'a CachedMedia>,
-    ) -> Option<Exchange<'a>> {
-        let (parent, member_message_id, member_name, member_text) = match &self.target {
+    ) -> Exchange<'a> {
+        let (parent, member_message_id, member_text) = match &self.target {
             ReplyTarget::Thread(parent) => (
-                Some(parent),
+                Some(Parent::from(parent)),
                 self.message_id,
-                self.replier_name.as_str(),
                 self.reply_text.as_str(),
             ),
-            ReplyTarget::Mention => (
-                None,
-                self.message_id,
-                self.replier_name.as_str(),
-                self.reply_text.as_str(),
+            ReplyTarget::Mention => (None, self.message_id, self.reply_text.as_str()),
+            ReplyTarget::Analysis {
+                subject,
+                request_id,
+                request_text,
+            } => (
+                Some(Parent {
+                    message_id: subject.message_id,
+                    member_name: match &subject.message.speaker {
+                        Speaker::Guenther => None,
+                        Speaker::Member(name) => Some(name),
+                    },
+                    text: subject.message.text.as_deref(),
+                    media: subject.media.as_ref(),
+                }),
+                *request_id,
+                request_text.as_str(),
             ),
-            ReplyTarget::Analysis(subject) => {
-                let Speaker::Member(name) = &subject.message.speaker else {
-                    return None;
-                };
-                (
-                    None,
-                    subject.message_id,
-                    name.as_str(),
-                    subject.message.text.as_deref().unwrap_or_default(),
-                )
-            }
         };
-        Some(Exchange {
+        Exchange {
             chat_id: self.chat_id,
             parent,
             member_message_id,
-            member_name,
+            member_name: &self.replier_name,
             member_text,
             answer_message_id: answer.id,
             answer_text: text,
             media,
             at: Utc::now(),
-        })
+        }
     }
 }
 
@@ -341,9 +353,7 @@ impl ReplyResponder {
             .reply_parameters(ReplyParameters::new(reply.message_id))
             .await?;
 
-        let Some(exchange) = reply.exchange(&answer, &line, media.as_ref()) else {
-            return Ok(());
-        };
+        let exchange = reply.exchange(&answer, &line, media.as_ref());
         if let Err(err) = self.threads.record(&exchange).await {
             warn!(error = %ErrorChain(&err), "Failed to remember the reply thread");
         }
@@ -381,7 +391,7 @@ impl ReplyResponder {
                 (Conversation::Thread(thread.messages), thread.media)
             }
             ReplyTarget::Mention => (Conversation::Mention, None),
-            ReplyTarget::Analysis(subject) => (
+            ReplyTarget::Analysis { subject, .. } => (
                 Conversation::Analysis(subject.message.clone()),
                 subject.media.clone(),
             ),
@@ -759,17 +769,21 @@ mod tests {
         assert_eq!(reply.reply_text, "is he right?");
         assert_eq!(
             reply.target,
-            ReplyTarget::Analysis(AnalysedMessage {
-                message_id: MessageId(1),
-                message: ThreadMessage {
-                    speaker: Speaker::Member("Kristofers".to_owned()),
-                    text: Some("Kowalski, analysis".to_owned()),
+            ReplyTarget::Analysis {
+                subject: AnalysedMessage {
+                    message_id: MessageId(1),
+                    message: ThreadMessage {
+                        speaker: Speaker::Member("Kristofers".to_owned()),
+                        text: Some("Kowalski, analysis".to_owned()),
+                    },
+                    media: Some(CachedMedia {
+                        kind: MediaKind::Video,
+                        file_id: "gif".to_owned(),
+                    }),
                 },
-                media: Some(CachedMedia {
-                    kind: MediaKind::Video,
-                    file_id: "gif".to_owned(),
-                }),
-            })
+                request_id: MessageId(2),
+                request_text: "/analysis is he right?".to_owned(),
+            }
         );
     }
 
@@ -798,14 +812,20 @@ mod tests {
     }
 
     #[test]
-    fn analysis_of_the_bots_message_is_not_remembered() {
+    fn analysis_is_remembered_after_the_analysed_message() {
         let msg = analysis_command(&json!({
             "reply_to_message": bot_message(&json!({ "text": "Box. Now." })),
         }));
         let reply = assert_some!(BotReply::analysis(&msg, BOT_ID, ""));
         let answer = message(&user(BOT_ID.0, true), &json!({ "text": "Fok." }));
 
-        assert_none!(reply.exchange(&answer, "Fok.", None));
+        let exchange = reply.exchange(&answer, "Fok.", None);
+        let parent = assert_some!(exchange.parent);
+        assert_eq!(parent.message_id, MessageId(1));
+        assert_none!(parent.member_name);
+        assert_some_eq!(parent.text, "Box. Now.");
+        assert_eq!(exchange.member_message_id, MessageId(2));
+        assert_eq!(exchange.member_text, "/analysis");
     }
 
     #[rstest]
