@@ -17,7 +17,7 @@ use std::{
 use teloxide::{
     Bot, RequestError,
     prelude::*,
-    types::{ChatId, FileId, MessageId},
+    types::{ChatId, FileId, MessageId, UserId},
 };
 use tempfile::tempdir;
 use thiserror::Error;
@@ -65,6 +65,7 @@ pub(super) struct CaptionJob {
     pub bot: Bot,
     pub files: TelegramFiles,
     pub platform: Platform,
+    pub sender_id: Option<UserId>,
     pub sender_name: Option<String>,
     pub message_text: Option<String>,
     pub media: JobMedia,
@@ -82,6 +83,7 @@ impl CaptionJob {
     async fn generate(self) -> Result<String, CaptionJobError> {
         let mut request = CaptionRequest {
             platform: self.platform,
+            sender_id: self.sender_id,
             sender_name: self.sender_name,
             message_text: self.message_text,
             source_text: None,

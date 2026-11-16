@@ -197,7 +197,14 @@ fn enable_llm(
         reply_cooldown = ?openrouter.reply_cooldown,
         "LLM captions and replies enabled"
     );
-    let captioner = Captioner::new(openrouter, Ffmpeg::new(&config.ffmpeg), comments.clone())?;
+    // `CHAT_ID` is the owner's private chat when it is a user id.
+    let owner = config.chat_id.map(ChatId).and_then(ChatId::as_user);
+    let captioner = Captioner::new(
+        openrouter,
+        Ffmpeg::new(&config.ffmpeg),
+        comments.clone(),
+        owner,
+    )?;
     let replies = ReplyResponder::new(
         captioner.clone(),
         files.clone(),

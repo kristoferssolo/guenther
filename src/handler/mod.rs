@@ -381,6 +381,7 @@ impl MediaHandlers {
             bot: bot.clone(),
             files: self.telegram_files.clone(),
             platform,
+            sender_id: msg.from.as_ref().map(|user| user.id),
             sender_name: msg.from.as_ref().map(|user| user.first_name.clone()),
             message_text: msg.text().or_else(|| msg.caption()).map(str::to_owned),
             media,
