@@ -42,6 +42,7 @@ enum ReplyError {
 pub struct BotReply {
     chat_id: ChatId,
     message_id: MessageId,
+    replier_id: UserId,
     replier_name: String,
     reply_text: String,
     /// The bot's message that was replied to; `None` for a mention.
@@ -89,6 +90,7 @@ impl BotReply {
         Some(Self {
             chat_id: msg.chat.id,
             message_id: msg.id,
+            replier_id: sender.id,
             replier_name: sender.first_name.clone(),
             reply_text: reply_text.to_owned(),
             parent,
@@ -200,6 +202,7 @@ impl ReplyResponder {
         let request = ReplyRequest {
             thread: thread.messages,
             media: fetch_cached(bot, &self.files, thread.media.clone(), fetch_dir.path()).await,
+            replier_id: Some(reply.replier_id),
             replier_name: Some(reply.replier_name.clone()),
             reply_text: reply.reply_text.clone(),
             linked_page,
@@ -342,6 +345,7 @@ mod tests {
         BotReply {
             chat_id: CHAT_ID,
             message_id: MessageId(2),
+            replier_id: UserId(7),
             replier_name: "Kristofers".to_owned(),
             reply_text: "why box now?".to_owned(),
             parent: Some(BotMessage {

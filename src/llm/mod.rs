@@ -30,6 +30,7 @@ use crate::{
     web_page::WebPage,
 };
 use std::{sync::Arc, time::Duration};
+use teloxide::types::UserId;
 use tempfile::tempdir;
 use tracing::debug;
 use url::Url;
@@ -38,6 +39,7 @@ use url::Url;
 #[derive(Debug, Clone)]
 pub struct CaptionRequest {
     pub platform: Platform,
+    pub sender_id: Option<UserId>,
     pub sender_name: Option<String>,
     pub message_text: Option<String>,
     pub source_text: Option<String>,
@@ -76,6 +78,7 @@ pub struct ReplyRequest {
     pub thread: Vec<ThreadMessage>,
     /// Media Guenther posted when the thread started.
     pub media: Vec<LocalMedia>,
+    pub replier_id: Option<UserId>,
     pub replier_name: Option<String>,
     pub reply_text: String,
     /// The page the chat member linked, if any.
@@ -89,21 +92,34 @@ pub struct Captioner {
     tools: MediaTools,
     comments: Arc<Comments>,
     initial_wait: Duration,
+    /// The bot owner, whom Guenther does not insult.
+    owner: Option<UserId>,
 }
 
 impl Captioner {
-    /// Build a captioner that takes its style examples from `comments`.
+    /// Build a captioner that takes its style examples from `comments` and
+    /// goes easy on `owner`.
     ///
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built.
-    pub fn new(config: &OpenRouterConfig, ffmpeg: Ffmpeg, comments: Arc<Comments>) -> Result<Self> {
+    pub fn new(
+        config: &OpenRouterConfig,
+        ffmpeg: Ffmpeg,
+        comments: Arc<Comments>,
+        owner: Option<UserId>,
+    ) -> Result<Self> {
         Ok(Self {
             client: OpenRouterClient::new(&config.api_key, &config.model)?,
             tools: MediaTools::new(ffmpeg, config.video_input),
             comments,
             initial_wait: config.caption_wait,
+            owner,
         })
+    }
+
+    fn is_owner(&self, user: Option<UserId>) -> bool {
+        user.is_some() && user == self.owner
     }
 
     /// The `OpenRouter` model id that writes the captions.
@@ -138,6 +154,7 @@ impl Captioner {
         let context = PromptContext {
             platform: request.platform,
             sender_name: request.sender_name.as_deref(),
+            sender_is_owner: self.is_owner(request.sender_id),
             message_text: request.message_text.as_deref(),
             source_text: request.source_text.as_deref(),
             style_examples: &style_examples,
@@ -163,6 +180,7 @@ impl Captioner {
         let context = ReplyContext {
             thread: &request.thread,
             replier_name: request.replier_name.as_deref(),
+            replier_is_owner: self.is_owner(request.replier_id),
             reply_text: &request.reply_text,
             linked_page: request.linked_page.as_ref(),
             style_examples: &style_examples,

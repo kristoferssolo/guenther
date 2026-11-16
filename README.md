@@ -47,7 +47,7 @@ Required:
 
 Optional:
 
-- `CHAT_ID`: admin/debug chat that receives internal error messages and accepts admin commands such as `/purge` and `/status`
+- `CHAT_ID`: admin/debug chat that receives internal error messages and accepts admin commands such as `/purge` and `/status`. When it is a private chat (a positive user id), that user is the bot owner, whom LLM captions and replies tease but never insult
 - `COBALT_API_URL`: Cobalt processing endpoint; defaults to `http://127.0.0.1:9000/`
 - `COBALT_API_KEY`: API key for a protected external Cobalt instance; omit for the private Compose service
 - `COBALT_PROXY_URL`: HTTP(S) proxy used only by the Compose Cobalt service; useful when a hosting provider's IP is blocked by a media platform
