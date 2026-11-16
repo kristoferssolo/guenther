@@ -42,20 +42,29 @@ pub struct CaptionRequest {
     pub media: Vec<LocalMedia>,
 }
 
-/// How a chat member addressed Guenther.
+/// Who wrote a message in a reply thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Addressed {
-    /// Replied to one of his messages, carrying its text or caption.
-    Reply { bot_message: Option<String> },
-    /// Mentioned his `@username` without replying to him.
-    Mention,
+pub enum Speaker {
+    Guenther,
+    /// A chat member, by first name.
+    Member(String),
+}
+
+/// One earlier message of a reply thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadMessage {
+    pub speaker: Speaker,
+    /// Text or caption; `None` for media sent without one.
+    pub text: Option<String>,
 }
 
 /// Everything the model sees about a chat member's reply to Guenther.
 #[derive(Debug, Clone)]
 pub struct ReplyRequest {
-    pub addressed: Addressed,
-    /// Media of Guenther's message that was replied to; empty for mentions.
+    /// Earlier messages of the thread, oldest first, ending with Guenther's
+    /// message that was replied to. Empty for a mention.
+    pub thread: Vec<ThreadMessage>,
+    /// Media Guenther posted when the thread started.
     pub media: Vec<LocalMedia>,
     pub replier_name: Option<String>,
     pub reply_text: String,
@@ -140,7 +149,7 @@ impl Captioner {
         let visuals = self.tools.prepare(&request.media, work_dir.path()).await;
         let style_examples = self.comments.sample(STYLE_EXAMPLE_COUNT);
         let context = ReplyContext {
-            addressed: &request.addressed,
+            thread: &request.thread,
             replier_name: request.replier_name.as_deref(),
             reply_text: &request.reply_text,
             style_examples: &style_examples,

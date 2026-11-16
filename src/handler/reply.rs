@@ -1,11 +1,12 @@
 use crate::{
-    cache::CachedMedia,
     handler::{caption::fetch_cached, delivery::extract_cached_media},
-    llm::{Addressed, Captioner, LlmError, ReplyRequest},
+    llm::{Captioner, LlmError, ReplyRequest},
+    reply_threads::{BotMessage, Exchange, ReplyThreads, Thread},
     telegram_file::TelegramFiles,
     telemetry::ErrorChain,
     utils::MediaKind,
 };
+use chrono::Utc;
 use std::{
     collections::{HashMap, hash_map::Entry},
     io,
@@ -41,9 +42,8 @@ pub struct BotReply {
     message_id: MessageId,
     replier_name: String,
     reply_text: String,
-    addressed: Addressed,
-    /// Photo or video of the bot's message, fetched back by `file_id`.
-    bot_media: Option<CachedMedia>,
+    /// The bot's message that was replied to; `None` for a mention.
+    parent: Option<BotMessage>,
 }
 
 impl BotReply {
@@ -52,7 +52,7 @@ impl BotReply {
     /// over a mention in the same message.
     ///
     /// Only the immediate parent is available, since Telegram does not nest
-    /// `reply_to_message`.
+    /// `reply_to_message`; [`ReplyThreads`] recovers the rest of the thread.
     pub fn detect(msg: &Message, bot_id: UserId, bot_name: &str) -> Option<Self> {
         let sender = msg.from.as_ref().filter(|user| !user.is_bot)?;
         let reply_text = msg.text().filter(|text| !text.trim().is_empty())?;
@@ -62,18 +62,17 @@ impl BotReply {
             .reply_to_message()
             .filter(|parent| parent.forum_topic_created().is_none())
             .filter(|parent| parent.from.as_ref().is_some_and(|user| user.id == bot_id));
-        let (addressed, bot_media) = match bot_parent {
-            Some(parent) => (
-                Addressed::Reply {
-                    bot_message: parent
-                        .text()
-                        .or_else(|| parent.caption())
-                        .map(str::to_owned),
-                },
-                extract_cached_media(parent, MediaKind::Video)
+        let parent = match bot_parent {
+            Some(parent) => Some(BotMessage {
+                message_id: parent.id,
+                text: parent
+                    .text()
+                    .or_else(|| parent.caption())
+                    .map(str::to_owned),
+                media: extract_cached_media(parent, MediaKind::Video)
                     .or_else(|| extract_cached_media(parent, MediaKind::Image)),
-            ),
-            None if mentions(msg, bot_name) => (Addressed::Mention, None),
+            }),
+            None if mentions(msg, bot_name) => None,
             None => return None,
         };
         Some(Self {
@@ -81,8 +80,7 @@ impl BotReply {
             message_id: msg.id,
             replier_name: sender.first_name.clone(),
             reply_text: reply_text.to_owned(),
-            addressed,
-            bot_media,
+            parent,
         })
     }
 }
@@ -100,11 +98,12 @@ fn mentions(msg: &Message, bot_name: &str) -> bool {
 }
 
 /// Answers replies to and mentions of the bot in character, at most once per
-/// cooldown in each chat.
+/// cooldown in each chat, keeping the context of earlier replies.
 #[derive(Debug, Clone)]
 pub struct ReplyResponder {
     captioner: Captioner,
     files: TelegramFiles,
+    threads: ReplyThreads,
     bot_id: UserId,
     bot_name: Arc<str>,
     cooldown: ChatCooldown,
@@ -114,6 +113,7 @@ impl ReplyResponder {
     pub fn new(
         captioner: Captioner,
         files: TelegramFiles,
+        threads: ReplyThreads,
         bot_id: UserId,
         bot_name: Arc<str>,
         cooldown: Duration,
@@ -121,6 +121,7 @@ impl ReplyResponder {
         Self {
             captioner,
             files,
+            threads,
             bot_id,
             bot_name,
             cooldown: ChatCooldown::new(cooldown),
@@ -140,13 +141,12 @@ impl ReplyResponder {
             debug!("Skipping in-character reply; the chat is cooling down");
             return;
         }
-        let captioner = self.captioner.clone();
-        let files = self.files.clone();
+        let responder = self.clone();
         let bot = bot.clone();
         tokio::spawn(
             async move {
                 let started_at = Instant::now();
-                match send_answer(&bot, &captioner, &files, reply).await {
+                match responder.send_answer(&bot, reply).await {
                     Ok(()) => info!(elapsed = ?started_at.elapsed(), "Sent in-character reply"),
                     Err(err) => warn!(
                         error = %ErrorChain(&err),
@@ -158,26 +158,53 @@ impl ReplyResponder {
             .in_current_span(),
         );
     }
-}
 
-async fn send_answer(
-    bot: &Bot,
-    captioner: &Captioner,
-    files: &TelegramFiles,
-    reply: BotReply,
-) -> Result<(), ReplyError> {
-    let fetch_dir = tempdir()?;
-    let request = ReplyRequest {
-        addressed: reply.addressed,
-        media: fetch_cached(bot, files, reply.bot_media, fetch_dir.path()).await,
-        replier_name: Some(reply.replier_name),
-        reply_text: reply.reply_text,
-    };
-    let line = captioner.reply(&request).await?;
-    bot.send_message(reply.chat_id, line)
-        .reply_parameters(ReplyParameters::new(reply.message_id))
-        .await?;
-    Ok(())
+    async fn send_answer(&self, bot: &Bot, reply: BotReply) -> Result<(), ReplyError> {
+        let thread = self.thread(&reply).await;
+        let fetch_dir = tempdir()?;
+        let request = ReplyRequest {
+            thread: thread.messages,
+            media: fetch_cached(bot, &self.files, thread.media.clone(), fetch_dir.path()).await,
+            replier_name: Some(reply.replier_name.clone()),
+            reply_text: reply.reply_text.clone(),
+        };
+        let line = self.captioner.reply(&request).await?;
+        let answer = bot
+            .send_message(reply.chat_id, &line)
+            .reply_parameters(ReplyParameters::new(reply.message_id))
+            .await?;
+
+        let exchange = Exchange {
+            chat_id: reply.chat_id,
+            parent: reply.parent.as_ref(),
+            member_message_id: reply.message_id,
+            member_name: &reply.replier_name,
+            member_text: &reply.reply_text,
+            answer_message_id: answer.id,
+            answer_text: &line,
+            media: thread.media.as_ref(),
+            at: Utc::now(),
+        };
+        if let Err(err) = self.threads.record(&exchange).await {
+            warn!(error = %ErrorChain(&err), "Failed to remember the reply thread");
+        }
+        Ok(())
+    }
+
+    /// The conversation `reply` continues. Falls back to the replied-to
+    /// message alone when the stored thread cannot be read.
+    async fn thread(&self, reply: &BotReply) -> Thread {
+        let Some(parent) = &reply.parent else {
+            return Thread::default();
+        };
+        self.threads
+            .thread(reply.chat_id, parent)
+            .await
+            .unwrap_or_else(|err| {
+                warn!(error = %ErrorChain(&err), "Failed to load the reply thread");
+                Thread::opening(parent)
+            })
+    }
 }
 
 /// Allows one start per chat in every `interval`.
@@ -217,6 +244,7 @@ impl ChatCooldown {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::CachedMedia;
     use claims::{assert_none, assert_ok, assert_some, assert_some_eq};
     use rstest::rstest;
     use serde_json::{Value, json};
@@ -266,10 +294,11 @@ mod tests {
             message_id: MessageId(2),
             replier_name: "Kristofers".to_owned(),
             reply_text: "why box now?".to_owned(),
-            addressed: Addressed::Reply {
-                bot_message: bot_message.map(str::to_owned),
-            },
-            bot_media,
+            parent: Some(BotMessage {
+                message_id: MessageId(1),
+                text: bot_message.map(str::to_owned),
+                media: bot_media,
+            }),
         }
     }
 
@@ -381,8 +410,7 @@ mod tests {
         let msg = message(&person(), &content);
 
         let reply = assert_some!(BotReply::detect(&msg, BOT_ID, BOT_NAME));
-        assert_eq!(reply.addressed, Addressed::Mention);
-        assert_none!(reply.bot_media);
+        assert_none!(reply.parent);
     }
 
     #[rstest]

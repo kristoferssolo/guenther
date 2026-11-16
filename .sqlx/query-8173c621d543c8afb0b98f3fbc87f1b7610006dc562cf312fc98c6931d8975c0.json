@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT OR IGNORE INTO\n            reply_messages (\n                chat_id,\n                message_id,\n                parent_message_id,\n                member_name,\n                text,\n                media_kind,\n                media_file_id,\n                created_at\n            )\n        VALUES\n            (?, ?, ?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "8173c621d543c8afb0b98f3fbc87f1b7610006dc562cf312fc98c6931d8975c0"
+}
