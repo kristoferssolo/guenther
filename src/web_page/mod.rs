@@ -3,12 +3,16 @@
 //! Links come from chat users, so the client only connects to public
 //! addresses, including after redirects.
 
+mod decode;
 mod extract;
 mod guard;
 
 pub use crate::web_page::extract::WebPage;
 
-use crate::web_page::guard::{PublicResolver, is_allowed_url};
+use crate::web_page::{
+    decode::decode_html,
+    guard::{PublicResolver, is_allowed_url},
+};
 use reqwest::{
     Client, StatusCode,
     header::{ACCEPT, CONTENT_TYPE},
@@ -92,9 +96,10 @@ impl PageFetcher {
             .headers()
             .get(CONTENT_TYPE)
             .and_then(|value| value.to_str().ok())
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .to_owned();
         if !content_type.contains("html") {
-            return Err(WebPageError::NotHtml(content_type.to_owned()));
+            return Err(WebPageError::NotHtml(content_type));
         }
 
         let mut html = Vec::new();
@@ -105,7 +110,7 @@ impl PageFetcher {
                 break;
             }
         }
-        Ok(WebPage::parse(&String::from_utf8_lossy(&html)))
+        Ok(WebPage::parse(&decode_html(&html, &content_type)))
     }
 }
 
