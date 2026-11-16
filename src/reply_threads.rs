@@ -65,12 +65,34 @@ impl Thread {
     }
 }
 
+/// The message an [`Exchange`] continues.
+#[derive(Debug, Clone, Copy)]
+pub struct Parent<'a> {
+    pub message_id: MessageId,
+    /// Sender of a chat member's message; `None` for Guenther's.
+    pub member_name: Option<&'a str>,
+    pub text: Option<&'a str>,
+    pub media: Option<&'a CachedMedia>,
+}
+
+impl<'a> From<&'a BotMessage> for Parent<'a> {
+    fn from(message: &'a BotMessage) -> Self {
+        Self {
+            message_id: message.message_id,
+            member_name: None,
+            text: message.text.as_deref(),
+            media: message.media.as_ref(),
+        }
+    }
+}
+
 /// A chat member's message to Guenther and his answer.
 #[derive(Debug, Clone, Copy)]
 pub struct Exchange<'a> {
     pub chat_id: ChatId,
-    /// Guenther's message that was replied to; `None` for a mention.
-    pub parent: Option<&'a BotMessage>,
+    /// Guenther's message that was replied to, or the message analysed with
+    /// `/analysis`; `None` for a mention.
+    pub parent: Option<Parent<'a>>,
     pub member_message_id: MessageId,
     pub member_name: &'a str,
     pub member_text: &'a str,
@@ -229,9 +251,9 @@ impl ReplyThreads {
                     chat_id,
                     message_id: i64::from(parent.message_id.0),
                     parent_message_id: None,
-                    member_name: None,
-                    text: parent.text.as_deref(),
-                    media: parent.media.as_ref(),
+                    member_name: parent.member_name,
+                    text: parent.text,
+                    media: parent.media,
                     created_at: &created_at,
                 },
             )
@@ -412,7 +434,7 @@ mod tests {
             threads
                 .record(&Exchange {
                     chat_id: CHAT,
-                    parent,
+                    parent: parent.map(Parent::from),
                     member_message_id: MessageId(member_id),
                     member_name: name,
                     member_text: text,
@@ -486,6 +508,44 @@ mod tests {
             Thread {
                 messages: vec![member("Kristofers", "u here?"), guenther("No.")],
                 media: None,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn analysis_keeps_the_analysed_message_and_the_question() {
+        let threads = threads().await;
+        assert_ok!(
+            threads
+                .record(&Exchange {
+                    chat_id: CHAT,
+                    parent: Some(Parent {
+                        message_id: MessageId(1),
+                        member_name: Some("Yorens"),
+                        text: Some("Ferrari or Haas?"),
+                        media: Some(&video()),
+                    }),
+                    member_message_id: MessageId(2),
+                    member_name: "Kristofers",
+                    member_text: "/analysis which one?",
+                    answer_message_id: MessageId(3),
+                    answer_text: "Haas, obviously.",
+                    media: Some(&video()),
+                    at: at(10),
+                })
+                .await
+        );
+        let answer = bot_message(3, "Haas, obviously.", None);
+
+        assert_ok_eq!(
+            threads.thread(CHAT, &answer, at(10)).await,
+            Thread {
+                messages: vec![
+                    member("Yorens", "Ferrari or Haas?"),
+                    member("Kristofers", "/analysis which one?"),
+                    guenther("Haas, obviously."),
+                ],
+                media: Some(video()),
             }
         );
     }

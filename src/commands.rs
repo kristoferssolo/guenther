@@ -1,3 +1,5 @@
+#[cfg(feature = "llm-captions")]
+use crate::handler::ReplyResponder;
 #[cfg(feature = "bingo")]
 use crate::{
     bingo::{AdminCache, BingoError, BingoStore, answer_bingo},
@@ -62,6 +64,10 @@ pub enum Command {
     /// Show link stats for this chat: /stats [week|month|year|all]
     #[command(parse_with = whole_argument)]
     Stats(String),
+    /// Reply to a message for Guenther's analysis: /analysis [your question]
+    #[cfg(feature = "llm-captions")]
+    #[command(parse_with = whole_argument)]
+    Analysis(String),
     /// Show bot health; admin chat only
     #[command(hide)]
     Status,
@@ -104,6 +110,9 @@ pub struct CommandContext<'a> {
     pub f1: &'a F1,
     pub media_posts: &'a MediaPosts,
     pub admin: AdminContext<'a>,
+    /// In-character replies; `None` when `OpenRouter` is not configured.
+    #[cfg(feature = "llm-captions")]
+    pub replies: Option<&'a ReplyResponder>,
     #[cfg(feature = "bingo")]
     pub bingo_store: &'a BingoStore,
     #[cfg(feature = "bingo")]
@@ -150,6 +159,8 @@ pub async fn answer(
         f1,
         media_posts,
         admin,
+        #[cfg(feature = "llm-captions")]
+        replies,
         #[cfg(feature = "bingo")]
         bingo_store,
         #[cfg(feature = "bingo")]
@@ -173,6 +184,27 @@ pub async fn answer(
         Command::Countdown => send_f1_countdown(bot, chat_id, f1).await?,
         Command::Standings => send_f1_standings(bot, chat_id, f1).await?,
         Command::Stats(input) => send_link_stats(bot, chat_id, media_posts, &input).await?,
+        #[cfg(feature = "llm-captions")]
+        Command::Analysis(question) => {
+            let Some(replies) = replies else {
+                bot.send_message(
+                    chat_id,
+                    "Analysis needs OpenRouter, which is not configured.",
+                )
+                .await?;
+                return Ok(());
+            };
+            let Some(analysis) = replies.analysis(message, &question) else {
+                bot.send_message(
+                    chat_id,
+                    "Usage: reply to a message with /analysis [your question]",
+                )
+                .await?;
+                return Ok(());
+            };
+            replies.answer(bot, analysis);
+            return Ok(());
+        }
         Command::Status => {
             if !is_admin_chat(chat_id, admin.chat_id) {
                 debug!("Ignoring /status outside the admin chat");
@@ -303,6 +335,19 @@ mod tests {
         assert_eq!(
             route_message(Some("/purge"), "guenther_bot"),
             RouteAction::HandleCommand(Command::Purge(String::new()))
+        );
+    }
+
+    #[cfg(feature = "llm-captions")]
+    #[test]
+    fn analysis_takes_an_optional_question() {
+        assert_eq!(
+            route_message(Some("/analysis is he right?"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Analysis("is he right?".to_owned()))
+        );
+        assert_eq!(
+            route_message(Some("/analysis@guenther_bot"), "guenther_bot"),
+            RouteAction::HandleCommand(Command::Analysis(String::new()))
         );
     }
 

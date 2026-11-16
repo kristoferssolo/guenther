@@ -351,6 +351,11 @@ The bot currently exposes:
 - `/standings`: show the current F1 driver and constructor standings
 - `/stats [week|month|year|all]`: show this chat's delivered links per sender and per platform, plus links shared more than once; defaults to `all`
 - `/bingo`: show F1 bingo help when built with the `bingo` feature
+- `/analysis [your question]`: as a reply to any message, Guenther analyses its
+  text, first link, and photo, video, or GIF in character, answering the
+  optional question. Needs the `llm-captions` feature and `OpenRouter`, and
+  shares the reply cooldown, so requests during it are dropped. Replies to the
+  analysis continue the conversation.
 - `/status`: show bot health in the admin chat (`CHAT_ID`), one fact per line:
   version, uptime, compiled features, enabled platforms, Cobalt reachability and
   version, LLM caption model, `media_cache` links and items per platform, media
