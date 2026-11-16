@@ -9,13 +9,14 @@ license = "MIT OR Apache-2.0"
 default = []
 bingo = ["dep:image", "dep:noto-sans-mono-bitmap"]
 voice-line-capture = []
-llm-captions = ["dep:base64"]
+llm-captions = ["dep:base64", "dep:encoding_rs", "dep:scraper"]
 
 [dependencies]
 base64 = { version = "0.23", optional = true }
 chrono = "0.4"
 color-eyre = "0.6"
 dotenvy = "0.15"
+encoding_rs = { version = "0.8", optional = true }
 futures = "0.3"
 infer = "0.22"
 image = { version = "0.25", default-features = false, features = [
@@ -39,6 +40,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
   "stream",
 ] }
+scraper = { version = "0.29", default-features = false, optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.9", default-features = false, features = [
@@ -59,6 +61,7 @@ tokio = { version = "1", features = [
   "fs",
   "io-util",
   "macros",
+  "net",
   "process",
   "rt-multi-thread",
   "sync",
