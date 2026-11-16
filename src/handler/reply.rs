@@ -198,7 +198,7 @@ impl ReplyResponder {
             return Thread::default();
         };
         self.threads
-            .thread(reply.chat_id, parent)
+            .thread(reply.chat_id, parent, Utc::now())
             .await
             .unwrap_or_else(|err| {
                 warn!(error = %ErrorChain(&err), "Failed to load the reply thread");

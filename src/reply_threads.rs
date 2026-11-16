@@ -92,67 +92,91 @@ impl ReplyThreads {
         Self { pool }
     }
 
-    /// The thread that `parent` belongs to, or [`Thread::opening`] when it
-    /// is not stored.
+    /// The thread that `parent` belongs to as of `now`, or
+    /// [`Thread::opening`] when it is not stored. Messages older than
+    /// `RETENTION` are left out even before they are pruned.
+    ///
+    /// `parent` keeps its current text, since Guenther's captions can be
+    /// edited after a reply was stored.
     ///
     /// # Errors
     ///
     /// Returns an error when the query fails or a stored row has an invalid
     /// media kind.
-    pub async fn thread(&self, chat_id: ChatId, parent: &BotMessage) -> Result<Thread> {
-        let thread = self.load(chat_id, parent.message_id).await?;
-        if thread.messages.is_empty() {
+    pub async fn thread(
+        &self,
+        chat_id: ChatId,
+        parent: &BotMessage,
+        now: DateTime<Utc>,
+    ) -> Result<Thread> {
+        let mut thread = self.load(chat_id, parent.message_id, now).await?;
+        let Some(last) = thread.messages.last_mut() else {
             return Ok(Thread::opening(parent));
-        }
+        };
+        last.text.clone_from(&parent.text);
         Ok(thread)
     }
 
     /// The stored messages ending with `message_id`, oldest first, at most
-    /// `MAX_THREAD_MESSAGES`. The thread's media is the one stored with
-    /// `message_id`.
-    async fn load(&self, chat_id: ChatId, message_id: MessageId) -> Result<Thread> {
+    /// `MAX_THREAD_MESSAGES` and none older than `RETENTION` before `now`.
+    /// The thread's media is the one stored with `message_id`.
+    async fn load(
+        &self,
+        chat_id: ChatId,
+        message_id: MessageId,
+        now: DateTime<Utc>,
+    ) -> Result<Thread> {
         let message_id = i64::from(message_id.0);
+        let cutoff = retention_cutoff(now);
         let rows = sqlx::query!(
             r#"
-            WITH RECURSIVE
-                thread (
+            WITH RECURSIVE thread (
+                message_id,
+                parent_message_id,
+                member_name,
+                text,
+                media_kind,
+                media_file_id,
+                depth
+            ) AS (
+                SELECT
                     message_id,
                     parent_message_id,
                     member_name,
                     text,
                     media_kind,
                     media_file_id,
-                    depth
-                ) AS (
-                    SELECT
-                        message_id,
-                        parent_message_id,
-                        member_name,
-                        text,
-                        media_kind,
-                        media_file_id,
-                        1
-                    FROM
-                        reply_messages
-                    WHERE
-                        chat_id = ?1
-                        AND message_id = ?2
-                    UNION ALL
-                    SELECT
-                        parent.message_id,
-                        parent.parent_message_id,
-                        parent.member_name,
-                        parent.text,
-                        parent.media_kind,
-                        parent.media_file_id,
-                        thread.depth + 1
-                    FROM
-                        reply_messages AS parent
-                        INNER JOIN thread ON parent.message_id = thread.parent_message_id
-                    WHERE
-                        parent.chat_id = ?1
-                        AND thread.depth < ?3
-                )
+                    1
+                FROM
+                    reply_messages
+                WHERE
+                    chat_id = ?1
+                    AND message_id = ?2
+                    AND (
+                        ?4 IS NULL
+                        OR created_at >= ?4
+                    )
+                UNION
+                ALL
+                SELECT
+                    parent.message_id,
+                    parent.parent_message_id,
+                    parent.member_name,
+                    parent.text,
+                    parent.media_kind,
+                    parent.media_file_id,
+                    thread.depth + 1
+                FROM
+                    reply_messages AS parent
+                    INNER JOIN thread ON parent.message_id = thread.parent_message_id
+                WHERE
+                    parent.chat_id = ?1
+                    AND thread.depth < ?3
+                    AND (
+                        ?4 IS NULL
+                        OR parent.created_at >= ?4
+                    )
+            )
             SELECT
                 member_name AS "member_name?: String",
                 text AS "text?: String",
@@ -166,6 +190,7 @@ impl ReplyThreads {
             chat_id.0,
             message_id,
             MAX_THREAD_MESSAGES,
+            cutoff,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -184,8 +209,8 @@ impl ReplyThreads {
         Ok(Thread { messages, media })
     }
 
-    /// Store `exchange`, and its parent when it starts a thread, then drop
-    /// messages older than `RETENTION`.
+    /// Store `exchange`, and its parent when it starts a thread or its text
+    /// changed, then drop messages older than `RETENTION`.
     ///
     /// # Errors
     ///
@@ -239,7 +264,7 @@ impl ReplyThreads {
         )
         .await?;
 
-        let cutoff = exchange.at.checked_sub_signed(RETENTION).map(db::timestamp);
+        let cutoff = retention_cutoff(exchange.at);
         sqlx::query!(
             r#"
             DELETE FROM
@@ -268,14 +293,15 @@ struct Row<'a> {
     created_at: &'a str,
 }
 
-/// Insert `row` unless its message is already stored, which happens when a
-/// second member replies to the same message of Guenther's.
+/// Insert `row`. When its message is already stored, as when a second
+/// member replies to the same message of Guenther's, only its text is
+/// updated, keeping its place in the thread and its media.
 async fn insert(connection: &mut SqliteConnection, row: Row<'_>) -> Result<()> {
     let media_kind = row.media.map(|media| <&str>::from(media.kind));
     let media_file_id = row.media.map(|media| media.file_id.as_str());
     sqlx::query!(
         r#"
-        INSERT OR IGNORE INTO
+        INSERT INTO
             reply_messages (
                 chat_id,
                 message_id,
@@ -287,7 +313,10 @@ async fn insert(connection: &mut SqliteConnection, row: Row<'_>) -> Result<()> {
                 created_at
             )
         VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?)
+            (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (chat_id, message_id) DO
+        UPDATE
+        SET
+            text = excluded.text
         "#,
         row.chat_id,
         row.message_id,
@@ -301,6 +330,11 @@ async fn insert(connection: &mut SqliteConnection, row: Row<'_>) -> Result<()> {
     .execute(connection)
     .await?;
     Ok(())
+}
+
+/// The oldest timestamp still kept at `now`.
+fn retention_cutoff(now: DateTime<Utc>) -> Option<String> {
+    now.checked_sub_signed(RETENTION).map(db::timestamp)
 }
 
 fn cached_media(kind: Option<&str>, file_id: Option<&str>) -> Result<Option<CachedMedia>> {
@@ -371,7 +405,7 @@ mod tests {
         day: u32,
     ) -> BotMessage {
         let thread = match parent {
-            Some(parent) => assert_ok!(threads.thread(CHAT, parent).await),
+            Some(parent) => assert_ok!(threads.thread(CHAT, parent, at(day)).await),
             None => Thread::default(),
         };
         assert_ok!(
@@ -398,7 +432,7 @@ mod tests {
         let parent = bot_message(1, "Box. Now.", Some(video()));
 
         assert_ok_eq!(
-            threads.thread(CHAT, &parent).await,
+            threads.thread(CHAT, &parent, at(10)).await,
             Thread {
                 messages: vec![guenther("Box. Now.")],
                 media: Some(video()),
@@ -428,7 +462,7 @@ mod tests {
         .await;
 
         assert_ok_eq!(
-            threads.thread(CHAT, &answer).await,
+            threads.thread(CHAT, &answer, at(10)).await,
             Thread {
                 messages: vec![
                     guenther("Box. Now."),
@@ -448,7 +482,7 @@ mod tests {
         let answer = exchange(&threads, None, (1, "Kristofers", "u here?"), (2, "No."), 10).await;
 
         assert_ok_eq!(
-            threads.thread(CHAT, &answer).await,
+            threads.thread(CHAT, &answer, at(10)).await,
             Thread {
                 messages: vec![member("Kristofers", "u here?"), guenther("No.")],
                 media: None,
@@ -478,7 +512,7 @@ mod tests {
         .await;
 
         assert_ok_eq!(
-            threads.thread(CHAT, &other).await,
+            threads.thread(CHAT, &other, at(10)).await,
             Thread {
                 messages: vec![
                     guenther("Box. Now."),
@@ -506,7 +540,7 @@ mod tests {
             .await;
         }
 
-        let thread = assert_ok!(threads.thread(CHAT, &parent).await);
+        let thread = assert_ok!(threads.thread(CHAT, &parent, at(10)).await);
         assert_ok_eq!(i64::try_from(thread.messages.len()), MAX_THREAD_MESSAGES);
         assert_eq!(thread.messages.last(), Some(&guenther("10")));
     }
@@ -524,7 +558,71 @@ mod tests {
         )
         .await;
 
-        assert_ok_eq!(threads.thread(CHAT, &old).await, Thread::opening(&old));
+        assert_ok_eq!(
+            threads.thread(CHAT, &old, at(16)).await,
+            Thread::opening(&old)
+        );
+    }
+
+    #[tokio::test]
+    async fn leaves_out_expired_messages_before_pruning() {
+        let threads = threads().await;
+        let caption = bot_message(1, "Box. Now.", None);
+        let old = exchange(
+            &threads,
+            Some(&caption),
+            (2, "Anna", "why?"),
+            (3, "Tyres."),
+            1,
+        )
+        .await;
+
+        assert_ok_eq!(
+            threads.thread(CHAT, &old, at(16)).await,
+            Thread::opening(&old)
+        );
+    }
+
+    #[tokio::test]
+    async fn uses_the_current_text_of_an_edited_caption() {
+        let threads = threads().await;
+        let caption = bot_message(1, "Static caption.", Some(video()));
+        let answer = exchange(
+            &threads,
+            Some(&caption),
+            (2, "Anna", "why?"),
+            (3, "Tyres."),
+            10,
+        )
+        .await;
+        let edited = bot_message(1, "LLM caption.", Some(video()));
+
+        assert_ok_eq!(
+            threads.thread(CHAT, &edited, at(10)).await,
+            Thread {
+                messages: vec![guenther("LLM caption.")],
+                media: Some(video()),
+            }
+        );
+        exchange(
+            &threads,
+            Some(&edited),
+            (4, "Ben", "lol"),
+            (5, "Fok off."),
+            10,
+        )
+        .await;
+        assert_ok_eq!(
+            threads.thread(CHAT, &answer, at(10)).await,
+            Thread {
+                messages: vec![
+                    guenther("LLM caption."),
+                    member("Anna", "why?"),
+                    guenther("Tyres."),
+                ],
+                media: Some(video()),
+            }
+        );
     }
 
     #[tokio::test]
@@ -533,7 +631,7 @@ mod tests {
         let answer = exchange(&threads, None, (1, "Kristofers", "u here?"), (2, "No."), 10).await;
 
         assert_ok_eq!(
-            threads.thread(ChatId(-200), &answer).await,
+            threads.thread(ChatId(-200), &answer, at(10)).await,
             Thread::opening(&answer)
         );
     }

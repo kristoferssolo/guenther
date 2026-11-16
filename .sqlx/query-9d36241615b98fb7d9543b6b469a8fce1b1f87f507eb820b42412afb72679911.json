@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            WITH RECURSIVE thread (\n                message_id,\n                parent_message_id,\n                member_name,\n                text,\n                media_kind,\n                media_file_id,\n                depth\n            ) AS (\n                SELECT\n                    message_id,\n                    parent_message_id,\n                    member_name,\n                    text,\n                    media_kind,\n                    media_file_id,\n                    1\n                FROM\n                    reply_messages\n                WHERE\n                    chat_id = ?1\n                    AND message_id = ?2\n                    AND (\n                        ?4 IS NULL\n                        OR created_at >= ?4\n                    )\n                UNION\n                ALL\n                SELECT\n                    parent.message_id,\n                    parent.parent_message_id,\n                    parent.member_name,\n                    parent.text,\n                    parent.media_kind,\n                    parent.media_file_id,\n                    thread.depth + 1\n                FROM\n                    reply_messages AS parent\n                    INNER JOIN thread ON parent.message_id = thread.parent_message_id\n                WHERE\n                    parent.chat_id = ?1\n                    AND thread.depth < ?3\n                    AND (\n                        ?4 IS NULL\n                        OR parent.created_at >= ?4\n                    )\n            )\n            SELECT\n                member_name AS \"member_name?: String\",\n                text AS \"text?: String\",\n                media_kind AS \"media_kind?: String\",\n                media_file_id AS \"media_file_id?: String\"\n            FROM\n                thread\n            ORDER BY\n                depth DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "member_name?: String",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "reply_messages",
+            "name": "member_name"
+          }
+        }
+      },
+      {
+        "name": "text?: String",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "reply_messages",
+            "name": "text"
+          }
+        }
+      },
+      {
+        "name": "media_kind?: String",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "reply_messages",
+            "name": "media_kind"
+          }
+        }
+      },
+      {
+        "name": "media_file_id?: String",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "reply_messages",
+            "name": "media_file_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "9d36241615b98fb7d9543b6b469a8fce1b1f87f507eb820b42412afb72679911"
+}
