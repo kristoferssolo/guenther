@@ -129,7 +129,9 @@ The same setup answers text replies to Guenther's own messages in character,
 as a reply to the user's message. The model gets Guenther's message text or
 caption, its photo or video fetched back from Telegram, and the replier's first
 name and text. A text message that mentions the bot's `@username` gets an
-answer the same way, from only the sender's name and text. Telegram only
+answer the same way, from only the sender's name and text. A mention in reply
+to someone else's message is answered like `/analysis` of that message: the
+model also gets its text, caption, photo, video, or GIF. Telegram only
 exposes the message that was replied to, so the bot stores each exchange in
 the `reply_messages` table. A reply to one of its answers sends the model the
 last 12 messages of that thread and the media that started it. Stored messages
