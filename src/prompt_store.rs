@@ -424,7 +424,7 @@ fn render_overview(active: &[ActiveVersion]) -> String {
             None => writeln!(text, "{name} · missing"),
         };
     }
-    text.push_str("Show one with /prompt <name>.");
+    text.push_str("Show one with /prompt &lt;name&gt;.");
     text
 }
 
@@ -647,5 +647,9 @@ mod tests {
             "{overview}"
         );
         assert_eq!(overview.lines().count(), PromptName::VARIANTS.len() + 1);
+        assert!(
+            overview.ends_with("Show one with /prompt &lt;name&gt;."),
+            "{overview}"
+        );
     }
 }
