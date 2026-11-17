@@ -10,14 +10,10 @@ pub struct KnownUser {
 
 impl From<&User> for KnownUser {
     fn from(user: &User) -> Self {
-        let display_name = user.last_name.as_ref().map_or_else(
-            || user.first_name.clone(),
-            |last_name| format!("{} {last_name}", user.first_name),
-        );
         Self {
             user_id: user.id,
             username: user.username.clone(),
-            display_name,
+            display_name: user.full_name(),
         }
     }
 }
