@@ -7,7 +7,11 @@
 //! against instructions in chat messages stay in code, so no edit can drop
 //! them.
 
-use crate::{db, telemetry::ErrorChain, utils::truncate_with_ellipsis};
+use crate::{
+    db,
+    telemetry::ErrorChain,
+    utils::{split_first_word, truncate_with_ellipsis},
+};
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use std::{collections::HashMap, fmt::Write};
@@ -310,12 +314,12 @@ impl PromptCommand {
     /// Returns an error for an unknown prompt name or subcommand, a missing or
     /// malformed argument, or a text over [`MAX_PROMPT_CHARS`].
     pub fn parse(input: &str) -> Result<Self> {
-        let (name, rest) = split_word(input);
+        let (name, rest) = split_first_word(input);
         if name.is_empty() {
             return Ok(Self::Overview);
         }
         let name = name.parse().map_err(|_| PromptError::Usage)?;
-        let (verb, rest) = split_word(rest);
+        let (verb, rest) = split_first_word(rest);
         match verb {
             "" => Ok(Self::Show(name, None)),
             "set" => {
@@ -334,15 +338,6 @@ impl PromptCommand {
             _ => Err(PromptError::Usage),
         }
     }
-}
-
-/// The first word of `input` and the trimmed rest, which keeps its inner
-/// line breaks.
-fn split_word(input: &str) -> (&str, &str) {
-    let input = input.trim();
-    input
-        .split_once(char::is_whitespace)
-        .map_or((input, ""), |(word, rest)| (word, rest.trim()))
 }
 
 fn parse_id(input: &str) -> Result<i64> {

@@ -80,6 +80,15 @@ pub fn text_or_caption(msg: &Message) -> Option<&str> {
     msg.text().or_else(|| msg.caption())
 }
 
+/// The first word of `input` and the trimmed rest, which keeps its inner
+/// line breaks, for parsing command arguments.
+pub fn split_first_word(input: &str) -> (&str, &str) {
+    let input = input.trim();
+    input
+        .split_once(char::is_whitespace)
+        .map_or((input, ""), |(word, rest)| (word, rest.trim()))
+}
+
 /// Truncate text by Unicode scalar values and append `...` when needed.
 pub fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
     if text.chars().count() <= max_chars {
