@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, path::Path};
 use strum::{Display, EnumString, IntoStaticStr};
-use teloxide::types::LinkPreviewOptions;
+use teloxide::types::{LinkPreviewOptions, Message};
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::warn;
 
@@ -73,6 +73,11 @@ pub async fn detect_media_kind(path: &Path) -> Option<MediaKind> {
     }
 
     None
+}
+
+/// The text of `msg`, or the caption of its media.
+pub fn text_or_caption(msg: &Message) -> Option<&str> {
+    msg.text().or_else(|| msg.caption())
 }
 
 /// Truncate text by Unicode scalar values and append `...` when needed.

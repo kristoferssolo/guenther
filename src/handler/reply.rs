@@ -6,7 +6,7 @@ use crate::{
     reply_threads::{BotMessage, Exchange, Parent, ReplyThreads, Thread},
     telegram_file::TelegramFiles,
     telemetry::ErrorChain,
-    utils::MediaKind,
+    utils::{MediaKind, text_or_caption},
     web_page::PageFetcher,
 };
 use chrono::Utc;
@@ -100,7 +100,7 @@ impl BotReply {
         let target = match (bot_parent, replied_to) {
             (Some(parent), _) => ReplyTarget::Thread(BotMessage {
                 message_id: parent.id,
-                text: message_text(parent),
+                text: text_or_caption(parent).map(str::to_owned),
                 media: extract_cached_media(parent, MediaKind::Video)
                     .or_else(|| extract_cached_media(parent, MediaKind::Image)),
             }),
@@ -220,7 +220,7 @@ impl AnalysedMessage {
             message_id: msg.id,
             message: ThreadMessage {
                 speaker,
-                text: message_text(msg),
+                text: text_or_caption(msg).map(str::to_owned),
             },
             media: analysed_media(msg),
         }
@@ -238,10 +238,6 @@ fn human_sender(msg: &Message) -> Option<&User> {
 fn replied_to(msg: &Message) -> Option<&Message> {
     msg.reply_to_message()
         .filter(|parent| parent.forum_topic_created().is_none())
-}
-
-fn message_text(msg: &Message) -> Option<String> {
-    msg.text().or_else(|| msg.caption()).map(str::to_owned)
 }
 
 /// The photo, video, or GIF of `msg`. Telegram sends GIFs as silent MP4s.
