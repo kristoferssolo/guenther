@@ -2,6 +2,7 @@ use crate::{
     cache::CachedMedia,
     handler::{caption::fetch_cached, delivery::extract_cached_media},
     llm::{Captioner, Conversation, LinkedPage, LlmError, ReplyRequest, Speaker, ThreadMessage},
+    prompt_store::PromptStore,
     reply_threads::{BotMessage, Exchange, Parent, ReplyThreads, Thread},
     telegram_file::TelegramFiles,
     telemetry::ErrorChain,
@@ -318,6 +319,11 @@ impl ReplyResponder {
     /// mentions the bot.
     pub fn detect(&self, msg: &Message) -> Option<BotReply> {
         BotReply::detect(msg, self.bot_id, &self.bot_name)
+    }
+
+    /// The store of the system prompts, edited with `/prompt`.
+    pub const fn prompts(&self) -> &PromptStore {
+        self.captioner.prompts()
     }
 
     /// The `/analysis` request in `msg`; see [`BotReply::analysis`].

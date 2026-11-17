@@ -33,7 +33,8 @@ use tracing::{Instrument, Span, debug, error, error_span, info, warn};
 use guenther::telegram_file::TelegramFiles;
 #[cfg(feature = "llm-captions")]
 use guenther::{
-    handler::ReplyResponder, llm::Captioner, reply_threads::ReplyThreads, web_page::PageFetcher,
+    handler::ReplyResponder, llm::Captioner, prompt_store::PromptStore,
+    reply_threads::ReplyThreads, web_page::PageFetcher,
 };
 #[cfg(feature = "llm-captions")]
 use sqlx::SqlitePool;
@@ -203,6 +204,7 @@ fn enable_llm(
         openrouter,
         Ffmpeg::new(&config.ffmpeg),
         comments.clone(),
+        PromptStore::new(pool.clone()),
         owner,
     )?;
     let replies = ReplyResponder::new(

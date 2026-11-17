@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id,\n                text,\n                created_at\n            FROM\n                prompt_versions\n            WHERE\n                name = ?1\n            ORDER BY\n                id DESC\n            LIMIT\n                1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "text",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "text"
+          }
+        }
+      },
+      {
+        "name": "created_at",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "206fb4ee7cea0f955943b0f9879e441b8c1054f9aca812a3cab7cda2e82aeaf3"
+}

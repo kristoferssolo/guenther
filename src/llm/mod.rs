@@ -22,10 +22,11 @@ use crate::{
         media::{LabeledPart, MediaTools},
         openrouter::{ContentPart, OpenRouterClient},
         prompt::{
-            PromptContext, REPLY_SYSTEM_PROMPT, ReplyContext, STYLE_EXAMPLE_COUNT, SYSTEM_PROMPT,
-            sanitize_caption,
+            PromptContext, ReplyContext, STYLE_EXAMPLE_COUNT, caption_system_prompt,
+            reply_system_prompt, sanitize_caption,
         },
     },
+    prompt_store::PromptStore,
     utils::MediaKind,
     web_page::WebPage,
 };
@@ -103,14 +104,15 @@ pub struct Captioner {
     client: OpenRouterClient,
     tools: MediaTools,
     comments: Arc<Comments>,
+    prompts: PromptStore,
     initial_wait: Duration,
     /// The bot owner, whom Guenther does not insult.
     owner: Option<UserId>,
 }
 
 impl Captioner {
-    /// Build a captioner that takes its style examples from `comments` and
-    /// goes easy on `owner`.
+    /// Build a captioner that takes its style examples from `comments`, its
+    /// system prompts from `prompts`, and goes easy on `owner`.
     ///
     /// # Errors
     ///
@@ -119,12 +121,14 @@ impl Captioner {
         config: &OpenRouterConfig,
         ffmpeg: Ffmpeg,
         comments: Arc<Comments>,
+        prompts: PromptStore,
         owner: Option<UserId>,
     ) -> Result<Self> {
         Ok(Self {
             client: OpenRouterClient::new(&config.api_key, &config.model)?,
             tools: MediaTools::new(ffmpeg, config.video_input),
             comments,
+            prompts,
             initial_wait: config.caption_wait,
             owner,
         })
@@ -132,6 +136,11 @@ impl Captioner {
 
     fn is_owner(&self, user: Option<UserId>) -> bool {
         user.is_some() && user == self.owner
+    }
+
+    /// The store the system prompts come from.
+    pub const fn prompts(&self) -> &PromptStore {
+        &self.prompts
     }
 
     /// The `OpenRouter` model id that writes the captions.
@@ -157,8 +166,8 @@ impl Captioner {
     ///
     /// # Errors
     ///
-    /// Returns an error if the request fails or the reply is not a usable
-    /// caption.
+    /// Returns an error if the prompts cannot be loaded, the request fails,
+    /// or the reply is not a usable caption.
     pub async fn caption(&self, request: &CaptionRequest) -> Result<String> {
         let work_dir = tempdir()?;
         let visuals = self.tools.prepare(&request.media, work_dir.path()).await;
@@ -173,8 +182,8 @@ impl Captioner {
             visual_count: visuals.len(),
         };
 
-        self.complete(SYSTEM_PROMPT, context.render(), visuals)
-            .await
+        let system = caption_system_prompt(&self.prompts.active_set().await?);
+        self.complete(&system, context.render(), visuals).await
     }
 
     /// Ask the model for Guenther's one-line answer to a reply.
@@ -184,7 +193,8 @@ impl Captioner {
     ///
     /// # Errors
     ///
-    /// Returns an error if the request fails or the answer is not usable.
+    /// Returns an error if the prompts cannot be loaded, the request fails,
+    /// or the answer is not usable.
     pub async fn reply(&self, request: &ReplyRequest) -> Result<String> {
         let work_dir = tempdir()?;
         let visuals = self.tools.prepare(&request.media, work_dir.path()).await;
@@ -198,8 +208,8 @@ impl Captioner {
             style_examples: &style_examples,
             visual_count: visuals.len(),
         };
-        self.complete(REPLY_SYSTEM_PROMPT, context.render(), visuals)
-            .await
+        let system = reply_system_prompt(&self.prompts.active_set().await?);
+        self.complete(&system, context.render(), visuals).await
     }
 
     async fn complete(
