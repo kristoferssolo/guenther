@@ -19,7 +19,7 @@ use std::{
 use teloxide::{
     Bot, RequestError,
     prelude::*,
-    types::{ChatId, MessageEntityKind, MessageId, ReplyParameters, UserId},
+    types::{ChatId, MessageEntityKind, MessageId, ReplyParameters, User, UserId},
 };
 use tempfile::tempdir;
 use thiserror::Error;
@@ -92,13 +92,9 @@ impl BotReply {
     /// without one falls back to the analysed message, so `@bot thoughts?`
     /// on someone else's link reads that link.
     pub fn detect(msg: &Message, bot_id: UserId, bot_name: &str) -> Option<Self> {
-        let sender = msg.from.as_ref().filter(|user| !user.is_bot)?;
+        let sender = human_sender(msg)?;
         let reply_text = msg.text().filter(|text| !text.trim().is_empty())?;
-        // Telegram sets a forum topic's creation message as the parent of
-        // every plain message in that topic, which is not a reply.
-        let replied_to = msg
-            .reply_to_message()
-            .filter(|parent| parent.forum_topic_created().is_none());
+        let replied_to = replied_to(msg);
         let bot_parent =
             replied_to.filter(|parent| parent.from.as_ref().is_some_and(|user| user.id == bot_id));
         let target = match (bot_parent, replied_to) {
@@ -138,10 +134,8 @@ impl BotReply {
     /// The answer replies to the analysed message. The first link of `msg`,
     /// or else of the analysed message, is read before answering.
     pub fn analysis(msg: &Message, bot_id: UserId, question: &str) -> Option<Self> {
-        let sender = msg.from.as_ref().filter(|user| !user.is_bot)?;
-        let subject = msg
-            .reply_to_message()
-            .filter(|parent| parent.forum_topic_created().is_none())?;
+        let sender = human_sender(msg)?;
+        let subject = replied_to(msg)?;
         Some(Self {
             chat_id: msg.chat.id,
             message_id: subject.id,
@@ -231,6 +225,19 @@ impl AnalysedMessage {
             media: analysed_media(msg),
         }
     }
+}
+
+/// The person who sent `msg`, or `None` for bots and channels.
+fn human_sender(msg: &Message) -> Option<&User> {
+    msg.from.as_ref().filter(|user| !user.is_bot)
+}
+
+/// The message `msg` replies to. Telegram sets a forum topic's creation
+/// message as the parent of every plain message in that topic, which is not
+/// a reply.
+fn replied_to(msg: &Message) -> Option<&Message> {
+    msg.reply_to_message()
+        .filter(|parent| parent.forum_topic_created().is_none())
 }
 
 fn message_text(msg: &Message) -> Option<String> {
