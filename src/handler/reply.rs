@@ -6,7 +6,7 @@ use crate::{
     reply_threads::{BotMessage, Exchange, Parent, ReplyThreads, Thread},
     telegram_file::TelegramFiles,
     telemetry::ErrorChain,
-    utils::{MediaKind, text_or_caption},
+    utils::{MediaKind, replied_to, text_or_caption},
     web_page::PageFetcher,
 };
 use chrono::Utc;
@@ -230,14 +230,6 @@ impl AnalysedMessage {
 /// The person who sent `msg`, or `None` for bots and channels.
 fn human_sender(msg: &Message) -> Option<&User> {
     msg.from.as_ref().filter(|user| !user.is_bot)
-}
-
-/// The message `msg` replies to. Telegram sets a forum topic's creation
-/// message as the parent of every plain message in that topic, which is not
-/// a reply.
-fn replied_to(msg: &Message) -> Option<&Message> {
-    msg.reply_to_message()
-        .filter(|parent| parent.forum_topic_created().is_none())
 }
 
 /// The photo, video, or GIF of `msg`. Telegram sends GIFs as silent MP4s.

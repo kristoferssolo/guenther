@@ -80,6 +80,14 @@ pub fn text_or_caption(msg: &Message) -> Option<&str> {
     msg.text().or_else(|| msg.caption())
 }
 
+/// The message `msg` replies to. Telegram sets a forum topic's creation
+/// message as the parent of every plain message in that topic, which is not
+/// a reply.
+pub fn replied_to(msg: &Message) -> Option<&Message> {
+    msg.reply_to_message()
+        .filter(|parent| parent.forum_topic_created().is_none())
+}
+
 /// The first word of `input` and the trimmed rest, which keeps its inner
 /// line breaks, for parsing command arguments.
 pub fn split_first_word(input: &str) -> (&str, &str) {
