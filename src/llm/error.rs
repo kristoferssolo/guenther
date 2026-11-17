@@ -1,4 +1,4 @@
-use crate::ffmpeg::FfmpegError;
+use crate::{ffmpeg::FfmpegError, prompt_store::PromptError};
 use reqwest::StatusCode;
 use std::io;
 use thiserror::Error;
@@ -28,6 +28,9 @@ pub enum LlmError {
 
     #[error("Unsupported media type `{0}` for the model")]
     UnsupportedMedia(String),
+
+    #[error("Failed to load the system prompts: {0}")]
+    Prompt(#[from] PromptError),
 }
 
 pub type Result<T> = std::result::Result<T, LlmError>;

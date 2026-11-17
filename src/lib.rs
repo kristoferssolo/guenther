@@ -13,6 +13,8 @@ pub mod inline;
 #[cfg(feature = "llm-captions")]
 pub mod llm;
 pub mod media_posts;
+#[cfg(feature = "llm-captions")]
+pub mod prompt_store;
 pub mod purge;
 #[cfg(feature = "llm-captions")]
 pub mod reply_threads;

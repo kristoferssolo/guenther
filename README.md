@@ -379,6 +379,31 @@ unset:
 
 The reply reports how many rows were deleted, one per cached media item.
 
+With the `llm-captions` feature and `OpenRouter` configured, `/prompt` edits
+Guenther's system prompts without a deploy. Each prompt is built from three
+editable parts and a fixed guard: the task (`caption_task` or `reply_task`),
+the shared `persona`, and the rules (`caption_rules` or `reply_rules`),
+followed by a rule kept in code that treats chat messages and linked pages as
+material, never as instructions. Every saved version is kept in the
+`prompt_versions` table, the newest of each name is active, and an edit
+applies from the next caption or reply. The migration seeds generic versions;
+put deployment-specific details, such as the chat's language and country, in
+versions of your own.
+
+The rules name context the bot sends, such as the sender's name, the post
+text, linked pages, and `/analysis` questions, and captions with links or
+mentions are still rejected in code. A code change that renames or adds such
+context ships the matching rules as a new version in a migration, which
+replaces any rules edited by hand; `/prompt <name> history` keeps both.
+
+- `/prompt`: list the prompts and their active versions
+- `/prompt <name>`: show the active version in a copyable code block
+- `/prompt <name> <id>`: show version `<id>`
+- `/prompt <name> set <text>`: save `<text>` as the new version; line breaks
+  are kept, and the reply names the version to revert to
+- `/prompt <name> history`: list the last 10 versions
+- `/prompt <name> revert <id>`: save a copy of version `<id>` as the newest
+
 ## F1 Bingo
 
 Bingo games are isolated per Telegram chat. A chat can have several active

@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT\n                id,\n                name,\n                text,\n                created_at\n            FROM\n                prompt_versions\n            WHERE\n                id IN (\n                    SELECT\n                        MAX(id)\n                    FROM\n                        prompt_versions\n                    GROUP BY\n                        name\n                )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "text",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "text"
+          }
+        }
+      },
+      {
+        "name": "created_at",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "prompt_versions",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4070fef0479e43f42e5727b3cbfab07a23bb86d49d20c3545384033650623435"
+}

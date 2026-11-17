@@ -1,5 +1,3 @@
-#[cfg(feature = "llm-captions")]
-use crate::handler::ReplyResponder;
 #[cfg(feature = "bingo")]
 use crate::{
     bingo::{AdminCache, BingoError, BingoStore, answer_bingo},
@@ -16,8 +14,12 @@ use crate::{
     telemetry::ErrorChain,
     utils::NO_LINK_PREVIEW,
 };
+#[cfg(feature = "llm-captions")]
+use crate::{handler::ReplyResponder, prompt_store::answer_prompt};
 use chrono::Utc;
 use strum::IntoStaticStr;
+#[cfg(feature = "llm-captions")]
+use teloxide::types::ParseMode;
 use teloxide::{
     RequestError,
     prelude::*,
@@ -78,6 +80,10 @@ pub enum Command {
     /// Delete media cache entries by link, platform, or `all` (admin chat only)
     #[command(parse_with = whole_argument, hide)]
     Purge(String),
+    /// Show, edit, or revert Guenther's system prompts (admin chat only)
+    #[cfg(feature = "llm-captions")]
+    #[command(parse_with = whole_argument, hide)]
+    Prompt(String),
 }
 
 /// Pass the whole argument text through, like the default parser.
@@ -236,8 +242,42 @@ pub async fn answer(
                 .unwrap_or_else(|err| err.to_string());
             bot.send_message(chat_id, reply).await?
         }
+        #[cfg(feature = "llm-captions")]
+        Command::Prompt(input) => {
+            send_prompt(bot, chat_id, admin.chat_id, replies, &input).await?;
+            return Ok(());
+        }
     };
 
+    Ok(())
+}
+
+/// Answer `/prompt`, which only works in the admin chat.
+#[cfg(feature = "llm-captions")]
+async fn send_prompt(
+    bot: &Bot,
+    chat_id: ChatId,
+    admin_chat_id: Option<ChatId>,
+    replies: Option<&ReplyResponder>,
+    input: &str,
+) -> ResponseResult<()> {
+    if !is_admin_chat(chat_id, admin_chat_id) {
+        debug!("Ignoring /prompt outside the admin chat");
+        return Ok(());
+    }
+    let Some(replies) = replies else {
+        bot.send_message(
+            chat_id,
+            "The prompts need OpenRouter, which is not configured.",
+        )
+        .await?;
+        return Ok(());
+    };
+    let reply = answer_prompt(input, replies.prompts(), Utc::now()).await;
+    bot.send_message(chat_id, reply)
+        .parse_mode(ParseMode::Html)
+        .link_preview_options(NO_LINK_PREVIEW)
+        .await?;
     Ok(())
 }
 
@@ -349,6 +389,21 @@ mod tests {
             route_message(Some("/analysis@guenther_bot"), "guenther_bot"),
             RouteAction::HandleCommand(Command::Analysis(String::new()))
         );
+    }
+
+    #[cfg(feature = "llm-captions")]
+    #[test]
+    fn prompt_keeps_the_line_breaks_of_its_argument() {
+        assert_eq!(
+            route_message(
+                Some("/prompt persona set Line one\nLine two"),
+                "guenther_bot"
+            ),
+            RouteAction::HandleCommand(Command::Prompt(
+                "persona set Line one\nLine two".to_owned()
+            ))
+        );
+        assert!(!Command::descriptions().to_string().contains("prompt"));
     }
 
     #[test]
