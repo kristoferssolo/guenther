@@ -13,7 +13,7 @@ use guenther::{
     media_posts::MediaPosts,
     status::BotStatus,
     telemetry::{ErrorChain, setup_logger},
-    utils::NO_LINK_PREVIEW,
+    utils::{NO_LINK_PREVIEW, text_or_caption},
     voice_lines::VoiceLines,
 };
 use std::{sync::Arc, time::Instant};
@@ -252,14 +252,12 @@ async fn message_handler(
         warn!(error = %ErrorChain(&err), "Failed to capture incoming voice line metadata");
     }
 
-    let text = msg.text().or_else(|| msg.caption()).map(str::to_owned);
-
     #[cfg(feature = "bingo")]
     if let Err(err) = observe_message_users(&bingo_store, &msg).await {
         warn!(error = %ErrorChain(&err), "Failed to remember Telegram user for bingo");
     }
 
-    match route_message(text.as_deref(), &state.bot_name) {
+    match route_message(text_or_caption(&msg), &state.bot_name) {
         RouteAction::HandleCommand(cmd) => {
             span.record("route", "command");
             span.record("command", <&'static str>::from(&cmd));

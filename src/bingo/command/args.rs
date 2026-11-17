@@ -1,4 +1,7 @@
-use crate::bingo::error::{BingoError, Result};
+use crate::{
+    bingo::error::{BingoError, Result},
+    utils::split_first_word,
+};
 use std::str::FromStr;
 
 pub fn parse_slug_and_target(
@@ -22,7 +25,7 @@ pub fn parse_slug_and_target(
 pub fn parse_required_slug_and_optional_target(input: &str) -> Result<(String, Option<String>)> {
     const USAGE: &str = "import <slug> [@user] followed by five grid rows";
 
-    let (slug, rest) = split_once_whitespace(input);
+    let (slug, rest) = split_first_word(input);
     if slug.is_empty() {
         return Err(usage(USAGE));
     }
@@ -37,7 +40,7 @@ pub fn parse_required_slug_and_optional_target(input: &str) -> Result<(String, O
 }
 
 pub fn required_pair<'a>(input: &'a str, expected: &str) -> Result<(&'a str, &'a str)> {
-    let (first, rest) = split_once_whitespace(input);
+    let (first, rest) = split_first_word(input);
     if first.is_empty() || rest.is_empty() {
         return Err(usage(expected));
     }
@@ -71,11 +74,4 @@ pub fn is_target_token(word: &str) -> bool {
 
 pub fn usage(expected: &str) -> BingoError {
     BingoError::InvalidCommand(format!("Usage: /bingo {expected}"))
-}
-
-pub fn split_once_whitespace(input: &str) -> (&str, &str) {
-    input
-        .trim()
-        .split_once(char::is_whitespace)
-        .map_or_else(|| (input.trim(), ""), |(head, rest)| (head, rest.trim()))
 }

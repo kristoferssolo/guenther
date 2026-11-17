@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, path::Path};
 use strum::{Display, EnumString, IntoStaticStr};
-use teloxide::types::LinkPreviewOptions;
+use teloxide::types::{LinkPreviewOptions, Message};
 use tokio::{fs::File, io::AsyncReadExt};
 use tracing::warn;
 
@@ -73,6 +73,28 @@ pub async fn detect_media_kind(path: &Path) -> Option<MediaKind> {
     }
 
     None
+}
+
+/// The text of `msg`, or the caption of its media.
+pub fn text_or_caption(msg: &Message) -> Option<&str> {
+    msg.text().or_else(|| msg.caption())
+}
+
+/// The message `msg` replies to. Telegram sets a forum topic's creation
+/// message as the parent of every plain message in that topic, which is not
+/// a reply.
+pub fn replied_to(msg: &Message) -> Option<&Message> {
+    msg.reply_to_message()
+        .filter(|parent| parent.forum_topic_created().is_none())
+}
+
+/// The first word of `input` and the trimmed rest, which keeps its inner
+/// line breaks, for parsing command arguments.
+pub fn split_first_word(input: &str) -> (&str, &str) {
+    let input = input.trim();
+    input
+        .split_once(char::is_whitespace)
+        .map_or((input, ""), |(word, rest)| (word, rest.trim()))
 }
 
 /// Truncate text by Unicode scalar values and append `...` when needed.

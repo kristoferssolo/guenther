@@ -11,6 +11,7 @@ use crate::{
         },
     },
     telegram_file::TelegramFiles,
+    utils::replied_to,
 };
 use teloxide::{
     prelude::Bot,
@@ -332,10 +333,7 @@ async fn resolve_target(
         }
         return store.user_by_username(chat_id, target).await;
     }
-    if let Some(user) = message
-        .reply_to_message()
-        .and_then(|reply| reply.from.as_ref())
-    {
+    if let Some(user) = replied_to(message).and_then(|reply| reply.from.as_ref()) {
         let user = KnownUser::from(user);
         store.observe_user(chat_id, &user).await?;
         return Ok(user);
@@ -347,4 +345,62 @@ async fn resolve_target(
     Err(BingoError::InvalidCommand(
         "Mention a user or reply to one of their messages".to_owned(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use claims::{assert_ok, assert_ok_eq};
+    use rstest::rstest;
+    use serde_json::{Value, json};
+
+    fn message(reply_to_message: &Value) -> Message {
+        assert_ok!(serde_json::from_value(json!({
+            "message_id": 6,
+            "message_thread_id": 5,
+            "is_topic_message": true,
+            "date": 1_700_000_060,
+            "chat": { "id": -100_123, "type": "supergroup", "title": "Pit wall", "is_forum": true },
+            "from": { "id": 7, "is_bot": false, "first_name": "Kristofers" },
+            "text": "/bingo get",
+            "reply_to_message": reply_to_message,
+        })))
+    }
+
+    fn parent(extra: &Value) -> Value {
+        let mut parent = json!({
+            "message_id": 5,
+            "message_thread_id": 5,
+            "is_topic_message": true,
+            "date": 1_700_000_000,
+            "chat": { "id": -100_123, "type": "supergroup", "title": "Pit wall", "is_forum": true },
+            "from": { "id": 8, "is_bot": false, "first_name": "Janis" },
+        });
+        if let (Some(fields), Some(extra)) = (parent.as_object_mut(), extra.as_object()) {
+            fields.extend(extra.clone());
+        }
+        parent
+    }
+
+    #[rstest]
+    #[case::topic_parent_is_not_a_reply(
+        json!({ "forum_topic_created": { "name": "Race day", "icon_color": 7_322_096 } }),
+        7
+    )]
+    #[case::reply_names_the_replied_user(json!({ "text": "my card?" }), 8)]
+    #[tokio::test]
+    async fn target_defaults_to_the_replied_user_or_the_sender(
+        #[case] parent_fields: Value,
+        #[case] expected: u64,
+    ) {
+        let store = BingoStore::new(assert_ok!(crate::db::connect("sqlite::memory:").await));
+        let msg = message(&parent(&parent_fields));
+
+        assert_ok_eq!(
+            resolve_target(&store, &msg, None, true)
+                .await
+                .map(|user| user.user_id),
+            UserId(expected)
+        );
+    }
 }

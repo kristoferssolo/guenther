@@ -3,15 +3,16 @@ use crate::bingo::{
         BingoCommand, CardAdmin, EntryAdmin, GameAdmin,
         args::{
             is_target_token, optional_word, parse_id, parse_required_slug_and_optional_target,
-            parse_slug_and_target, required_pair, required_word, split_once_whitespace, usage,
+            parse_slug_and_target, required_pair, required_word, usage,
         },
     },
     error::{BingoError, Result},
     model::{CELL_COUNT, EntryNumber, GRID_SIDE, GameState, ImportedCell, Position},
 };
+use crate::utils::split_first_word;
 
 pub fn parse(input: &str) -> Result<BingoCommand> {
-    let (head, rest) = split_once_whitespace(input);
+    let (head, rest) = split_first_word(input);
     match head.to_ascii_lowercase().as_str() {
         "" | "help" => Ok(BingoCommand::Help),
         "games" => Ok(BingoCommand::Games),
@@ -34,7 +35,7 @@ pub fn parse(input: &str) -> Result<BingoCommand> {
 }
 
 fn parse_entries(input: &str) -> Result<BingoCommand> {
-    let (action, rest) = split_once_whitespace(input);
+    let (action, rest) = split_first_word(input);
     if action.eq_ignore_ascii_case("import") {
         return Ok(BingoCommand::Entry(EntryAdmin::Import {
             slug: required_word(rest, "entries import <game>")?.to_owned(),
@@ -46,7 +47,7 @@ fn parse_entries(input: &str) -> Result<BingoCommand> {
 }
 
 fn parse_game(input: &str) -> Result<BingoCommand> {
-    let (action, rest) = split_once_whitespace(input);
+    let (action, rest) = split_first_word(input);
     match action.to_ascii_lowercase().as_str() {
         "create" => {
             let (slug, name) = required_pair(rest, "game create <slug> <name>")?;
@@ -77,7 +78,7 @@ fn parse_game(input: &str) -> Result<BingoCommand> {
             }))
         }
         "description" => {
-            let (slug, description) = split_once_whitespace(rest);
+            let (slug, description) = split_first_word(rest);
             if slug.is_empty() {
                 return Err(usage("game description <slug> [text]"));
             }
@@ -126,7 +127,7 @@ fn parse_edit(input: &str) -> Result<BingoCommand> {
 
 fn parse_delete(input: &str) -> Result<BingoCommand> {
     const USAGE: &str = "delete [game] <entry_number>";
-    let (first, rest) = split_once_whitespace(input);
+    let (first, rest) = split_first_word(input);
     let (slug, raw_number) = if rest.is_empty() {
         (None, required_word(first, USAGE)?)
     } else {
@@ -217,7 +218,7 @@ fn parse_import(input: &str, replace: bool) -> Result<BingoCommand> {
 fn parse_card(input: &str) -> Result<BingoCommand> {
     const USAGE: &str = "card set <slug> [@user] <cell> <entry_number>";
 
-    let (action, rest) = split_once_whitespace(input);
+    let (action, rest) = split_first_word(input);
     if !action.eq_ignore_ascii_case("set") {
         return Err(BingoError::InvalidCommand(
             "Usage: /bingo card set <slug> [@user] <A1-E5> <entry_number>".to_owned(),

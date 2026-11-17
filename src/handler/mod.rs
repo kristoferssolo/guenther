@@ -27,6 +27,7 @@ use crate::{
     handler::caption::{CaptionJob, InitialCaption, JobMedia},
     llm::Captioner,
     telegram_file::TelegramFiles,
+    utils::text_or_caption,
 };
 use regex::Error as RegexError;
 use std::{result::Result as StdResult, sync::Arc, time::Instant};
@@ -383,7 +384,7 @@ impl MediaHandlers {
             platform,
             sender_id: msg.from.as_ref().map(|user| user.id),
             sender_name: msg.from.as_ref().map(|user| user.first_name.clone()),
-            message_text: msg.text().or_else(|| msg.caption()).map(str::to_owned),
+            message_text: text_or_caption(msg).map(str::to_owned),
             media,
         }
         .start()
