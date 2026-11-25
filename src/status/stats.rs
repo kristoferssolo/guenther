@@ -17,6 +17,7 @@ pub struct MediaStats {
 #[derive(Debug, Default)]
 struct Inner {
     instagram_failures: AtomicU64,
+    reddit_failures: AtomicU64,
     tiktok_failures: AtomicU64,
     twitter_failures: AtomicU64,
     youtube_failures: AtomicU64,
@@ -74,6 +75,7 @@ impl MediaStats {
     fn failure_counter(&self, platform: Platform) -> &AtomicU64 {
         match platform {
             Platform::Instagram => &self.inner.instagram_failures,
+            Platform::Reddit => &self.inner.reddit_failures,
             Platform::Tiktok => &self.inner.tiktok_failures,
             Platform::Twitter => &self.inner.twitter_failures,
             Platform::Youtube => &self.inner.youtube_failures,

@@ -5,6 +5,7 @@ Guenther is a Rust Telegram bot that takes social media links and sends back the
 It currently supports:
 
 - Instagram posts, reels, and TV posts, including photos and galleries
+- Reddit image posts, plus video and GIF posts through Cobalt, including `/s/` share links
 - TikTok short links
 - X/Twitter posts
 - YouTube Shorts
@@ -75,7 +76,7 @@ Sample `.env`:
 TELOXIDE_TOKEN=123456:telegram-token
 CHAT_ID=123456789
 COBALT_API_URL=http://127.0.0.1:9000/
-ENABLED_PLATFORMS=instagram,tiktok,twitter,youtube
+ENABLED_PLATFORMS=instagram,reddit,tiktok,twitter,youtube
 F1_UTC_OFFSET=+3
 DATABASE_URL=sqlite://data/bingo.sqlite3
 ```

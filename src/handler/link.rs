@@ -6,7 +6,7 @@ use regex::{Error as RegexError, Regex};
 use std::{collections::HashSet, sync::Arc};
 use url::Url;
 
-const URL_PATTERNS: [(Platform, &str); 4] = [
+const URL_PATTERNS: [(Platform, &str); 5] = [
     (
         Platform::Instagram,
         r"(?P<url>https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:reel|tv|(?:[A-Za-z0-9._]+/)?p)/[A-Za-z0-9_-]+/?(?:\?[^\s#]*)?(?:#[^\s]*)?)(?:[^\w/?#-]|$)",
@@ -22,6 +22,10 @@ const URL_PATTERNS: [(Platform, &str); 4] = [
     (
         Platform::Tiktok,
         r"https?://(?:(?:www\.)?tiktok\.com/@[A-Za-z0-9._-]+/video/\d+(?:\?[^\s]*)?|(?:vm|vt|tt|tik)\.tiktok\.com/[A-Za-z0-9_-]+[/?#]?)",
+    ),
+    (
+        Platform::Reddit,
+        r"https?://(?:(?:[a-z]+\.)?reddit\.com/(?:(?:(?:r|user)/[A-Za-z0-9_-]+/)?comments/[A-Za-z0-9]+(?:/[^\s?#]*)?|r/[A-Za-z0-9_-]+/s/[A-Za-z0-9]+)(?:\?[^\s]*)?|v\.redd\.it/[A-Za-z0-9]+)",
     ),
 ];
 
@@ -132,6 +136,7 @@ fn normalize_cache_key(platform: Platform, original_url: &str) -> String {
 
     let stable_key = match platform {
         Platform::Instagram => instagram_media_key(&url),
+        Platform::Reddit => reddit_post_key(&url),
         Platform::Tiktok => tiktok_video_key(&url),
         Platform::Twitter => twitter_status_key(&url),
         Platform::Youtube => youtube_video_key(&url),
@@ -156,6 +161,23 @@ fn instagram_media_key(url: &Url) -> Option<String> {
 pub fn is_instagram_video_url(original_url: &str) -> bool {
     Url::parse(original_url)
         .is_ok_and(|url| matches!(path_segments(&url).next(), Some("reel" | "tv")))
+}
+
+/// Share links resolve to a post only through a redirect, so they get their
+/// own key namespace.
+fn reddit_post_key(url: &Url) -> Option<String> {
+    if url.host_str() == Some("v.redd.it") {
+        return path_segments(url)
+            .next()
+            .map(|identifier| format!("reddit:video:{identifier}"));
+    }
+    match path_segments(url).collect::<Vec<_>>().as_slice() {
+        ["comments", identifier, ..] | ["r" | "user", _, "comments", identifier, ..] => {
+            Some(format!("reddit:post:{identifier}"))
+        }
+        ["r", _, "s", identifier, ..] => Some(format!("reddit:share:{identifier}")),
+        _ => None,
+    }
 }
 
 fn tiktok_video_key(url: &Url) -> Option<String> {
@@ -232,6 +254,29 @@ mod tests {
         let url = "https://www.tiktok.com/@apple/video/7673917526358641950?is_from_webapp=1&sender_device=pc";
 
         assert_eq!(original_urls(url), [url]);
+    }
+
+    #[rstest]
+    #[case::share("https://www.reddit.com/r/formuladank/s/TyBtJCUyRz")]
+    #[case::post("https://www.reddit.com/r/formuladank/comments/1y23htn/hear_me_out/")]
+    #[case::post_with_query(
+        "https://www.reddit.com/r/formuladank/comments/1y23htn/hear_me_out/?share_id=x&utm_source=share"
+    )]
+    #[case::old_reddit("https://old.reddit.com/r/formula1/comments/abc123")]
+    #[case::user("https://www.reddit.com/user/someone/comments/abc123/title/")]
+    #[case::bare("https://reddit.com/comments/abc123")]
+    #[case::video("https://v.redd.it/abc123")]
+    fn extracts_reddit_post_urls(#[case] url: &str) {
+        assert_eq!(original_urls(url), [url]);
+    }
+
+    #[rstest]
+    #[case::subreddit("https://www.reddit.com/r/formuladank/")]
+    #[case::user("https://www.reddit.com/user/someone")]
+    #[case::wiki("https://www.reddit.com/r/formula1/wiki/index")]
+    #[case::other_domain("https://notreddit.com/r/formula1/comments/abc123")]
+    fn rejects_non_post_reddit_urls(#[case] url: &str) {
+        assert_eq!(original_urls(url), Vec::<String>::new());
     }
 
     #[test]
@@ -354,6 +399,27 @@ mod tests {
                 "https://www.youtube.com/shorts/video-123?si=tracking#comments"
             ),
             "youtube:shorts:video-123"
+        );
+        for url in [
+            "https://www.reddit.com/r/formuladank/comments/1y23htn/hear_me_out/?share_id=x",
+            "https://old.reddit.com/r/formuladank/comments/1y23htn/",
+            "https://reddit.com/comments/1y23htn",
+        ] {
+            assert_eq!(
+                normalize_cache_key(Platform::Reddit, url),
+                "reddit:post:1y23htn"
+            );
+        }
+        assert_eq!(
+            normalize_cache_key(
+                Platform::Reddit,
+                "https://www.reddit.com/r/formuladank/s/TyBtJCUyRz"
+            ),
+            "reddit:share:TyBtJCUyRz"
+        );
+        assert_eq!(
+            normalize_cache_key(Platform::Reddit, "https://v.redd.it/abc123"),
+            "reddit:video:abc123"
         );
         assert_eq!(
             normalize_cache_key(

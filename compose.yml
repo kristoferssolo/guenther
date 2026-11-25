@@ -8,7 +8,7 @@ services:
     env_file: .env
     environment:
       COBALT_API_URL: http://cobalt:9000/
-      ENABLED_PLATFORMS: ${ENABLED_PLATFORMS-instagram,tiktok,twitter,youtube}
+      ENABLED_PLATFORMS: ${ENABLED_PLATFORMS-instagram,reddit,tiktok,twitter,youtube}
     depends_on:
       - cobalt
     restart: unless-stopped

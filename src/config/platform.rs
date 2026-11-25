@@ -18,6 +18,7 @@ pub struct PlatformConfig {
 )]
 pub enum Platform {
     Instagram,
+    Reddit,
     Tiktok,
     #[strum(to_string = "twitter", serialize = "x")]
     Twitter,
