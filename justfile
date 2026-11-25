@@ -11,6 +11,7 @@ alias b := build
 alias c := check
 alias d := docs
 alias f := fmt
+alias m := migrate
 alias r := run
 alias t := test
 
@@ -28,7 +29,7 @@ build-all:
 
 # Run all checks with every feature enabled
 [group("dev")]
-check: clippy docs test
+check: fmt-check clippy docs test
 
 # Run the development server
 [group("run")]
@@ -40,10 +41,22 @@ run:
 run-capture:
     cargo run --no-default-features --features voice-line-capture --release
 
-# Format code
+# sleek reads stdin when invoked without arguments
+sqlx_fmt := 'sqlx-inline-fmt --quiet --min-hashes 1 --formatter "sh -c sleek --" src tests'
+
+# The second SQL pass restores indentation after rustfmt.
+# Format Rust and inline SQL; if SQL changes, run `just prepare` and commit .sqlx
 [group("dev")]
 fmt:
+    {{ sqlx_fmt }}
     cargo fmt --all
+    {{ sqlx_fmt }}
+
+# Check Rust and inline SQL formatting
+[group("dev")]
+fmt-check:
+    cargo fmt --all -- --check
+    {{ sqlx_fmt }} --check
 
 # Run clippy
 [group("dev")]
@@ -69,17 +82,21 @@ test-default:
     cargo nextest run
 
 
-# CI pipeline
-ci: check prepare
+# Run the full pre-commit workflow
+ci: fmt prepare check
 
 # Clean build artifacts
 [group("dev")]
 clean:
     cargo clean
 
+# mise builds cargo tools outside the checkout, where rust-toolchain.toml does not apply,
+# so RUSTUP_TOOLCHAIN passes the repository toolchain to them.
+# Install the Rust toolchain from rust-toolchain.toml and the pinned tools from mise.toml
 [group("dev")]
 setup:
-    mise install
+    rustup toolchain install
+    toolchain="$(rustup show active-toolchain)"; RUSTUP_TOOLCHAIN="${toolchain%% *}" mise install
 
 [group("dev")]
 bingo-card-preview:

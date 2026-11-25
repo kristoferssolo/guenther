@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT\n            url AS \"url!\",\n            COUNT(*) AS \"count!: i64\",\n            MAX(id) AS \"latest_id!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (?2 IS NULL OR created_at >= ?2)\n        GROUP BY\n            cache_key\n        HAVING\n            COUNT(*) > 1\n        ORDER BY\n            COUNT(*) DESC,\n            MAX(id) DESC\n        LIMIT\n            ?3\n        ",
+  "query": "\n        SELECT\n            url AS \"url!\",\n            COUNT(*) AS \"count!: i64\",\n            MAX(id) AS \"latest_id!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (\n                ?2 IS NULL\n                OR created_at >= ?2\n            )\n        GROUP BY\n            cache_key\n        HAVING\n            COUNT(*) > 1\n        ORDER BY\n            COUNT(*) DESC,\n            MAX(id) DESC\n        LIMIT\n            ?3\n        ",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "215fcae3d01091925511ab650fc4b93eb016df0e22e118a611ffa7c05c5d0fc4"
+  "hash": "4f181835c290a9360ef4e93337c49b57c1764e46efa4982deb9d0270eef7467f"
 }

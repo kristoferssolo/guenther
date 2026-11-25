@@ -181,7 +181,10 @@ async fn top_senders(
             media_posts
         WHERE
             chat_id = ?1
-            AND (?2 IS NULL OR created_at >= ?2)
+            AND (
+                ?2 IS NULL
+                OR created_at >= ?2
+            )
         GROUP BY
             sender_id
         ORDER BY
@@ -219,7 +222,10 @@ async fn platform_counts(
             media_posts
         WHERE
             chat_id = ?1
-            AND (?2 IS NULL OR created_at >= ?2)
+            AND (
+                ?2 IS NULL
+                OR created_at >= ?2
+            )
         GROUP BY
             platform
         ORDER BY
@@ -257,7 +263,10 @@ async fn top_links(
             media_posts
         WHERE
             chat_id = ?1
-            AND (?2 IS NULL OR created_at >= ?2)
+            AND (
+                ?2 IS NULL
+                OR created_at >= ?2
+            )
         GROUP BY
             cache_key
         HAVING

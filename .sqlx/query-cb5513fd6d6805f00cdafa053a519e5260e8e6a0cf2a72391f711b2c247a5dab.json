@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT\n            sender_name AS \"sender_name!\",\n            COUNT(*) AS \"count!: i64\",\n            MAX(id) AS \"latest_id!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (?2 IS NULL OR created_at >= ?2)\n        GROUP BY\n            sender_id\n        ORDER BY\n            COUNT(*) DESC,\n            MAX(id) DESC\n        LIMIT\n            ?3\n        ",
+  "query": "\n        SELECT\n            sender_name AS \"sender_name!\",\n            COUNT(*) AS \"count!: i64\",\n            MAX(id) AS \"latest_id!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (\n                ?2 IS NULL\n                OR created_at >= ?2\n            )\n        GROUP BY\n            sender_id\n        ORDER BY\n            COUNT(*) DESC,\n            MAX(id) DESC\n        LIMIT\n            ?3\n        ",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       false
     ]
   },
-  "hash": "6250a8b3feb41ddf6ee7b69cb8bd1c9757c11f5cd701846e0358da90c1c7be03"
+  "hash": "cb5513fd6d6805f00cdafa053a519e5260e8e6a0cf2a72391f711b2c247a5dab"
 }
