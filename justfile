@@ -44,7 +44,8 @@ run-capture:
 # sleek reads stdin when invoked without arguments
 sqlx_fmt := 'sqlx-inline-fmt --quiet --min-hashes 1 --formatter "sh -c sleek --" src tests'
 
-# Format Rust and inline SQL. The second SQL pass restores indentation after rustfmt.
+# The second SQL pass restores indentation after rustfmt.
+# Format Rust and inline SQL; if SQL changes, run `just prepare` and commit .sqlx
 [group("dev")]
 fmt:
     {{ sqlx_fmt }}
