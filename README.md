@@ -87,6 +87,13 @@ bot restarts.
 
 ## Running Locally
 
+Install the pinned development tools from `mise.toml` with
+[mise](https://mise.jdx.dev):
+
+```bash
+mise install
+```
+
 Start a local Cobalt instance, then install dependencies:
 
 ```bash

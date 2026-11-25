@@ -75,7 +75,7 @@ clean:
 
 [group("dev")]
 setup:
-    cargo install cargo-nextest sccache
+    mise install
 
 [group("dev")]
 bingo-card-preview:
