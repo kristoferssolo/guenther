@@ -239,7 +239,9 @@ cover image, and reels arrive as a single JPEG instead of a video.
 
 Reddit's API rejects anonymous requests, so Reddit videos need the
 credentials of a Reddit API app. Add a `reddit` entry; Cobalt refreshes the
-access token itself:
+access token itself. Cobalt reads posts as that account and Guenther shares
+the result with any chat, so use a dedicated account that has not joined
+private communities:
 
 ```json
 "reddit": [
