@@ -89,9 +89,13 @@ ci: fmt prepare check
 clean:
     cargo clean
 
+# mise builds cargo tools outside the checkout, where rust-toolchain.toml does not apply,
+# so RUSTUP_TOOLCHAIN passes the repository toolchain to them.
+# Install the Rust toolchain from rust-toolchain.toml and the pinned tools from mise.toml
 [group("dev")]
 setup:
-    mise install
+    rustup toolchain install
+    toolchain="$(rustup show active-toolchain)"; RUSTUP_TOOLCHAIN="${toolchain%% *}" mise install
 
 [group("dev")]
 bingo-card-preview:

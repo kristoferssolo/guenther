@@ -88,11 +88,17 @@ bot restarts.
 
 ## Running Locally
 
-Install the pinned development tools from `mise.toml` with
-[mise](https://mise.jdx.dev):
+Requires [rustup](https://rustup.rs/) 1.28 or later, which installs the Rust
+version in `rust-toolchain.toml` (keep its `cargo` proxy on `PATH`), and
+[mise](https://mise.jdx.dev), which provides `just` and the other tools in
+`mise.toml`. The commands below assume mise is
+[activated](https://mise.jdx.dev/getting-started.html#activate-mise) in your
+shell; otherwise run them as `mise exec -- just <recipe>`.
+
+Install the Rust toolchain, then the pinned development tools:
 
 ```bash
-mise install
+mise exec just -- just setup
 ```
 
 Start a local Cobalt instance, then install dependencies:
