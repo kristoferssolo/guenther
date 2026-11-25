@@ -1,0 +1,11 @@
+[tools]
+# CI builds with the latest stable toolchain
+rust = { version = "stable", components = "clippy,rustfmt" }
+just = "1.59.0"
+cargo-nextest = "0.9.152"
+# The justfile wraps rustc with sccache unless RUSTC_WRAPPER is set
+sccache = "0.20.0"
+"cargo:bacon" = "3.26.0"
+# Regenerates the `.sqlx` offline query cache with `cargo sqlx prepare`
+"cargo:sqlx-cli" = { version = "0.9.1", default-features = false, features = "sqlite,rustls" }
+"cargo:sleek" = "0.5.0"
