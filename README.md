@@ -224,11 +224,12 @@ Guenther's Docker network. It does not expose Cobalt on a host port.
 
 Cobalt reads account cookies from `../files/cobalt-cookies.json`, relative to
 the Compose file (where Dokploy keeps mounted files), mounted at
-`/cookies.json`. Copy the template there and fill in the services you need:
+`/cookies.json`. Copy the template there (`-n` keeps an existing file) and fill
+in the services you need:
 
 ```bash
 mkdir -p ../files
-cp cobalt-cookies.example.json ../files/cobalt-cookies.json
+cp -n cobalt-cookies.example.json ../files/cobalt-cookies.json
 ```
 
 The file must exist before `docker compose up`, or Docker creates a directory
