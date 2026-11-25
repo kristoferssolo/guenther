@@ -5,7 +5,7 @@ Guenther is a Rust Telegram bot that takes social media links and sends back the
 It currently supports:
 
 - Instagram posts, reels, and TV posts, including photos and galleries
-- Reddit image posts, plus video and GIF posts through Cobalt, including `/s/` share links
+- Reddit image and video posts, including `/s/` share links
 - TikTok short links
 - X/Twitter posts
 - YouTube Shorts
@@ -236,6 +236,19 @@ read-write and its contents will change over time.
 Instagram no longer serves video URLs to anonymous clients. Without a logged-in
 `sessionid` (or an `instagram_bearer` token), Cobalt falls back to the post's
 cover image, and reels arrive as a single JPEG instead of a video.
+
+Reddit's API rejects anonymous requests, so Reddit videos need the
+credentials of a Reddit API app. Add a `reddit` entry; Cobalt refreshes the
+access token itself:
+
+```json
+"reddit": [
+    "client_id=<id>; client_secret=<secret>; refresh_token=<token>"
+]
+```
+
+Reddit image posts work without it, because Guenther reads them from the post's
+embed page.
 
 If YouTube rejects the VPS IP with `error.api.youtube.login`, configure an
 HTTP(S) proxy with a different network exit in `.env` and recreate Cobalt:
@@ -564,8 +577,9 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 
 ## Notes
 
-- All social media downloads go through Cobalt and support public media only.
-  Instagram additionally requires account cookies in `cobalt-cookies.json`; see
+- Social media downloads go through Cobalt and support public media only.
+  Reddit image posts are read from Reddit's embed page instead. Instagram and
+  Reddit video additionally require credentials in `cobalt-cookies.json`; see
   [Docker](#docker).
 - Cached entries record what was downloaded at the time. If Cobalt returned
   cover images for reels, send `/purge <url>` or `/purge instagram` in the
