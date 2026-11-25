@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT\n            platform,\n            COUNT(*) AS \"count!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (?2 IS NULL OR created_at >= ?2)\n        GROUP BY\n            platform\n        ORDER BY\n            COUNT(*) DESC,\n            platform\n        ",
+  "query": "\n        SELECT\n            platform,\n            COUNT(*) AS \"count!: i64\"\n        FROM\n            media_posts\n        WHERE\n            chat_id = ?1\n            AND (\n                ?2 IS NULL\n                OR created_at >= ?2\n            )\n        GROUP BY\n            platform\n        ORDER BY\n            COUNT(*) DESC,\n            platform\n        ",
   "describe": {
     "columns": [
       {
@@ -29,5 +29,5 @@
       false
     ]
   },
-  "hash": "c28d3a91e39e900d3e96eff8e9bbd0f855a9490c66e2c6e15f03b4d7f0682cd1"
+  "hash": "b8d1c6e8e94a67e50e634462907a0001b438965ae8586ae9f91b1fe927131315"
 }
