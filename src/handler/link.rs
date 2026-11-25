@@ -25,7 +25,7 @@ const URL_PATTERNS: [(Platform, &str); 5] = [
     ),
     (
         Platform::Reddit,
-        r"https?://(?:(?:[a-z]+\.)?reddit\.com/(?:(?:(?:r|user)/[A-Za-z0-9_-]+/)?comments/[A-Za-z0-9]+(?:/[^\s?#]*)?|r/[A-Za-z0-9_-]+/s/[A-Za-z0-9]+)(?:\?[^\s]*)?|v\.redd\.it/[A-Za-z0-9]+)",
+        r"https?://(?:(?:[a-z]+\.)?reddit\.com/(?:(?:r|user)/[A-Za-z0-9_-]+/comments/[A-Za-z0-9]+(?:/[^\s?#]*)?|r/[A-Za-z0-9_-]+/s/[A-Za-z0-9]+)(?:\?[^\s]*)?|v\.redd\.it/[A-Za-z0-9]+)",
     ),
 ];
 
@@ -172,9 +172,7 @@ fn reddit_post_key(url: &Url) -> Option<String> {
             .map(|identifier| format!("reddit:video:{identifier}"));
     }
     match path_segments(url).collect::<Vec<_>>().as_slice() {
-        ["comments", identifier, ..] | ["r" | "user", _, "comments", identifier, ..] => {
-            Some(format!("reddit:post:{identifier}"))
-        }
+        ["r" | "user", _, "comments", identifier, ..] => Some(format!("reddit:post:{identifier}")),
         ["r", _, "s", identifier, ..] => Some(format!("reddit:share:{identifier}")),
         _ => None,
     }
@@ -264,7 +262,6 @@ mod tests {
     )]
     #[case::old_reddit("https://old.reddit.com/r/formula1/comments/abc123")]
     #[case::user("https://www.reddit.com/user/someone/comments/abc123/title/")]
-    #[case::bare("https://reddit.com/comments/abc123")]
     #[case::video("https://v.redd.it/abc123")]
     fn extracts_reddit_post_urls(#[case] url: &str) {
         assert_eq!(original_urls(url), [url]);
@@ -275,6 +272,7 @@ mod tests {
     #[case::user("https://www.reddit.com/user/someone")]
     #[case::wiki("https://www.reddit.com/r/formula1/wiki/index")]
     #[case::other_domain("https://notreddit.com/r/formula1/comments/abc123")]
+    #[case::bare_post("https://reddit.com/comments/abc123")]
     fn rejects_non_post_reddit_urls(#[case] url: &str) {
         assert_eq!(original_urls(url), Vec::<String>::new());
     }
@@ -403,7 +401,6 @@ mod tests {
         for url in [
             "https://www.reddit.com/r/formuladank/comments/1y23htn/hear_me_out/?share_id=x",
             "https://old.reddit.com/r/formuladank/comments/1y23htn/",
-            "https://reddit.com/comments/1y23htn",
         ] {
             assert_eq!(
                 normalize_cache_key(Platform::Reddit, url),
