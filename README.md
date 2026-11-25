@@ -5,6 +5,7 @@ Guenther is a Rust Telegram bot that takes social media links and sends back the
 It currently supports:
 
 - Instagram posts, reels, and TV posts, including photos and galleries
+- Reddit image and video posts, including `/s/` share links
 - TikTok short links
 - X/Twitter posts
 - YouTube Shorts
@@ -75,7 +76,7 @@ Sample `.env`:
 TELOXIDE_TOKEN=123456:telegram-token
 CHAT_ID=123456789
 COBALT_API_URL=http://127.0.0.1:9000/
-ENABLED_PLATFORMS=instagram,tiktok,twitter,youtube
+ENABLED_PLATFORMS=instagram,reddit,tiktok,twitter,youtube
 F1_UTC_OFFSET=+3
 DATABASE_URL=sqlite://data/bingo.sqlite3
 ```
@@ -221,11 +222,14 @@ RUST_FEATURES="--features=bingo,llm-captions" docker compose up --build
 The Compose setup starts a private Cobalt sidecar that is reachable only from
 Guenther's Docker network. It does not expose Cobalt on a host port.
 
-Cobalt reads account cookies from `cobalt-cookies.json`, mounted at
-`/cookies.json`. Copy the template and fill in the services you need:
+Cobalt reads account cookies from `../files/cobalt-cookies.json`, relative to
+the Compose file (where Dokploy keeps mounted files), mounted at
+`/cookies.json`. Copy the template there (`-n` keeps an existing file) and fill
+in the services you need:
 
 ```bash
-cp cobalt-cookies.example.json cobalt-cookies.json
+mkdir -p ../files
+cp -n cobalt-cookies.example.json ../files/cobalt-cookies.json
 ```
 
 The file must exist before `docker compose up`, or Docker creates a directory
@@ -235,6 +239,21 @@ read-write and its contents will change over time.
 Instagram no longer serves video URLs to anonymous clients. Without a logged-in
 `sessionid` (or an `instagram_bearer` token), Cobalt falls back to the post's
 cover image, and reels arrive as a single JPEG instead of a video.
+
+Reddit's API rejects anonymous requests, so Reddit videos need the
+credentials of a Reddit API app. Add a `reddit` entry; Cobalt refreshes the
+access token itself. Cobalt reads posts as that account and Guenther shares
+the result with any chat, so use a dedicated account that has not joined
+private communities:
+
+```json
+"reddit": [
+    "client_id=<id>; client_secret=<secret>; refresh_token=<token>"
+]
+```
+
+Reddit image posts work without it, because Guenther reads them from the post's
+embed page.
 
 If YouTube rejects the VPS IP with `error.api.youtube.login`, configure an
 HTTP(S) proxy with a different network exit in `.env` and recreate Cobalt:
@@ -563,8 +582,9 @@ Inline queries search entries from `voice_lines.toml` and return cached Telegram
 
 ## Notes
 
-- All social media downloads go through Cobalt and support public media only.
-  Instagram additionally requires account cookies in `cobalt-cookies.json`; see
+- Social media downloads go through Cobalt and support public media only.
+  Reddit image posts are read from Reddit's embed page instead. Instagram and
+  Reddit video additionally require credentials in `cobalt-cookies.json`; see
   [Docker](#docker).
 - Cached entries record what was downloaded at the time. If Cobalt returned
   cover images for reels, send `/purge <url>` or `/purge instagram` in the

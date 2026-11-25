@@ -36,4 +36,19 @@ pub enum DownloadError {
 
     #[error("Failed to download the Twitter image: {0}")]
     DownloadTwitterImage(#[source] reqwest::Error),
+
+    #[error("Not a Reddit post link")]
+    InvalidRedditUrl,
+
+    #[error("Failed to fetch the Reddit post: {0}")]
+    FetchRedditPost(#[source] reqwest::Error),
+
+    #[error("No post data on the Reddit embed page")]
+    ParseRedditPost,
+
+    #[error("The Reddit post is not an image post")]
+    MissingRedditImage,
+
+    #[error("Failed to download the Reddit image: {0}")]
+    DownloadRedditImage(#[source] reqwest::Error),
 }

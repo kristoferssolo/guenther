@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn unsupported_target_error_lists_platforms() {
         let message = PurgeError::UnsupportedTarget("facebook".to_owned()).to_string();
-        assert!(message.contains("instagram, tiktok, twitter, youtube"));
+        assert!(message.contains("instagram, reddit, tiktok, twitter, youtube"));
     }
 
     #[tokio::test]
@@ -208,6 +208,7 @@ mod tests {
 
     #[rstest]
     #[case::instagram(Platform::Instagram, "https://instagram.com/reel/abc")]
+    #[case::reddit(Platform::Reddit, "https://www.reddit.com/r/formuladank/s/TyBtJCUyRz")]
     #[case::tiktok(Platform::Tiktok, "https://vm.tiktok.com/ZMabc/")]
     #[case::twitter(Platform::Twitter, "https://x.com/driver/status/123")]
     #[case::youtube(Platform::Youtube, "https://youtube.com/shorts/abc")]

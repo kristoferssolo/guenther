@@ -1,4 +1,5 @@
 mod cobalt;
+mod reddit;
 mod twitter;
 
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
     download::{
         DownloadResult,
         error::Result,
-        platform::{cobalt::CobaltClient, twitter::TwitterClient},
+        platform::{cobalt::CobaltClient, reddit::RedditClient, twitter::TwitterClient},
     },
 };
 
@@ -16,6 +17,7 @@ pub use crate::download::platform::twitter::status_id as twitter_status_id;
 #[derive(Debug, Clone)]
 pub struct Downloader {
     cobalt: CobaltClient,
+    reddit: RedditClient,
     twitter: TwitterClient,
 }
 
@@ -28,6 +30,7 @@ impl Downloader {
     pub fn new(cobalt: CobaltConfig) -> Result<Self> {
         Ok(Self {
             cobalt: CobaltClient::new(cobalt)?,
+            reddit: RedditClient::new()?,
             twitter: TwitterClient::new()?,
         })
     }
@@ -39,6 +42,7 @@ impl Downloader {
     /// Returns errors from the selected platform downloader.
     pub async fn download(&self, platform: Platform, url: &str) -> Result<DownloadResult> {
         match platform {
+            Platform::Reddit => self.reddit.download(&self.cobalt, url).await,
             Platform::Twitter => self.twitter.download(&self.cobalt, url).await,
             Platform::Instagram | Platform::Tiktok | Platform::Youtube => {
                 self.cobalt.download(url).await

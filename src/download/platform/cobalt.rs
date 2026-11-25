@@ -228,7 +228,7 @@ struct InstanceDetails {
     version: String,
 }
 
-fn safe_filename(suggested: &str, index: usize) -> String {
+pub(super) fn safe_filename(suggested: &str, index: usize) -> String {
     let basename = Path::new(suggested)
         .file_name()
         .and_then(|value| value.to_str())
