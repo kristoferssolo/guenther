@@ -68,6 +68,10 @@ test:
 test-default:
     cargo nextest run
 
+
+# CI pipeline
+ci: check prepare
+
 # Clean build artifacts
 [group("dev")]
 clean:
@@ -89,3 +93,13 @@ cobalt-up:
 [group("container")]
 podman-build:
     podman build --tag guenther:local .
+
+# Apply pending migrations to DATABASE_URL
+[group("db")]
+migrate:
+    cargo sqlx migrate run
+
+# Regenerate the offline SQLx query cache (.sqlx)
+[group("db")]
+prepare: migrate
+    cargo sqlx prepare --workspace -- --all-targets --all-features
